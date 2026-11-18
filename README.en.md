@@ -10,6 +10,7 @@
 ![Purelapse: filmstrip, brightness chart and settings](docs/screenshot.jpg)
 
 **Before – after:** left untouched, right processed with Purelapse
+
 https://github.com/user-attachments/assets/08c6d79c-24cf-44d8-aacb-35ddfd3aa6f2
 
 ## Contents
