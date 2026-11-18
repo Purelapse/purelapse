@@ -25,9 +25,8 @@ Erste oeffentliche Testversion.
   Lichter.
 - Warteschlange, Telegram-Benachrichtigung, Ablaufanzeige mit Zeiten,
   Protokoll mit Zeitstempeln, helles und dunkles Design, Deutsch/Englisch.
-- AppImage fuer Linux, Startskript und Bauskript fuer Windows.
+- AppImage fuer Linux
 
 ### Bekannte Einschraenkungen
-- Unter Windows bisher nicht getestet.
 - Darktable: Schnelleinstellungen und echte Vorschau gibt es nur fuer ART
   und RawTherapee.
