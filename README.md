@@ -9,11 +9,9 @@
 
 ![Purelapse: Bildleiste, Helligkeitsverlauf und Einstellungen](docs/screenshot.jpg)
 
-
 **Vorher – nachher:** links unbearbeitet, rechts mit Purelapse
 
 https://github.com/user-attachments/assets/08c6d79c-24cf-44d8-aacb-35ddfd3aa6f2
-
 
 ## Inhalt
 
@@ -280,18 +278,12 @@ python3 -m venv .venv
 .venv/bin/python purelapse_main.py
 ```
 
-Unter Windows (bisher ungetestet): `purelapse_windows.bat` doppelklicken.
-
 ## Selbst bauen
 
-| Ergebnis | Befehl | Voraussetzung |
-|---|---|---|
-| Linux-AppImage | `bash build_appimage.sh` | Docker, Internet |
-| Windows-`.exe` | `build_windows.bat` | Python 3, Internet |
+Die AppImage baust du mit `bash build_appimage.sh` (benötigt Docker und Internet).
 
 ## Bekannte Einschränkungen
 
-- Unter Windows bisher nicht getestet.
 - Darktable: Schnelleinstellungen, echte Vorschau und Hotpixel-Entfernung gibt
   es nur für ART und RawTherapee.
 
