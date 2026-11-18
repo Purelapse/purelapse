@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purelapse – flicker-free timelapses on Linux</title>
+<meta name="description" content="Purelapse deflickers timelapses from RAW or JPG sequences, drives ART, RawTherapee and darktable, blends keyframes smoothly and renders the video in up to 8K. Free and open source for Linux.">
+<link rel="canonical" href="https://purelapse.org/en.html">
+<link rel="alternate" hreflang="de" href="https://purelapse.org/">
+<link rel="alternate" hreflang="en" href="https://purelapse.org/en.html">
+<link rel="alternate" hreflang="x-default" href="https://purelapse.org/en.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Purelapse – flicker-free timelapses on Linux">
+<meta property="og:description" content="Purelapse deflickers timelapses from RAW or JPG sequences, drives ART, RawTherapee and darktable, blends keyframes smoothly and renders the video in up to 8K. Free and open source for Linux.">
+<meta property="og:url" content="https://purelapse.org/en.html">
+<meta property="og:image" content="https://purelapse.org/assets/og-image.jpg">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="assets/style.css">
+
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="en.html"><img src="assets/icon.png" alt="" width="30" height="30">Purelapse</a>
+    <nav class="nav-links" aria-label="Navigation"><a href="#vergleich">Comparison</a><a href="#ablauf">How it works</a><a href="#funktionen">Features</a><a href="#download">Download</a></nav>
+    <div class="lang" aria-label="Sprache / Language"><a href="index.html" hreflang="de" data-lang="de">DE</a><span>EN</span></div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <span class="pill"><b>Beta 2.39.0-beta</b> · Open source · Linux</span>
+      <h1>Timelapses <span class="grad-text">without flicker.</span></h1>
+      <p class="lead">Purelapse smooths the brightness of your RAW or JPG sequences, drives ART, RawTherapee or darktable and renders a clean video – from sunsets to holy grail.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/slvobng/purelapse/releases/download/v2.39.0-beta/Purelapse-2.39.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download for Linux<small>AppImage · 2.39.0-beta</small></span></a>
+        <a class="btn" href="https://github.com/slvobng/purelapse"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span>Source on GitHub</span></a>
+      </div>
+      <p class="meta"><span>Free</span><span>GPL-3.0</span><span>German &amp; English</span></p>
+      <div class="shot">
+        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="screenshot.jpg" width="1919" height="1026" alt="Purelapse: filmstrip, brightness chart and render settings">
+      </div>
+    </div>
+  </section>
+
+  <section id="vergleich">
+    <div class="wrap">
+      <div class="section-head center">
+        <div class="eyebrow">Before – after</div>
+        <h2>See for yourself.</h2>
+        <p>The same sequence – on the left straight out of the camera, on the right after Purelapse.</p>
+      </div>
+      <div class="compare">
+        <video id="cmp" src="assets/compare.mp4" poster="assets/compare-poster.jpg" muted loop playsinline preload="metadata" width="1280" height="360">Your browser can't play this video.</video>
+        <span class="tag l">Untouched</span><span class="tag r">Purelapse</span>
+      </div>
+      <p class="caption">Video without sound · 18 seconds</p>
+    </div>
+  </section>
+
+  <section id="ablauf" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">How it works</div>
+        <h2>Three steps from folder to video.</h2>
+        <p>A step bar guides you through the workflow. Completed steps are marked, and you can go back to any of them at any time.</p>
+      </div>
+      <div class="steps"><div class="step"><h3>Smooth brightness</h3><div class="tagline">Pass 1</div><p>Purelapse measures every RAW in linear light and writes an exposure correction into the engine's sidecar files. You see the target curve in the chart right away.</p></div><div class="step"><h3>Grade keyframes</h3><div class="tagline">optional</div><p>Mark individual frames as keyframes and adjust white balance, contrast or saturation – right inside Purelapse or in the engine. Everything in between is blended smoothly.</p></div><div class="step"><h3>Render video</h3><div class="tagline">Pass 2</div><p>The engine develops all frames, Purelapse re-measures and corrects in further rounds until the residual flicker is below 0.008 EV. Then the video is created.</p></div></div>
+    </div>
+  </section>
+
+  <section id="funktionen">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Features</div>
+        <h2>Everything in one program.</h2>
+        <p>From the first measurement to the finished video file – without switching between half a dozen tools.</p>
+      </div>
+      <div class="grid"><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0"/></svg></div><h3>Deflicker in linear light</h3><p>16-bit measurement that stays reliable even in dark night shots. With a measuring area when the sun or lamps get in the way.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14.5 8.5l2 2"/></svg></div><h3>Keyframes</h3><p>Set anchor frames, and Purelapse carries the settings smoothly across all frames in between.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></div><h3>Quick settings</h3><p>Colour temperature, green balance, brightness, contrast, saturation, sharpening and denoising – with a real preview from the engine.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h3M9 12h3M14 12h6M4 7h8M14 7h2M4 17h5M11 17h9"/></svg></div><h3>Motion blur</h3><p>Averages 3 to 25 frames into one video frame – for softly drifting clouds, water and stars.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></div><h3>Camera move &amp; effects</h3><p>16:9 move from A to B, stabilisation, denoising, hot pixels, astro clean, telemetry overlay, fade in and out.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Preview &amp; comparison</h3><p>Quick preview in minutes from the camera's embedded images, a five-frame preview, an untouched version and a comparison video.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h0"/></svg></div><h3>Warnings</h3><p>Detects missing frames, clipped and pink highlights, and a fluctuating white balance.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg></div><h3>Queue</h3><p>Line up several folders with their own settings and let them run overnight.</p></div><div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg></div><h3>Telegram</h3><p>A message on your phone when a run is finished – or when something goes wrong.</p></div></div>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap split">
+      <div>
+        <div class="section-head" style="margin-bottom:0">
+          <div class="eyebrow">Holy grail</div>
+          <h2>From day into night.</h2>
+          <p>In holy-grail shots the camera changes shutter speed, aperture or ISO during the sequence. Purelapse is built for exactly that.</p>
+        </div>
+        <ul class="ticks"><li><span><b>Compensates exposure jumps.</b> Every step caused by changed camera settings shows up as a brightness jump in the measurement and gets smoothed out.</span></li><li><span><b>Ramping interval.</b> If the interval grows with the shutter speed, that's treated as normal – only real gaps are reported.</span></li><li><span><b>Choose the light progression.</b> Constant, sunrise or sunset: if you like, the progression only gets brighter or only gets darker.</span></li><li><span><b>Sun elevation in the chart.</b> With GPS from the image, Purelapse shows the limits of civil, nautical and astronomical twilight.</span></li></ul>
+      </div>
+      <div class="curve">
+        <svg viewBox="0 0 600 200" role="img" aria-label="Schematic chart: measured brightness with jumps and the smoothed target curve">
+  <defs><linearGradient id="sky" x1="0" x2="1"><stop offset="0" stop-color="#f2a24b" stop-opacity=".16"/><stop offset="1" stop-color="#8b7cf6" stop-opacity=".16"/></linearGradient></defs>
+  <rect x="0" y="0" width="600" height="200" rx="8" fill="url(#sky)"/>
+  <g stroke="#262c39" stroke-width="1"><line x1="10" x2="590" y1="40" y2="40"/><line x1="10" x2="590" y1="80" y2="80"/><line x1="10" x2="590" y1="120" y2="120"/><line x1="10" x2="590" y1="160" y2="160"/></g>
+  <polyline points="10.0,45.2 14.8,43.9 19.6,48.0 24.4,43.5 29.2,47.4 34.0,46.1 38.8,43.8 43.6,47.6 48.4,44.0 53.2,47.4 58.0,44.7 62.8,45.1 67.6,48.0 72.4,51.5 77.2,46.1 82.0,47.2 86.8,50.8 91.6,53.7 96.4,51.1 101.2,50.0 106.0,55.1 110.8,48.1 115.6,55.0 120.4,51.0 125.2,50.3 130.0,50.7 134.8,67.2 139.6,74.5 144.4,36.1 149.2,42.6 154.0,46.4 158.8,47.7 163.6,52.6 168.4,52.2 173.2,55.7 178.0,60.5 182.8,67.9 187.6,69.6 192.4,72.4 197.2,78.4 202.0,81.2 206.8,83.9 211.6,55.3 216.4,58.5 221.2,59.0 226.0,65.8 230.8,69.6 235.6,76.6 240.4,79.8 245.2,80.6 250.0,90.6 254.8,88.1 259.6,95.0 264.4,102.2 269.2,102.0 274.0,109.3 278.8,73.7 283.6,83.3 288.4,88.7 293.2,91.9 298.0,99.0 302.8,99.1 307.6,106.9 312.4,110.7 317.2,115.2 322.0,118.8 326.8,126.5 331.6,131.9 336.4,132.7 341.2,138.7 346.0,101.7 350.8,111.2 355.6,115.1 360.4,122.2 365.2,125.1 370.0,125.0 374.8,130.0 379.6,136.3 384.4,135.2 389.2,142.7 394.0,144.3 398.8,147.7 403.6,151.1 408.4,160.5 413.2,122.5 418.0,127.1 422.8,131.8 427.6,139.2 432.4,136.4 437.2,142.8 442.0,147.0 446.8,153.1 451.6,155.9 456.4,159.5 461.2,158.1 466.0,162.4 470.8,165.1 475.6,172.4 480.4,139.5 485.2,136.1 490.0,139.4 494.8,142.9 499.6,145.9 504.4,150.9 509.2,154.6 514.0,153.7 518.8,151.9 523.6,155.5 528.4,155.3 533.2,157.2 538.0,160.5 542.8,158.6 547.6,157.4 552.4,158.4 557.2,159.0 562.0,154.2 566.8,161.1 571.6,160.3 576.4,161.2 581.2,160.7 586.0,157.6" fill="none" stroke="#a2aaba" stroke-width="2" stroke-linejoin="round"/>
+  <polyline points="10.0,46.6 14.8,46.7 19.6,46.8 24.4,46.9 29.2,47.1 34.0,47.2 38.8,47.4 43.6,47.6 48.4,47.7 53.2,47.9 58.0,48.1 62.8,48.4 67.6,48.6 72.4,48.9 77.2,49.1 82.0,49.4 86.8,49.8 91.6,50.1 96.4,50.5 101.2,50.8 106.0,51.2 110.8,51.7 115.6,52.1 120.4,52.6 125.2,53.2 130.0,53.7 134.8,54.3 139.6,54.9 144.4,55.6 149.2,56.3 154.0,57.1 158.8,57.9 163.6,58.7 168.4,59.6 173.2,60.5 178.0,61.5 182.8,62.5 187.6,63.6 192.4,64.8 197.2,66.0 202.0,67.2 206.8,68.5 211.6,69.9 216.4,71.3 221.2,72.8 226.0,74.3 230.8,75.9 235.6,77.6 240.4,79.3 245.2,81.0 250.0,82.8 254.8,84.6 259.6,86.5 264.4,88.4 269.2,90.4 274.0,92.3 278.8,94.3 283.6,96.4 288.4,98.4 293.2,100.4 298.0,102.5 302.8,104.6 307.6,106.6 312.4,108.6 317.2,110.7 322.0,112.7 326.8,114.6 331.6,116.6 336.4,118.5 341.2,120.4 346.0,122.2 350.8,124.0 355.6,125.7 360.4,127.4 365.2,129.1 370.0,130.7 374.8,132.2 379.6,133.7 384.4,135.1 389.2,136.5 394.0,137.8 398.8,139.0 403.6,140.2 408.4,141.4 413.2,142.5 418.0,143.5 422.8,144.5 427.6,145.4 432.4,146.3 437.2,147.1 442.0,147.9 446.8,148.7 451.6,149.4 456.4,150.1 461.2,150.7 466.0,151.3 470.8,151.8 475.6,152.4 480.4,152.9 485.2,153.3 490.0,153.8 494.8,154.2 499.6,154.5 504.4,154.9 509.2,155.2 514.0,155.6 518.8,155.9 523.6,156.1 528.4,156.4 533.2,156.6 538.0,156.9 542.8,157.1 547.6,157.3 552.4,157.4 557.2,157.6 562.0,157.8 566.8,157.9 571.6,158.1 576.4,158.2 581.2,158.3 586.0,158.4" fill="none" stroke="#f2a24b" stroke-width="3.2" stroke-linecap="round"/>
+  <text x="14" y="24" fill="#a2aaba" font-size="13" font-family="system-ui, sans-serif">Day</text>
+  <text x="586" y="190" fill="#a2aaba" font-size="13" text-anchor="end" font-family="system-ui, sans-serif">Night</text>
+</svg>
+        <div class="legend"><span><i style="background:#a2aaba"></i>Measured</span><span><i style="background:#f2a24b"></i>Target curve</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Output</div>
+        <h2>Up to 8K, up to 120 frames per second.</h2>
+        <p>Rendering is done with FFmpeg – on the CPU or on the graphics card. Before every run, Purelapse checks that the chosen hardware codec works on your computer.</p>
+      </div>
+      <dl class="specs"><div class="spec"><dt>Resolution (16:9)</dt><dd><div class="chips"><span class="chip">720p</span><span class="chip">1080p</span><span class="chip">1440p</span><span class="chip hi">4K</span><span class="chip">8K</span></div></dd></div><div class="spec"><dt>Frame rate</dt><dd><div class="chips"><span class="chip">23.976</span><span class="chip">24</span><span class="chip">25</span><span class="chip">29.97</span><span class="chip">30</span><span class="chip">50</span><span class="chip">59.94</span><span class="chip">60</span><span class="chip">120 fps</span></div></dd></div><div class="spec"><dt>Codecs</dt><dd><div class="chips"><span class="chip">H.264</span><span class="chip">H.265 / HEVC</span><span class="chip">Apple ProRes 422 HQ</span></div></dd></div><div class="spec"><dt>Encoding</dt><dd><div class="chips"><span class="chip">CPU</span><span class="chip">NVIDIA NVENC</span><span class="chip">Intel QuickSync</span><span class="chip">VAAPI (AMD / Intel)</span></div></dd></div><div class="spec"><dt>Quality</dt><dd><div class="chips"><span class="chip hi">Visually lossless (CRF 16)</span><span class="chip">High (CRF 20)</span><span class="chip">Standard (CRF 23)</span><span class="chip">Low (CRF 28)</span></div></dd></div><div class="spec"><dt>Motion blur</dt><dd><div class="chips"><span class="chip">off</span><span class="chip">3</span><span class="chip">4</span><span class="chip">5</span><span class="chip">6</span><span class="chip">7</span><span class="chip">8</span><span class="chip">9</span><span class="chip">10</span><span class="chip">12</span><span class="chip">15</span><span class="chip">18</span><span class="chip">20</span><span class="chip">25 frames</span></div></dd></div></dl>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">RAW development</div>
+        <h2>Your engine, your edits.</h2>
+        <p>Purelapse only changes the exposure in the profile. Whatever you've set up in the engine stays as it is.</p>
+      </div>
+      <div class="engines"><div class="engine"><h3>ART</h3><ul><li>Deflicker and recalibration</li><li>Keyframes</li><li>Quick settings</li><li>Real preview</li><li>Highlight reconstruction</li></ul></div><div class="engine"><h3>RawTherapee</h3><ul><li>Deflicker and recalibration</li><li>Keyframes</li><li>Quick settings</li><li>Real preview</li><li>Highlight reconstruction</li></ul></div><div class="engine"><h3>darktable</h3><ul><li>Deflicker and recalibration</li><li>Keyframes</li><li class="no">Quick settings</li><li class="no">Real preview</li><li class="no">Highlight reconstruction</li></ul></div></div>
+      <p class="note">darktable stores its module settings as binary data in the XMP file, which an external program can't edit reliably. So with darktable you grade keyframes directly in darktable. Formats: NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW.</p>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap install">
+      <div>
+        <div class="section-head" style="margin-bottom:0">
+          <div class="eyebrow">Download</div>
+          <h2>Ready in two minutes.</h2>
+        </div>
+        <ol><li><span>Install <b>RawTherapee or ART</b> for the RAW workflow. JPG sequences don't need an engine.</span></li><li><span>Download the <b>AppImage</b>. It contains Python, Qt, OpenCV and FFmpeg – nothing to install.</span></li><li><span>Make it executable and start it with the two commands in the box.</span></li><li><span>In Purelapse, open <b>Settings…</b> and enter the path to <code>rawtherapee-cli</code> or <code>ART-cli</code>.</span></li></ol>
+      </div>
+      <div>
+        <div class="cta" style="justify-content:flex-start;margin-top:0;margin-bottom:22px">
+          <a class="btn btn-primary" href="https://github.com/slvobng/purelapse/releases/download/v2.39.0-beta/Purelapse-2.39.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download for Linux<small>AppImage · 2.39.0-beta</small></span></a>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.39.0-beta-x86_64.AppImage\n./Purelapse-2.39.0-beta-x86_64.AppImage" data-done="Copied">Copy</button></div>
+          <pre><span class="p">$</span> chmod +x Purelapse-2.39.0-beta-x86_64.AppImage
+<span class="p">$</span> ./Purelapse-2.39.0-beta-x86_64.AppImage</pre>
+        </div>
+        <p class="req">Runs on Linux Mint 21 / Ubuntu 22.04 and newer (x86_64). <a href="https://github.com/slvobng/purelapse/releases">All versions and changes →</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="final alt">
+    <div class="wrap">
+      <h2>Give it a try.</h2>
+      <p>Purelapse is a beta. Feedback, bug reports and ideas are very welcome.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/slvobng/purelapse/releases/download/v2.39.0-beta/Purelapse-2.39.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download for Linux</span></a>
+        <a class="btn" href="https://github.com/slvobng/purelapse/issues">Report a bug</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="en.html"><img src="assets/icon.png" alt="" width="24" height="24">Purelapse</a>
+    <span>Purelapse is licensed under the <a href="https://github.com/slvobng/purelapse/blob/main/LICENSE">GPL-3.0</a>. ART, RawTherapee, darktable and FFmpeg belong to their respective projects.</span>
+    <nav aria-label="Links"><a href="https://github.com/slvobng/purelapse">GitHub</a><a href="https://github.com/slvobng/purelapse/issues">Report a bug</a><a href="https://github.com/slvobng/purelapse/releases">Releases</a></nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var v = document.getElementById("cmp");
+  var ruhig = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (v) {
+    if (ruhig || !("IntersectionObserver" in window)) { v.controls = true; }
+    else {
+      new IntersectionObserver(function (e) {
+        e.forEach(function (x) { if (x.isIntersecting) { var p = v.play(); if (p && p.catch) p.catch(function () { v.controls = true; }); } else v.pause(); });
+      }, { threshold: 0.35 }).observe(v);
+    }
+  }
+  var b = document.getElementById("copy");
+  if (b) b.addEventListener("click", function () {
+    var txt = b.getAttribute("data-text").replace(/\\n/g, "\n"), alt = b.textContent;
+    var ok = function () { b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.textContent = alt; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(ok, function () {});
+  });
+  document.querySelectorAll("[data-lang]").forEach(function (a) {
+    a.addEventListener("click", function () { try { localStorage.setItem("purelapse-lang", a.getAttribute("data-lang")); } catch (e) {} });
+  });
+})();
+</script>
+</body>
+</html>
