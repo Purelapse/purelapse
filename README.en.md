@@ -275,18 +275,12 @@ python3 -m venv .venv
 .venv/bin/python purelapse_main.py
 ```
 
-On Windows (not tested yet): double-click `purelapse_windows.bat`.
-
 ## Building it yourself
 
-| Result | Command | Requirements |
-|---|---|---|
-| Linux AppImage | `bash build_appimage.sh` | Docker, internet |
-| Windows `.exe` | `build_windows.bat` | Python 3, internet |
+Build the AppImage with `bash build_appimage.sh` (requires Docker and internet).
 
 ## Known limitations
 
-- Not tested on Windows yet.
 - Darktable: quick settings, the real preview and hot pixel removal are only
   available for ART and RawTherapee.
 
