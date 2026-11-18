@@ -9,6 +9,12 @@
 
 ![Purelapse: Bildleiste, Helligkeitsverlauf und Einstellungen](docs/screenshot.jpg)
 
+
+**Vorher – nachher:** links unbearbeitet, rechts mit Purelapse
+
+https://github.com/user-attachments/assets/08c6d79c-24cf-44d8-aacb-35ddfd3aa6f2
+
+
 ## Inhalt
 
 - [Was Purelapse macht](#was-purelapse-macht)
