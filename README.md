@@ -11,6 +11,8 @@ for RAW development, re-measures the developed result and recalibrates until
 the remaining flicker is below 0.008 EV, then encodes the video with FFmpeg.
 The user interface is available in German and English.*
 
+![Purelapse: Bildleiste, Helligkeitsverlauf und Einstellungen](docs/screenshot.jpg)
+
 ## Was Purelapse macht
 
 Bei Zeitraffern mit wechselndem Licht (Sonnenuntergang, Heiliger Gral,
