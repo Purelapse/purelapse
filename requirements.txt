@@ -1,0 +1,9 @@
+PyQt5
+pyqtgraph
+numpy
+opencv-python-headless
+rawpy
+scipy
+exifread
+astral
+imageio-ffmpeg

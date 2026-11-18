@@ -1,0 +1,8 @@
+#!/bin/sh
+# Einstieg des AppImages: startet das mitgelieferte Purelapse.
+HERE="$(dirname "$(readlink -f "$0")")"
+# Qt 5 bringt hier nur die X11-Anbindung mit; unter einer Wayland-Sitzung
+# laeuft es ueber XWayland. Ohne diese Zeile bricht der Start ab, wenn die
+# Sitzung "wayland" vorgibt.
+export QT_QPA_PLATFORM=xcb
+exec "$HERE/usr/lib/purelapse/Purelapse" "$@"

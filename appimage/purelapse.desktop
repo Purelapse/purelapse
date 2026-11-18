@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Purelapse
+Comment=Zeitraffer entflackern, entwickeln und rendern
+Exec=Purelapse
+Icon=purelapse
+Categories=Graphics;Photography;
+Terminal=false
