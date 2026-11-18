@@ -2,13 +2,11 @@
 __pycache__/
 *.pyc
 .venv/
-.venv-win/
 
 # Bauergebnisse
 build/
 dist/
 *.AppImage
-*.exe
 
 # Abgelegte alte Staende - gehoeren nicht ins Repository
 archiv/
