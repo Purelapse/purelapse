@@ -243,3 +243,7 @@ footer a { color: var(--dim); }
 /* Besucherzaehler in der Fusszeile */
 .visits { flex-basis: 100%; font-size: 13.5px; color: var(--faint); }
 .visits b { color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Zweites Vergleichsvideo (Originalqualitaet, mit Bedienelementen) */
+.compare-2 { margin-top: 36px; }
+.compare-2 video { object-fit: contain; }
