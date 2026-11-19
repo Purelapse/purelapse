@@ -247,3 +247,5 @@ footer a { color: var(--dim); }
 /* Zweites Vergleichsvideo (Originalqualitaet, mit Bedienelementen) */
 .compare-2 { margin-top: 36px; }
 .compare-2 video { object-fit: contain; }
+/* Im Vollbild nie beschneiden: ganzes Bild zeigen, Rest schwarz */
+video:fullscreen { object-fit: contain !important; aspect-ratio: auto !important; background: #000; }
