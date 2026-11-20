@@ -187,12 +187,15 @@ TRANSLATIONS = {
                  "Automatisch richtet sich nach Kernzahl und freiem\n"
                  "Arbeitsspeicher. Jede Instanz braucht rund 2 bis 3 GB.\n"
                  "Bei wenig Speicher auf 1 oder 2 stellen.\n\n"
-                 "Gilt nur fuer ART und RawTherapee, nicht fuer Darktable."),
+                 "Bei Darktable hoechstens 4 Prozesse - darktable-cli braucht\n"
+                 "mehr Speicher (rund 3 GB je Prozess), und mehr bringt auf\n"
+                 "einer Grafikkarte nichts."),
     "TT_ARTCLI": "Ausfuehrbare Datei der Entwicklungs-Engine. Wird fuer Pass 2 benoetigt.",
     "TT_ENGINE": "ART, RawTherapee oder Darktable. ART und RawTherapee teilen sich\\n"
                  "Kommandozeile und Profilformat (.arp bzw. .pp3). Darktable nutzt\\n"
-                 "dieselbe .xmp, die es selbst schreibt - Purelapse ergaenzt dort nur\\n"
-                 "ein eigenes Belichtungs-Modul, ohne bestehende Bearbeitungen anzufassen.\\n"
+                 "die .xmp, die es selbst beim Import schreibt - Purelapse traegt die\\n"
+                 "Korrektur in die wirksame Belichtung ein und uebertraegt in Pass 2\\n"
+                 "den Modulstapel der Keyframes; eigene Bearbeitungen bleiben erhalten.\\n"
                  "Pro Ordner muss man sich festlegen; liegen bereits Begleitdateien\\n"
                  "vor, stellt Purelapse beim Einlesen selbst um.",
     "TT_CALIB": "Purelapse misst das Ergebnis der Engine und schreibt die verbleibende\nAbweichung in die Sidecars zurueck, dann entwickelt die Engine erneut.\nAb Runde 2 nur noch die tatsaechlich geaenderten Bilder.\nEin Durchgang genuegt in aller Regel.",
@@ -252,12 +255,15 @@ TRANSLATIONS_TT_EN = {
                  "Automatic follows core count and free memory. Each\n"
                  "instance needs roughly 2 to 3 GB. Set it to 1 or 2 if\n"
                  "memory is tight.\n\n"
-                 "Applies to ART and RawTherapee only, not to Darktable."),
+                 "With Darktable at most 4 processes - darktable-cli needs\n"
+                 "more memory (about 3 GB per process), and more brings\n"
+                 "nothing on a single graphics card."),
     "TT_ARTCLI": "Executable of the development engine. Required for pass 2.",
     "TT_ENGINE": "ART, RawTherapee or Darktable. ART and RawTherapee share the\\n"
                  "command line and profile format (.arp resp. .pp3). Darktable uses\\n"
-                 "the same .xmp it writes itself - Purelapse only adds its own\\n"
-                 "exposure module there, without touching existing edits.\\n"
+                 "the .xmp it writes itself on import - Purelapse writes the\\n"
+                 "correction into the effective exposure and, in pass 2, carries the\\n"
+                 "keyframes' module stack across; your own edits are kept.\\n"
                  "You have to commit per folder; if sidecars are present already,\\n"
                  "Purelapse switches automatically when reading the folder.",
     "TT_CALIB": "Purelapse measures the engine's result and writes the remaining deviation\nback into the sidecars, then the engine develops again.\nFrom round 2 on, only the frames that actually changed.\nOne round is usually enough.",

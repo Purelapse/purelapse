@@ -5111,10 +5111,11 @@ class Worker(QtCore.QThread):
         self._validate_profiles(valid_files, template, "nach Pass 1")
         clipped = sum(1 for r in report if r['clip_frac'] > 0.01)
         if clipped:
-            self.log.emit(self._t(f"> WARNUNG: {clipped} von {len(report)} Bildern haben ausgefressene "
-                          "Lichter. Dort misst die Analyse zu schwach und der Deflicker "
-                          "korrigiert zu wenig. Ein Messbereich (ROI) ohne Himmel hilft.",
-                f"> WARNING: {clipped} of {len(report)} images have blown highlights. There the analysis measures too weakly and the deflicker corrects too little. A measuring area (ROI) without sky helps."))
+            self.log.emit(self._t(f"> HINWEIS: {clipped} von {len(report)} Bildern haben ausgefressene "
+                          "Lichter. Die Messung laesst diese Stellen aus, der Deflicker "
+                          "bleibt davon unberuehrt. Die Lichter selbst sind verloren - "
+                          "wird die Sonne rosa, hilft 'Lichter rekonstruieren' in einem Keyframe.",
+                f"> NOTE: {clipped} of {len(report)} images have blown highlights. The measurement leaves these areas out, the deflicker is not affected. The highlights themselves are lost - if the sun turns pink, 'reconstruct highlights' in a keyframe helps."))
         self.finished_ok.emit(
             "Pass 1 abgeschlossen - die Helligkeit ist vermessen, die "
             "Korrektur steht in den Profilen.\n\n"
@@ -9171,17 +9172,17 @@ class MainWindow(QtWidgets.QWidget):
                     "diese Lichter sind wirklich verloren und lassen sich auch "
                     "durch eine negative Belichtungskorrektur nicht "
                     "zurueckholen.\n"
-                    "Fuer den Deflicker heisst das: in diesen Bildern "
-                    "unterschaetzt die Messung die wahre Belichtung, die "
-                    "Zielkurve wird dort ungenauer.",
+                    "Fuer den Deflicker ist das unschaedlich: die Messung "
+                    "laesst ausgebrannte Stellen samt schmalem Saum aus, "
+                    "solange mindestens ein Fuenftel des Bildes uebrig bleibt.",
                     f"{anzahl} of {gesamt} frames ({anteil:.0f} %) have more than "
                     f"{100 * CLIP_SCHWELLE_RAW:.1f} % clipped pixels.\n"
                     "Measured on the 16-bit sensor data in linear light - these "
                     "highlights are genuinely lost and cannot be brought back "
                     "by negative exposure compensation.\n"
-                    "For the deflicker this means the measurement understates "
-                    "the true exposure in those frames, so the target curve is "
-                    "less accurate there.")
+                    "For the deflicker this is harmless: the measurement leaves "
+                    "clipped areas out, together with a narrow seam, as long as "
+                    "at least a fifth of the frame remains.")
             else:
                 erklaerung = self._t(
                     f"{anzahl} von {gesamt} Bildern ({anteil:.0f} %) haben mehr als "

@@ -308,3 +308,49 @@ video:fullscreen { object-fit: contain !important; aspect-ratio: auto !important
   .chap-body { padding: 2px 14px 18px; font-size: 15px; }
   .tbl table { font-size: 13.5px; }
 }
+
+/* ---------- Versionshistorie ---------- */
+.nav-links a[aria-current="page"] { color: var(--text); }
+.vers-hero { padding: 72px 0 40px; }
+.vers-hero h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 800; margin-top: 12px; }
+.vers-hero p { color: var(--dim); font-size: 18px; max-width: 640px; margin-top: 16px; }
+.vers-list { padding: 8px 0 88px; }
+.vers { display: grid; gap: 18px; }
+.ver { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 28px; padding: 26px 28px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.ver.now { border-color: rgba(242, 162, 75, 0.45); }
+.ver-side { display: flex; flex-direction: column; gap: 6px; }
+.ver-nr { font-size: 26px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; }
+.ver-date { color: var(--faint); font-size: 14.5px; }
+.ver-badge { align-self: flex-start; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--orange); background: rgba(242, 162, 75, 0.1); border: 1px solid rgba(242, 162, 75, 0.35); border-radius: 7px; padding: 1px 8px; margin-bottom: 4px; }
+.ver-links { display: grid; gap: 4px; margin-top: 10px; font-size: 14.5px; }
+.ver-intro { color: var(--text); font-size: 16.5px; }
+.ver-note { margin-top: 12px; padding: 10px 14px; border-left: 3px solid var(--orange); background: rgba(242, 162, 75, 0.06); border-radius: 0 8px 8px 0; color: var(--dim); font-size: 15px; }
+.ver-note b { color: var(--text); }
+.ver-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-top: 18px; }
+.ver-groups h3 { font-size: 15px; letter-spacing: 0; margin-bottom: 6px; }
+.ver-groups ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; color: var(--dim); font-size: 15px; }
+.ver-groups li { position: relative; padding-left: 16px; }
+.ver-groups li::before { content: ""; position: absolute; left: 0; top: 0.68em; width: 6px; height: 6px; border-radius: 50%; background: var(--violet); }
+.ver-groups.single { grid-template-columns: minmax(0, 1fr); }
+.vers-end { margin-top: 22px; color: var(--faint); font-size: 14.5px; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.nav-links a { white-space: nowrap; }
+@media (max-width: 1000px) {
+  .nav .wrap { gap: 18px; }
+  .nav-links { gap: 14px; font-size: 14px; }
+}
+@media (max-width: 860px) {
+  .nav-links { display: none; }
+  .lang { margin-left: auto; }
+}
+@media (max-width: 900px) {
+  .ver { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ver-side { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+  .ver-badge { align-self: center; margin-bottom: 0; }
+  .ver-links { flex-basis: 100%; grid-auto-flow: column; justify-content: start; gap: 18px; margin-top: 2px; }
+}
+@media (max-width: 720px) {
+  .ver { padding: 20px 18px; }
+  .ver-groups { grid-template-columns: minmax(0, 1fr); }
+  .ver-links { grid-auto-flow: row; gap: 4px; }
+  .vers-hero { padding: 48px 0 28px; }
+}

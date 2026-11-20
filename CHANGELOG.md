@@ -3,6 +3,30 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+### Behoben
+- **Hinweis nach Pass 1 bei ausgefressenen Lichtern** war seit 2.42 falsch:
+  Er behauptete, die Messung falle dort zu schwach aus, und empfahl einen
+  Messbereich ohne Himmel. Seit 2.42 lässt die Messung ausgebrannte Stellen
+  aus. Jetzt ein Hinweis statt einer Warnung: der Deflicker ist nicht
+  betroffen, gegen eine rosa Sonne hilft „Lichter rekonstruieren“.
+- Ebenso der Hinweistext am Lichter-Feld („in diesen Bildern unterschätzt die
+  Messung die wahre Belichtung“).
+- Hinweis zur Engine-Auswahl: Bei Darktable stand noch, Purelapse ergänze nur
+  ein eigenes Belichtungs-Modul. Seit 2.42 schreibt es in die wirksame
+  Belichtung und überträgt den Modulstapel der Keyframes.
+- Hinweis „Parallele Prozesse“: „gilt nicht für Darktable“ stimmte nicht
+  mehr. Die Einstellung gilt auch dort, begrenzt auf 4 Prozesse.
+
+### Webseite
+- Stand 2.42 und neuer Bereich „Technik“ (Deutsch und Englisch): alle
+  Funktionen mit Rechenwegen, Grenzwerten, Engine-Aufrufen und Dateien, in
+  16 aufklappbaren Kapiteln.
+- Neue Seite „Versionen“ (`versionen.html` / `versions.html`) mit den
+  wichtigsten Änderungen jeder Version ab 2.39, verlinkt aus Navigation,
+  Download-Bereich und Fußzeile. Wird bei jedem Release ergänzt.
+
 ## [2.42.0-beta] – 2026-11-20
 
 ### Wichtig beim Umstieg

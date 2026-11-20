@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Versionen – Purelapse</title>
+<meta name="description" content="Versionshistorie von Purelapse: was sich in jeder Version geändert hat, mit Download und ausführlichem Änderungsprotokoll.">
+<link rel="canonical" href="https://purelapse.org/versionen.html">
+<link rel="alternate" hreflang="de" href="https://purelapse.org/versionen.html">
+<link rel="alternate" hreflang="en" href="https://purelapse.org/versions.html">
+<link rel="alternate" hreflang="x-default" href="https://purelapse.org/versions.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Versionen – Purelapse">
+<meta property="og:description" content="Versionshistorie von Purelapse: was sich in jeder Version geändert hat, mit Download und ausführlichem Änderungsprotokoll.">
+<meta property="og:url" content="https://purelapse.org/versionen.html">
+<meta property="og:image" content="https://purelapse.org/assets/og-image.jpg">
+<meta property="og:locale" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="assets/style.css?v=4">
+<script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});if(l==="en"||(!l&&!de)){location.replace("versions.html"+location.hash)}}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="30" height="30">Purelapse</a>
+    <nav class="nav-links" aria-label="Navigation"><a href="index.html#vergleich">Vergleich</a><a href="index.html#ablauf">So geht's</a><a href="index.html#funktionen">Funktionen</a><a href="index.html#download">Download</a><a href="index.html#technik">Technik</a><a href="versionen.html" aria-current="page">Versionen</a></nav>
+    <div class="lang" aria-label="Sprache / Language"><span>DE</span><a href="versions.html" hreflang="en" data-lang="en">EN</a></div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="vers-hero">
+    <div class="wrap">
+      <div class="eyebrow">Versionshistorie</div>
+      <h1>Was sich getan hat.</h1>
+      <p>Die wichtigsten Änderungen jeder Version in Kürze. Jede Einzelheit steht im ausführlichen Änderungsprotokoll.</p>
+    </div>
+  </section>
+  <section class="vers-list">
+    <div class="wrap">
+      <div class="vers">
+        <article class="ver now" id="v2-42-0">
+          <div class="ver-side"><span class="ver-badge">Aktuell</span><h2 class="ver-nr">2.42.0-beta</h2><time class="ver-date" datetime="2026-11-20">20. November 2026</time><div class="ver-links"><a href="https://github.com/slvobng/purelapse/releases/download/v2.42.0-beta/Purelapse-2.42.0-beta-x86_64.AppImage">AppImage herunterladen</a><a href="https://github.com/slvobng/purelapse/releases/tag/v2.42.0-beta">Release auf GitHub</a></div></div>
+          <div class="ver-main"><p class="ver-intro">Die bisher größte Überarbeitung: genauere Messung, darktable auf Augenhöhe mit ART und RawTherapee, sauberere Videos. Enthält die nicht einzeln veröffentlichten Stände 2.40 und 2.41.</p><p class="ver-note"><b>Beim Umstieg:</b> Die Messung hat sich geändert – laufende Projekte mit Pass 1 und Pass 2 neu rechnen lassen. Alte Einstellungsdateien werden beim ersten Start übernommen.</p><div class="ver-groups"><div><h3>Bildqualität</h3><ul><li>Sonne und ausgebrannte Lichter verfälschen die Messung nicht mehr. Restflackern mit Sonne im Bild: von bis zu 0,05 EV auf 0,0005 EV.</li><li>Die Nachkalibrierung bewertet Ausgebranntes über die ganze Sequenz und erzeugt kein Flackern mehr, wo keines war.</li><li>Kamerafahrt auf Bruchteile von Bildpunkten genau, ohne Ruckeln, mit sanftem Anfahren und Abbremsen.</li><li>Videofarben nach HD-Norm BT.709 und gründlichere Encoder-Einstellungen.</li><li>Neu: HEVC 10 Bit (CPU und NVIDIA) und 16-Bit-Zwischenbilder gegen Stufen im Himmel.</li></ul></div><div><h3>darktable</h3><ul><li>Keyframes übertragen den kompletten Modulstapel – über 60 Module von Weißabgleich bis Filmic werden weich überblendet.</li><li>Schnelleinstellungen (Helligkeit, Kontrast, Sättigung, Schärfe) mit echter Vorschau.</li><li>darktable-cli entwickelt mit bis zu vier Prozessen gleichzeitig, auch bei geöffnetem darktable.</li><li>Hotpixel-Korrektur wirkt jetzt, und der Deflicker-Wert landet zuverlässig in der wirksamen Belichtung.</li></ul></div><div><h3>Bedienung</h3><ul><li>Symbole statt Text für Ordner, Aktualisieren, Zurücksetzen und Einstellungen; deutlichere Schrittknöpfe.</li><li>Das Protokoll ist vollständig auch auf Englisch verfügbar.</li><li>Nur noch eine Konfigurationsdatei statt bis zu 16 Einzeldateien im Benutzerordner.</li></ul></div><div><h3>Zuverlässigkeit</h3><ul><li>Alle Dateien werden atomar geschrieben; Schreibfehler halten den Lauf mit einer Meldung an.</li><li>darktable-cli kann nicht mehr hängen: Zeitlimit je Bild, Abbruch sofort.</li><li>Keine Geisterschrift mehr bei Motion Blur mit Telemetrie-Overlay.</li><li>Rund 3000 automatische Prüfungen laufen bei jeder Änderung.</li></ul></div></div></div>
+        </article>
+        <article class="ver" id="v2-39-0">
+          <div class="ver-side"><h2 class="ver-nr">2.39.0-beta</h2><time class="ver-date" datetime="2026-11-18">18. November 2026</time><div class="ver-links"><a href="https://github.com/slvobng/purelapse/releases/tag/v2.39.0-beta">Release auf GitHub</a></div></div>
+          <div class="ver-main"><p class="ver-intro">Erste öffentliche Testversion.</p><div class="ver-groups single"><div><h3>Enthalten</h3><ul><li>Deflicker für RAW mit ART, RawTherapee und darktable in zwei Durchgängen, Nachkalibrierung bis unter 0,008 EV Restflackern.</li><li>Deflicker für JPG-Serien in einem Durchgang.</li><li>Keyframes mit weicher Überblendung und Schnelleinstellungen mit echter Vorschau durch die Engine.</li><li>Schnellvorschau, Start- und Endbild, Messbereich, 16:9-Kamerafahrt, Motion Blur, Stabilisierung, Astro-Clean, Telemetrie.</li><li>Videoausgabe bis 8K: H.264/H.265 auf CPU, NVIDIA, Intel QuickSync und VAAPI sowie ProRes, mit Codec-Selbsttest.</li><li>Warnungen für Lücken, ausgebrannte und rosa verfärbte Lichter; Warteschlange, Telegram, Deutsch und Englisch.</li></ul></div></div></div>
+        </article>
+      </div>
+      <p class="vers-end"><span>Ältere Entwicklungsstände wurden nicht veröffentlicht.</span><a href="https://github.com/slvobng/purelapse/blob/main/CHANGELOG.md">Alle Einzelheiten im Änderungsprotokoll →</a><a href="index.html">← Zur Startseite</a></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="24" height="24">Purelapse</a>
+    <span>Purelapse steht unter der <a href="https://github.com/slvobng/purelapse/blob/main/LICENSE">GPL-3.0</a>. ART, RawTherapee, darktable und FFmpeg gehören ihren jeweiligen Projekten.</span>
+    <nav aria-label="Links"><a href="https://github.com/slvobng/purelapse">GitHub</a><a href="https://github.com/slvobng/purelapse/issues">Fehler melden</a><a href="versionen.html">Versionen</a><a href="https://github.com/slvobng/purelapse/releases">GitHub-Releases</a></nav>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll("[data-lang]").forEach(function (a) {
+  a.addEventListener("click", function () { try { localStorage.setItem("purelapse-lang", a.getAttribute("data-lang")); } catch (e) {} });
+});
+</script>
+</body>
+</html>
