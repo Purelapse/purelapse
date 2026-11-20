@@ -64,7 +64,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.42.0-beta"
+VERSION = "2.42.1-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -2505,6 +2505,34 @@ def exif_gemerkt(pfad):
     return dict(wert)
 
 
+def telemetrie_zeichnen(bild, text, hoehe, hoechst):
+    """
+    Schreibt die Telemetrie-Zeile unten links ins Bild (auf schwarzem
+    Kasten), in 8 und in 16 Bit.
+
+    OpenCV zeichnet Text nur noch in 8-Bit-Bilder (ab OpenCV 5:
+    "img.depth() == CV_8U"). Mit 16-Bit-Zwischenbildern brach das Rendern
+    deshalb am ersten Bild ab. Fuer 16 Bit wird der Text als 8-Bit-Maske
+    gezeichnet und mit ihrer Kantenglaettung in das Bild uebertragen -
+    das Ergebnis entspricht dem 8-Bit-Bild mal 257.
+    """
+    schrift, groesse = cv2.FONT_HERSHEY_SIMPLEX, 0.5
+    (tw, _th), _ = cv2.getTextSize(text, schrift, groesse, 1)
+    cv2.rectangle(bild, (10, hoehe - 35), (20 + tw, hoehe - 10), (0, 0, 0), -1)
+    if bild.dtype == np.uint8:
+        cv2.putText(bild, text, (15, hoehe - 18), schrift, groesse,
+                    (hoechst, hoechst, hoechst), 1, cv2.LINE_AA)
+        return bild
+    maske = np.zeros(bild.shape[:2], np.uint8)
+    cv2.putText(maske, text, (15, hoehe - 18), schrift, groesse, 255, 1, cv2.LINE_AA)
+    y0, y1 = max(0, hoehe - 35), max(0, hoehe - 10) + 1
+    x0, x1 = 10, 20 + tw + 1
+    teil = maske[y0:y1, x0:x1].astype(np.float32) * (float(hoechst) / 255.0)
+    ziel = bild[y0:y1, x0:x1]
+    ziel[...] = (teil[..., None] + 0.5).astype(bild.dtype)
+    return bild
+
+
 def apply_hotpixel_fix(img, idx):
     """Ersetzt die als defekt erkannten Punkte durch den lokalen Median."""
     if idx is None:
@@ -4427,11 +4455,7 @@ class Worker(QtCore.QThread):
                     text = (f"{zeit} | " if zeit else "") + (
                         f"ISO {exif['iso']} | f/{exif['aperture']} | "
                         f"{format_shutter(exif['shutter'])}")
-                    (tw, _th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                    cv2.rectangle(final, (10, calc_height - 35), (20 + tw, calc_height - 10),
-                                  (0, 0, 0), -1)
-                    cv2.putText(final, text, (15, calc_height - 18), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5, (hoechst, hoechst, hoechst), 1, cv2.LINE_AA)
+                    telemetrie_zeichnen(final, text, calc_height, hoechst)
                 try:
                     final = self._fade(final, idx, total)
                     ffmpeg_proc.stdin.write(np.ascontiguousarray(final).tobytes())
@@ -4497,6 +4521,10 @@ class Worker(QtCore.QThread):
         return fertig[0]
 
     def _remove_satellites(self, prev_img, curr_img, next_img, threshold=30):
+        # Die Schwelle gilt fuer 8 Bit; bei 16-Bit-Zwischenbildern waeren
+        # 30 von 65535 Stufen schon Rauschen - jeder Bildpunkt fiele raus.
+        if curr_img.dtype == np.uint16:
+            threshold = threshold * 257
         diff_prev = cv2.subtract(curr_img, prev_img)
         _, mask_prev = cv2.threshold(cv2.cvtColor(diff_prev, cv2.COLOR_BGR2GRAY), threshold, 255, cv2.THRESH_BINARY)
         diff_next = cv2.subtract(curr_img, next_img)
@@ -6703,6 +6731,15 @@ class MainWindow(QtWidgets.QWidget):
         self.lbl_farbstich.setVisible(False)
         row_info.addWidget(self.lbl_farbstich)
         row_info.addStretch()
+        # Die eingestellte Engine steht immer sichtbar rechts in der
+        # Infozeile - vorher nur in den Einstellungen und in der
+        # Zusammenfassung ueber den Knoepfen. Ein Klick oeffnet die
+        # Einstellungen.
+        self.btn_engine = QtWidgets.QPushButton()
+        self.btn_engine.setObjectName("enginechip")
+        self.btn_engine.setCursor(QtCore.Qt.PointingHandCursor)
+        self.btn_engine.clicked.connect(self._open_settings)
+        row_info.addWidget(self.btn_engine)
         vf.addLayout(row_info)
         main_layout.addWidget(box_folder)
 
@@ -7763,8 +7800,51 @@ class MainWindow(QtWidgets.QWidget):
         else:
             self._start()
 
+    def _engine_anzeigen(self):
+        """
+        Schild rechts in der Infozeile: welche Engine eingestellt ist.
+        Bei JPG wird keine gebraucht; fehlt bei RAW das Programm der Engine,
+        steht das gleich dort - Pass 2 und die Vorschau braeuchten es.
+        """
+        k = getattr(self, 'btn_engine', None)
+        if k is None:
+            return
+        t = THEMES[self.theme]
+        raw = self.rb_raw.isChecked() if hasattr(self, 'rb_raw') else True
+        name = eng('label')
+        feld = getattr(self, 'txt_art_path', None)
+        cli = (feld.text() if feld is not None else get_art_path()).strip()
+        if not raw:
+            text = self._t("JPG · ohne Engine", "JPG · no engine")
+            tip = self._t(f"JPG-Serien rechnet Purelapse selbst, ohne Engine.\n"
+                          f"Fuer RAW eingestellt: {name}.\n\nKlick: Einstellungen",
+                          f"Purelapse processes JPG sequences itself, without an engine.\n"
+                          f"Set for RAW: {name}.\n\nClick: settings")
+            farbe, rand = t['dim'], t['border2']
+        elif not (cli and os.path.isfile(cli)):
+            text = self._t(f"⚠ Engine: {name} – Programm fehlt",
+                           f"⚠ Engine: {name} – program missing")
+            tip = self._t(f"Fuer Pass 2 und die Vorschau braucht Purelapse {eng('bin')}.\n\n"
+                          "Klick: in den Einstellungen den Pfad eintragen.",
+                          f"Pass 2 and the preview need {eng('bin')}.\n\n"
+                          "Click: enter its path in the settings.")
+            farbe = rand = t['warn']
+        else:
+            text = f"Engine: {name}"
+            tip = self._t(f"RAW-Entwicklung mit {name}\n{cli}\n\nKlick: Einstellungen",
+                          f"RAW development with {name}\n{cli}\n\nClick: settings")
+            farbe, rand = t['text'], t['border2']
+        k.setText(text)
+        k.setToolTip(tip)
+        k.setStyleSheet(
+            f"QPushButton#enginechip {{ color: {farbe}; background: transparent;"
+            f" border: 1px solid {rand}; border-radius: 7px; padding: 3px 12px;"
+            " min-height: 0px; font-weight: bold; }"
+            f" QPushButton#enginechip:hover {{ border-color: {t['accent']}; }}")
+
     def _update_summary(self):
         """Eine Zeile ueber den Knoepfen: was der naechste Klick bewirkt."""
+        self._engine_anzeigen()
         if not hasattr(self, 'lbl_summary') or self._is_busy():
             return
         is_raw = self.rb_raw.isChecked()
@@ -8100,6 +8180,7 @@ class MainWindow(QtWidgets.QWidget):
         for feld in (self.txt_art_path, self.txt_arp_template):
             feld.setStyleSheet(f"color: {t['dim']}; font-size: 10px;")
         self.chk_diag.setStyleSheet(f"color: {t['dim']};")
+        self._engine_anzeigen()
         self.lbl_size_est.setStyleSheet(f"color: {t['dim']}; font-style: italic;")
         self._style_gaps()
         if not self._is_busy():
@@ -8336,6 +8417,7 @@ class MainWindow(QtWidgets.QWidget):
         if path and os.path.isfile(path):
             self.txt_art_path.setText(path)
             save_art_path(path)
+            self._engine_anzeigen()
 
     def _browse_arp_template(self):
         if eng('kind') == 'darktable':

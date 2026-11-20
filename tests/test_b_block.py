@@ -77,6 +77,35 @@ dek = subprocess.run(["ffmpeg", "-v", "error", "-i", v[0], "-frames:v", "1", "-f
                      capture_output=True).stdout
 y16 = np.frombuffer(dek, np.uint16)
 pruef(len(np.unique(y16 >> 6)) > 200, f"zu wenige Tonstufen: {len(np.unique(y16 >> 6))}")
+# 16 Bit mit allen Effekten, die ins Bild zeichnen oder vergleichen. OpenCV
+# zeichnet Text nur in 8-Bit-Bilder - die Telemetrie brach mit 16 Bit ab.
+e = lauf(parameter(o, d, raw_mode='pass2', art_cli_path=RT_CLI, tiff16=True, codec_idx=9,
+                   telemetry=True, astro_clean=True, max_blur=3, min_blur=2, fade_sec=0.5))
+pruef(e.ok(), f"16 Bit mit Telemetrie/Astro/Blur scheitert: {e.fehler[:1]}")
+anz = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+                      "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", videos(o)[0]],
+                     capture_output=True, text=True).stdout.strip() if videos(o) else ""
+pruef(anz == "30", f"16-Bit-Video mit Effekten hat {anz} Bilder")
+t = "20:51:33 | ISO 3200 | f/2.8 | 20.0s"
+b8 = np.full((360, 640, 3), 90, np.uint8)
+b16 = b8.astype(np.uint16) * 257
+pm.telemetrie_zeichnen(b8, t, 360, 255)
+pm.telemetrie_zeichnen(b16, t, 360, 65535)
+pruef((b8[330:345, 15:200] == 255).any(), "Telemetrie 8 Bit: kein Text")
+pruef(int(np.abs(b16.astype(np.int64) - b8.astype(np.int64) * 257).max()) <= 257,
+      "Telemetrie 16 Bit weicht von 8 Bit ab")
+# Astro-Clean: 16 Bit verhaelt sich wie 8 Bit (Schwelle mitskaliert)
+w = pm.Worker(parameter(o, d))
+rng = np.random.default_rng(3)
+n8 = [np.clip(100 + rng.normal(0, 4, (60, 80, 3)), 0, 255).astype(np.uint8) for _ in range(3)]
+n8[1][30, 10:70] = 250                     # Satellitenspur nur im mittleren Bild
+r8 = w._remove_satellites(*n8)
+r16 = w._remove_satellites(*[x.astype(np.uint16) * 257 for x in n8])
+pruef(r8[30, 40, 0] < 150 and r16[30, 40, 0] < 150 * 257, "Satellitenspur nicht entfernt")
+ersetzt8 = int((r8 != n8[1]).any(axis=2).sum())
+ersetzt16 = int((r16 != n8[1].astype(np.uint16) * 257).any(axis=2).sum())
+pruef(abs(ersetzt16 - ersetzt8) <= 5 and ersetzt8 < 100,
+      f"Astro-Clean ersetzt 8 Bit {ersetzt8}, 16 Bit {ersetzt16} Bildpunkte")
 # Zurueck auf JPG: Bilder werden neu entwickelt, keine TIFFs im Film
 e = lauf(parameter(o, d, raw_mode='pass2', art_cli_path=RT_CLI, tiff16=False))
 pruef(e.ok() and len(glob.glob(os.path.join(o, "Deflickered_JPG", "*.jpg"))) == 30, "Rueckweg zu JPG")

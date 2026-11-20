@@ -3,9 +3,29 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
-## [Unveröffentlicht]
+## [2.42.1-beta] – 2026-11-20
+
+Fehlerbehebung für 2.42.0. Wer mit 16-Bit-Zwischenbildern arbeitet, sollte
+umsteigen.
+
+### Neu
+- **Eingestellte Engine immer sichtbar:** Rechts in der Zeile unter dem
+  Ordnerpfad steht „Engine: ART“, „Engine: RawTherapee“ bzw. „Engine:
+  Darktable“, bei JPG-Serien „JPG · ohne Engine“. Fehlt bei RAW das
+  Programm der Engine, steht dort eine Warnung. Ein Klick öffnet die
+  Einstellungen.
 
 ### Behoben
+- **16-Bit-Zwischenbilder mit Telemetrie-Overlay brachen ab** („img.depth() ==
+  CV_8U in function 'putText'“), und zwar erst nach der Entwicklung, beim
+  Rendern des Videos. OpenCV zeichnet Text nur in 8-Bit-Bilder. Die Zeile wird
+  jetzt als 8-Bit-Maske gezeichnet und in das 16-Bit-Bild übertragen –
+  Ergebnis wie bei 8 Bit. Die entwickelten Bilder bleiben erhalten; ein
+  erneuter Start von Pass 2 rendert nur noch das Video.
+- **Astro-Clean mit 16-Bit-Zwischenbildern:** Die Schwelle (30 Stufen) galt
+  auch für 16 Bit, wo 30 von 65 535 Stufen Rauschen sind – nahezu jeder
+  Bildpunkt wäre durch den Mittelwert der Nachbarbilder ersetzt worden. Sie
+  wird jetzt mitskaliert.
 - **Hinweis nach Pass 1 bei ausgefressenen Lichtern** war seit 2.42 falsch:
   Er behauptete, die Messung falle dort zu schwach aus, und empfahl einen
   Messbereich ohne Himmel. Seit 2.42 lässt die Messung ausgebrannte Stellen
@@ -18,6 +38,13 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
   Belichtung und überträgt den Modulstapel der Keyframes.
 - Hinweis „Parallele Prozesse“: „gilt nicht für Darktable“ stimmte nicht
   mehr. Die Einstellung gilt auch dort, begrenzt auf 4 Prozesse.
+
+### Intern
+- Neue Prüfung: Engine-Schild für alle Engines, JPG, fehlendes Programm
+  und beide Sprachen.
+- Neue Prüfung: Pass 2 mit 16-Bit-Zwischenbildern, Telemetrie, Astro-Clean,
+  Motion Blur und Blende; Telemetrie und Astro-Clean in 8 und 16 Bit
+  verglichen.
 
 ### Webseite
 - Stand 2.42 und neuer Bereich „Technik“ (Deutsch und Englisch): alle
