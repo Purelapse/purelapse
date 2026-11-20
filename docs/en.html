@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 
 </head>
 <body>
@@ -28,7 +28,7 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="en.html"><img src="assets/icon.png" alt="" width="30" height="30">Purelapse</a>
-    <nav class="nav-links" aria-label="Navigation"><a href="#vergleich">Comparison</a><a href="#ablauf">How it works</a><a href="#funktionen">Features</a><a href="#download">Download</a></nav>
+    <nav class="nav-links" aria-label="Navigation"><a href="#vergleich">Comparison</a><a href="#ablauf">How it works</a><a href="#funktionen">Features</a><a href="#download">Download</a><a href="#technik">Technical</a></nav>
     <div class="lang" aria-label="Sprache / Language"><a href="index.html" hreflang="de" data-lang="de">DE</a><span>EN</span></div>
   </div>
 </header>
@@ -174,6 +174,530 @@
       </div>
     </div>
   </section>
+
+  <section id="technik" class="tech">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Technical reference</div>
+        <h2>Everything in detail.</h2>
+        <p>The complete technical description of Purelapse 2.42: every feature, every processing step, every threshold. Each chapter can be expanded on its own.</p>
+      </div>
+      <div class="tech-layout">
+        <nav class="toc" aria-label="Contents of the technical reference">
+          <div class="toc-head">Contents</div>
+          <ol>
+            <li><a href="#t-ablauf">Workflow and modes</a></li>
+            <li><a href="#t-sichtung">Loading and review</a></li>
+            <li><a href="#t-messung">Brightness measurement</a></li>
+            <li><a href="#t-zielkurve">Target curve and smoothing</a></li>
+            <li><a href="#t-pass1">Pass 1: writing profiles</a></li>
+            <li><a href="#t-keyframes">Keyframes</a></li>
+            <li><a href="#t-schnell">Quick settings</a></li>
+            <li><a href="#t-pass2">Pass 2: development</a></li>
+            <li><a href="#t-kalib">Recalibration</a></li>
+            <li><a href="#t-bild">Frame pipeline and effects</a></li>
+            <li><a href="#t-video">Video output</a></li>
+            <li><a href="#t-vorschau">Preview and comparison</a></li>
+            <li><a href="#t-stapel">Queue and Telegram</a></li>
+            <li><a href="#t-leistung">Performance and memory</a></li>
+            <li><a href="#t-dateien">Files and settings</a></li>
+            <li><a href="#t-qs">Tests and requirements</a></li>
+          </ol>
+          <button type="button" class="toc-all" data-open="Expand all" data-close="Collapse all">Expand all</button>
+        </nav>
+        <div class="chapters">
+
+          <details class="chap" id="t-ablauf">
+            <summary><span class="num">01</span><span class="ttl">Workflow and modes<small>Steps, run types, progress display</small></span></summary>
+            <div class="chap-body">
+              <h4>Step bar</h4>
+              <p>The interface guides you through four steps: <b>Load images</b> → <b>Smooth brightness</b> → <b>Edit keyframes</b> → <b>Render video</b>. For RAW, “Smooth brightness” is pass 1 and “Render video” is pass 2; for JPG the keyframe step is skipped. Completed steps are marked, and every step stays clickable.</p>
+              <h4>Run types</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Run</th><th>What happens</th></tr></thead>
+                <tbody>
+                  <tr><td>JPG direct</td><td>Measures all JPGs, evens out brightness and colour channels, stores the deflickered frames (JPG quality 95) in <code>Deflickered_JPG</code> and renders the video in a single run.</td></tr>
+                  <tr><td>RAW pass 1</td><td>Measures every RAW in linear light, computes the target curve and writes the exposure correction into the engine's sidecar file (<code>.arp</code>, <code>.pp3</code> or <code>.xmp</code>).</td></tr>
+                  <tr><td>RAW pass 2</td><td>Distributes the keyframes, has the engine develop, re-measures the result, recalibrates and renders the video.</td></tr>
+                  <tr><td>Preview (5 frames)</td><td>Develops five frames spread evenly across the sequence with all current settings.</td></tr>
+                  <tr><td>Quick preview</td><td>A rough video in minutes from the camera's embedded preview images.</td></tr>
+                  <tr><td>Untouched version</td><td>The timelapse without any processing, as a reference.</td></tr>
+                  <tr><td>Comparison video</td><td>Two finished videos side by side or split.</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Folders and formats</h4>
+              <ul>
+                <li>A folder holds one sequence – JPG or RAW, not mixed. If both are present, RAW is used.</li>
+                <li>RAW formats: NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW.</li>
+                <li>At start-up Purelapse offers the last workflow and shows its state: number of RAW/JPG files, “pass 1 done”, “frames developed”, number of finished videos and the time of the last change. Only file names are read, so the dialog appears instantly.</li>
+              </ul>
+              <h4>Progress display and log</h4>
+              <ul>
+                <li>Before every run Purelapse shows the expected steps (e.g. development → measure result → recalibration → stabilisation → render video). Each step gets its duration and state; progress, remaining time and percentage are shown in the status line.</li>
+                <li>The log window shows every message with a time stamp, coloured by error, warning and success. It opens by itself on an error. All messages exist in German and English.</li>
+                <li>“Cancel” stops any run; running engine processes are terminated immediately.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-sichtung">
+            <summary><span class="num">02</span><span class="ttl">Loading and review<small>Filmstrip, chart, gaps, highlights, sun elevation</small></span></summary>
+            <div class="chap-body">
+              <h4>Filmstrip</h4>
+              <ul>
+                <li>Thumbnails come from the camera JPEG embedded in the RAW file; if there is none, rawpy develops the frame at half size. Every tile (128 × 85 pixels) carries an RGB histogram.</li>
+                <li>Loading runs in parallel on all CPU cores but one.</li>
+                <li>Keyframes are marked; “★ keyframes only” hides all other frames without breaking the link to the chart. Buttons jump to the first and last frame.</li>
+                <li><b>Start frame / End frame</b> restrict the workflow to part of the sequence. The choice is stored per folder; run pass 1 again afterwards.</li>
+              </ul>
+              <h4>Engine detection</h4>
+              <p>If the folder already contains sidecar files of exactly one engine (<code>.arp</code>, <code>.pp3</code> or genuine darktable <code>.xmp</code>), Purelapse switches to that engine when loading. XMP files that only hold a star rating don't count.</p>
+              <h4>Chart</h4>
+              <ul>
+                <li>Two main curves: measured brightness (“Original”) and the target curve. Every change of strength, light progression or exposure redraws the target curve instantly.</li>
+                <li>Optional curves: white balance, exposure from EXIF, shooting interval, clipping, residual flicker (after pass 2) and sun elevation.</li>
+                <li>A click in the chart jumps to that frame; a band marks the part of the filmstrip currently visible; vertical lines show the keyframes.</li>
+              </ul>
+              <h4>Missing frames</h4>
+              <p>The EXIF time stamps give the sequence of intervals. Each interval is compared with the median of the 21 surrounding ones – so an interval that grows with the shutter speed (holy grail) counts as normal. From 1.6 times that median Purelapse reports a gap together with the estimated number of missing frames (rounded ratio − 1). At least eight valid intervals are needed; the smallest, median and largest usual interval are shown as well.</p>
+              <h4>Clipped highlights</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>When</th><th>Basis</th><th>Threshold</th></tr></thead>
+                <tbody>
+                  <tr><td>On loading (provisional)</td><td>Camera's embedded preview JPEG</td><td>&gt; 1 % clipped pixels</td></tr>
+                  <tr><td>In pass 1 (reliable)</td><td>16-bit sensor data: a 2×2 colour-filter cell counts as clipped once one of its photosites reaches ≥ 98 % of the white level</td><td>&gt; 0.5 % of pixels</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Tinted highlights (pink sun)</h4>
+              <p>A pixel counts as tinted if it is bright (strongest channel ≥ 0.93), red ≥ 0.96 and blue ≥ 0.88 are at the limit, and green stays at least 0.12 below. A frame is reported when more than 15 % of its bright pixels are tinted like this. A strong but genuine orange in an evening sky does not trigger the warning. The remedy is highlight reconstruction in a keyframe (see chapter 07).</p>
+              <h4>Sun elevation</h4>
+              <p>From latitude and longitude (typed in or “GPS from image”) and the time-zone offset at the time of shooting, Purelapse computes the sun's elevation for every frame using the <code>astral</code> library. The chart marks the crossings at 0° (sunrise/sunset), −6° (civil), −12° (nautical) and −18° (astronomical twilight) – useful for placing keyframes there. It has no influence on the deflicker itself.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-messung">
+            <summary><span class="num">03</span><span class="ttl">Brightness measurement<small>RAW, JPG, re-measurement, measuring area</small></span></summary>
+            <div class="chap-body">
+              <h4>RAW (pass 1)</h4>
+              <ul>
+                <li>rawpy develops every frame at half size, with camera white balance, without auto brightness, gamma 1.0 and 16 bit. With 8-bit gamma output, large parts of night shots would collapse to black – the mean would no longer measure exposure.</li>
+                <li>Brightness per pixel: <code>0.2989·R + 0.5870·G + 0.1140·B</code>, computed in 32-bit floating point.</li>
+                <li><b>Clipped areas are left out:</b> pixels at the sensor limit (2×2 cell ≥ 98 % of white level) stay equally bright whatever the exposure and would pull the measurement towards them. They are excluded together with a narrow seam (radius ≈ 2 pixels per 1000 pixels of image edge, at least 2). If less than 20 % of the image remains, all pixels are measured.</li>
+                <li>The average is arithmetic in linear light – unlike a logarithmic mean it doesn't depend on noise, which changes with the ISO setting.</li>
+                <li>Also recorded per frame: share of clipped and black pixels, and the camera's white-balance factors (red/green, blue/green).</li>
+              </ul>
+              <h4>JPG workflow</h4>
+              <p>The means of the three colour channels are measured. Pixels whose strongest channel reaches 250 of 255 are left out together with a seam (again with the 20 % lower limit).</p>
+              <h4>Re-measurement in pass 2</h4>
+              <ul>
+                <li>The developed frames are measured completely, every pixel counts. Conversion from sRGB to linear light is exact via lookup tables (256 levels for JPG, 65,536 for 16-bit TIFF).</li>
+                <li>Every frame is split into blocks (at most 256 across the width). A block counts as clipped if one pixel in it reaches 250/255.</li>
+                <li>Only blocks that clip in <b>no</b> frame of the sequence are evaluated, plus a one-block seam. Reason: in the finished frame “clipped” depends on the correction – a darkened sun is grey instead of white. Decided frame by frame, the recalibration would “correct” flicker that wasn't there.</li>
+                <li>If less than 20 % remains, each frame decides for itself.</li>
+              </ul>
+              <h4>Measuring area (ROI)</h4>
+              <p>A freely drawn rectangle restricts all measurements – pass 1, JPG, re-measurement and quick preview – to part of the frame. It is stored relative to the image size. Since 2.42 it is only needed in special cases, such as moving objects that dominate the frame.</p>
+              <h4>Parallelism</h4>
+              <p>Up to 8 frames are measured at once (beyond that the disk is the bottleneck, not the CPU), no more than half of the free memory allows at 450 MB per frame, and never more than the configured cores.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-zielkurve">
+            <summary><span class="num">04</span><span class="ttl">Target curve and smoothing<small>Algorithm, strength, light progression, exposure</small></span></summary>
+            <div class="chap-body">
+              <h4>Algorithm</h4>
+              <ol class="steps-list">
+                <li>Measurements are converted into stops: <code>EV = log₂(brightness)</code>.</li>
+                <li>A straight line fitted by linear regression describes the basic course; the work is done on the deviation from it.</li>
+                <li>First smoothing: Gaussian filter with <code>σ₁ = min(1 + 0.6·s, n/3)</code> frames (s = strength in %, n = number of frames).</li>
+                <li>Outliers are limited: deviations of more than <code>2.5 · 1.4826 · MAD</code> (at least 0.05 EV) from the smoothed course are clipped – a single bad frame doesn't drag the curve along.</li>
+                <li>Second smoothing with <code>σ₂ = min(max(1, σ₁/3), n/6)</code>; the straight line is added back.</li>
+                <li>From a strength of 85 % the curve blends seamlessly into the pure straight line; at 100 % it is the line.</li>
+                <li>With “Sunrise” or “Sunset”, an isotonic regression (pool adjacent violators) forces a never falling or never rising course.</li>
+                <li>The exposure shift is added; the correction per frame is <code>log₂(target / measurement)</code> in EV.</li>
+              </ol>
+              <h4>Controls</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Control</th><th>Range</th><th>Effect</th></tr></thead>
+                <tbody>
+                  <tr><td>Deflicker strength</td><td>1–100 %, default 50 %</td><td>Width of the smoothing. Low removes only fast flicker, high also reshapes the light progression.</td></tr>
+                  <tr><td>Light progression</td><td>Constant · Sunrise · Sunset</td><td>Constant keeps the course as it is; the others force it to be monotonic. Sequences with a “hump” in the light belong on Constant.</td></tr>
+                  <tr><td>Exposure</td><td>−3.0 to +3.0 EV in 0.1 steps</td><td>Shifts the target brightness of the whole sequence.</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Plausibility check</h4>
+              <p>Pass 1 compares the measured flicker (standard deviation of each frame against the median of its nine neighbours) with the required correction. If the correction exceeds <code>max(0.15 EV, 3 × flicker)</code>, Purelapse points out that the deflicker reshapes the light progression, names the cause (high strength, forced progression) and shows the value for strength 25 and “Constant” for comparison.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-pass1">
+            <summary><span class="num">05</span><span class="ttl">Pass 1: writing profiles<small>Base profile, exposure, darktable, white balance</small></span></summary>
+            <div class="chap-body">
+              <h4>Base profile (ART and RawTherapee)</h4>
+              <ul>
+                <li>Purelapse never creates a sidecar from nothing: a profile consisting only of <code>[Exposure]</code> is discarded by some engines, and the correction would have no effect. A complete profile with a <code>[Version]</code> block is required.</li>
+                <li>Order of sources: an existing engine profile in the image folder, the base profile chosen in the settings, otherwise Purelapse has the engine create its default profile once (<code>-Y -j80 -c</code> on a sample frame). The result is kept permanently in <code>~/.local/share/purelapse</code>.</li>
+              </ul>
+              <h4>What is written</h4>
+              <ul>
+                <li>Exposure correction per frame in <code>[Exposure] Compensation</code> (auto off). If a keyframe already carries its own exposure change, it is kept as an offset from the pass 1 value.</li>
+                <li>The plain pass 1 values go to <code>purelapse_deflicker.json</code>; pass 2 needs them for exact keyframe transitions.</li>
+                <li>With “Remove dead / hot pixels” the engine's defect-pixel correction is switched on (ART/RawTherapee: hot and dead pixel filter, threshold 100).</li>
+              </ul>
+              <h4>darktable</h4>
+              <ul>
+                <li>Purelapse writes into the XMP files darktable creates on import (preference “write sidecar file for each image: on import”). If they are missing, pass 1 stops right away with an explanation – not after the measurement.</li>
+                <li>Per module and instance priority, the last history entry below <code>history_end</code> is the effective one. The deflicker value goes into exactly that exposure instance; the user's own exposure change is kept as an offset. A custom module order is supported as well.</li>
+                <li>Fresh profiles keep darktable's defaults (<code>auto_presets_applied</code>); only stacks taken over from keyframes count as finished.</li>
+              </ul>
+              <h4>White balance check</h4>
+              <p>From the camera's red/green and blue/green factors Purelapse computes the frame-to-frame jitter and the total span. Below 0.004 EV jitter and 0.02 EV span the white balance counts as constant. From 0.004 EV jitter Purelapse warns about automatic white balance – the deflicker only corrects brightness – and recommends giving the first and last frame a fixed white balance as keyframes.</p>
+              <h4>Checks</h4>
+              <p>Every profile written is read back and checked against the base profile. Format deviations are reported in the log (details in diagnostic mode), as are frames with clipped highlights.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-keyframes">
+            <summary><span class="num">06</span><span class="ttl">Keyframes<small>Marking, distribution, blending, darktable module stack</small></span></summary>
+            <div class="chap-body">
+              <h4>Marking</h4>
+              <p>A frame is a keyframe when it carries <b>5 stars</b> – in the XMP rating or as <code>Rank</code>/<code>Rating</code> in the profile. Set it in Purelapse with the tick on the tile, or in the engine. In an existing XMP, Purelapse changes only the rating. darktable reads XMP files only on first import; a note on the keyframe page explains how it picks up the stars.</p>
+              <h4>Distribution in pass 2</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Range</th><th>Profile</th></tr></thead>
+                <tbody>
+                  <tr><td>Before the first keyframe</td><td>Copy of the first keyframe</td></tr>
+                  <tr><td>Between two keyframes</td><td>Blend with <code>t = (i − s) / (e − s)</code></td></tr>
+                  <tr><td>After the last keyframe</td><td>Copy of the last keyframe</td></tr>
+                </tbody>
+              </table></div>
+              <p>Exposure is handled separately: <code>EV(i) = pass1(i) + Δs + (Δe − Δs)·t + calibration(i)</code>, where Δ is a keyframe's own exposure change relative to its pass 1 and calibration value. This keeps the deflicker in every frame while the keyframe grading runs smoothly on top.</p>
+              <h4>ART and RawTherapee</h4>
+              <ul>
+                <li>Numbers and number lists of equal length are blended linearly, integers rounded.</li>
+                <li>Text and curves with different numbers of points switch in the middle (t = 0.5). Purelapse names up to four such settings per keyframe pair beforehand.</li>
+                <li>White balance: if temperature, green or multipliers differ, the mode is set to custom temperature (ART <code>CustomTemp</code>, RawTherapee <code>Custom</code>) – otherwise the engine would silently fall back to the camera value.</li>
+                <li>A tool is switched on as soon as it is on in either keyframe.</li>
+              </ul>
+              <h4>darktable: complete module stack</h4>
+              <ul>
+                <li>All modules of the keyframes are carried over, not just exposure. Each module instance is matched by operation and instance priority.</li>
+                <li>The parameters are stored as binary data in the XMP. Purelapse decodes them with layouts taken from the darktable 4.6.1 source code (67 modules) and checks module version and data size before every blend.</li>
+                <li>Floating-point values are blended linearly, hues along the shorter way round the colour wheel. Integers and choice lists come from the nearer keyframe.</li>
+                <li>Switches, masks and blend modes, as well as modules present in only one keyframe, also come from the nearer keyframe.</li>
+                <li>Geometry and retouching are never blended: crop, perspective, lens correction, retouch, spot removal, liquify, hot pixels and the pipeline's mandatory modules.</li>
+                <li>Blended smoothly are, among others, white balance, color calibration, sharpen, color balance rgb, filmic rgb, sigmoid, tone equalizer, local contrast, haze removal and graduated density.</li>
+                <li>Before distribution the log lists which modules are carried over and which are blended. Recommendation: use the same modules in all keyframes (copy the history with Ctrl+Shift+C / Ctrl+Shift+V).</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-schnell">
+            <summary><span class="num">07</span><span class="ttl">Quick settings<small>Controls, mapping per engine, auto, real preview</small></span></summary>
+            <div class="chap-body">
+              <p>“Edit keyframe…” edits a keyframe's profile without opening the engine. Every control has its own tick box: without the tick the value in the profile is left alone, so an edit made in the engine stays intact. Controls whose section is missing from the profile are locked instead of silently writing a key the engine would discard.</p>
+              <h4>Controls and mapping</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Control</th><th>Range</th><th>ART</th><th>RawTherapee</th><th>darktable</th></tr></thead>
+                <tbody>
+                  <tr><td>Colour temperature</td><td class="nw">2000–12000 K</td><td colspan="2"><code>[White Balance] Temperature</code></td><td>–</td></tr>
+                  <tr><td>Green balance</td><td class="nw">0.6–1.8</td><td colspan="2"><code>[White Balance] Green</code></td><td>–</td></tr>
+                  <tr><td>Brightness</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Brightness</code></td><td><code>[Exposure] Brightness</code></td><td>color balance rgb, brilliance × 0.01</td></tr>
+                  <tr><td>Contrast</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Contrast</code></td><td><code>[Exposure] Contrast</code></td><td>color balance rgb, contrast × 0.01</td></tr>
+                  <tr><td>Saturation</td><td class="nw">−100…100</td><td><code>[Saturation] Saturation</code></td><td><code>[Exposure] Saturation</code></td><td>color balance rgb, saturation × 0.01</td></tr>
+                  <tr><td>Sharpening</td><td>1–1000 (darktable 1–800)</td><td colspan="2"><code>[Sharpening] Amount</code></td><td>sharpen, amount ÷ 400 (200 → 0.5)</td></tr>
+                  <tr><td>Denoise luminance</td><td class="nw">0–100</td><td><code>[Denoise] Luminance</code></td><td><code>[Directional Pyramid Denoising] Luma</code></td><td>–</td></tr>
+                  <tr><td>Denoise chrominance</td><td class="nw">0–100</td><td><code>[Denoise] Chrominance</code></td><td><code>[Directional Pyramid Denoising] Chroma</code></td><td>–</td></tr>
+                </tbody>
+              </table></div>
+              <p class="small">White balance and denoising are deliberately missing for darktable: darktable stores camera-dependent values there (channel coefficients, noise profile) that cannot be derived from kelvin or a strength without the camera's colour matrix.</p>
+              <h4>Auto-optimise</h4>
+              <p>Every suggestion rests on a measurement, and every measurement appears with its number in the explanation:</p>
+              <ul>
+                <li><b>Brightness:</b> image median to 0.44 on screen, at most ±25; changes below 2 points are not suggested.</li>
+                <li><b>Contrast:</b> only if the histogram (2nd–98th percentile) uses less than 0.88 of the scale; stretched towards 0.92, at most +28, no suggestion below 5 points.</li>
+                <li><b>Saturation:</b> only for pale images (mean colourfulness below 0.28), at most +25; damped when contrast rises at the same time.</li>
+                <li><b>Sharpening:</b> 240 to 380, stepless according to the fine structure of the subject (deviation from a Gaussian blur).</li>
+                <li><b>Denoising:</b> from the ISO value in the EXIF data (grain can't be measured in a downscaled preview): up to ISO 200 luminance 0 / colour 15, stepped up to 45 / 40 above ISO 6400.</li>
+                <li><b>Highlights:</b> if more than 15 % of the brightest areas are tinted pink, highlight reconstruction is switched on.</li>
+                <li><b>White balance</b> stays unchanged – a single frame can't tell whether the colour mood is intended.</li>
+              </ul>
+              <h4>Reconstruct highlights</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Engine</th><th>Methods</th><th>Recommended</th></tr></thead>
+                <tbody>
+                  <tr><td>ART</td><td>Off · Blend · Color · Balanced (<code>[Exposure] HLRecovery</code>)</td><td>Color</td></tr>
+                  <tr><td>RawTherapee</td><td>Off · Blend · Color · Color propagation (<code>[HLRecovery] Method</code>)</td><td>Color propagation</td></tr>
+                  <tr><td>darktable</td><td colspan="2">via darktable's “highlight reconstruction” module in the keyframe</td></tr>
+                </tbody>
+              </table></div>
+              <p>Background: in the core of the sun green hits the limit first, then the white-balance factors lift red and blue further – white turns magenta. Negative exposure compensation doesn't help; reconstruction estimates the missing channel from the others.</p>
+              <h4>Real preview</h4>
+              <ul>
+                <li>The engine itself develops the frame – with exactly the profile that would be written on saving, at no more than 2000 pixels on the long edge (headroom for zooming). Saving and preview go through the same function.</li>
+                <li>It starts 600 ms after the last slider movement; up to 16 states are cached. Until the engine's image arrives, Purelapse shows an approximation.</li>
+                <li>Zoom up to 8×, “Show before”, RGB histogram, “Reset”.</li>
+                <li>“Copy from another keyframe” only takes values the own profile knows and that differ from neutral there.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-pass2">
+            <summary><span class="num">08</span><span class="ttl">Pass 2: development<small>Preparation, engine call, darktable-cli, 16 bit, resuming</small></span></summary>
+            <div class="chap-body">
+              <h4>Preparation</h4>
+              <ol class="steps-list">
+                <li>Check that every frame has a complete profile for the selected engine. If all are incomplete, Purelapse stops rather than deliver a flickering video.</li>
+                <li><b>Freezing automatics</b> (ART/RawTherapee): an auto-matched tone curve would compute its own curve for every frame – that flickers despite clean measurements. It is switched off; if no own curve is stored, the engine's standard film curve applies. In RawTherapee a fixed auto curve is released from auto mode (which would ignore brightness and contrast). In ART the automatic of log tone mapping is switched off.</li>
+                <li>Keyframe distribution (chapter 06).</li>
+              </ol>
+              <h4>ART and RawTherapee</h4>
+              <ul>
+                <li>Call: <code>ART-cli -S -Y -o Deflickered_JPG -j100 -c &lt;frames&gt;</code> (RawTherapee adds <code>-d</code>). <code>-S</code> instead of <code>-s</code>: if a sidecar is missing the engine aborts instead of silently developing with its default profile.</li>
+                <li>With 16-bit intermediates: <code>-tz -b16</code> (compressed 16-bit TIFF) instead of <code>-j100</code>.</li>
+                <li>Several processes share the frames (every n-th frame). Each process gets <code>OMP_NUM_THREADS = cores / processes</code>.</li>
+                <li>The engine's output is scanned for errors; profiles that weren't loaded are counted and reported.</li>
+              </ul>
+              <h4>darktable-cli</h4>
+              <ul>
+                <li>One frame per call: <code>darktable-cli FRAME FRAME.xmp TARGET --hq true --width 0 --height 0 --core --configdir SLOT --conf plugins/imageio/format/jpeg/quality=100</code>.</li>
+                <li>16 bit: additionally <code>tiff/bpp=16</code>, <code>pixelformat=0</code>, <code>compress=1</code>.</li>
+                <li>Up to 4 processes at once (more doesn't help on one GPU), at most one per 3 GB of free memory.</li>
+                <li>darktable-cli locks its preset database. So each process gets its own configuration folder in the cache, into which the user's <code>darktablerc</code> and <code>data.db</code> are copied (from <code>~/.config/darktable</code> or the Flatpak version) – OpenCL settings and own presets still apply. As a side effect pass 2 also runs while darktable is open.</li>
+                <li>Time limit of 10 minutes per frame; cancelling kills running processes immediately and removes leftover lock files.</li>
+              </ul>
+              <h4>16-bit intermediate images</h4>
+              <p>Option in the settings. The engine develops to 16-bit TIFF, and the video is computed in 16 bit throughout (handed to FFmpeg as <code>bgr48le</code>). Fine gradients in the sky stay free of banding, especially with HEVC 10 bit or ProRes. Purelapse checks the disk space first: <code>width × height × 6 bytes × 0.85</code> per frame plus 5 % reserve (about 120 MB per frame at 24 megapixels). Switching the option re-develops the frames.</p>
+              <h4>Resuming and cancelling</h4>
+              <ul>
+                <li>In <code>Deflickered_JPG/.purelapse_developed.json</code> Purelapse records for every frame the fingerprint of its profile (SHA-1) and the format. The next run only develops what is missing or whose profile changed.</li>
+                <li>After cancelling, finished frames are kept. The newest files – one per running process – are discarded because they may have been interrupted mid-write.</li>
+                <li>The video gets exactly the developed image of each source frame, not just everything in the output folder; if one is missing, Purelapse names it.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-kalib">
+            <summary><span class="num">09</span><span class="ttl">Recalibration<small>Closed loop down to below 0.008 EV</small></span></summary>
+            <div class="chap-body">
+              <p>The engine never develops exactly as the pass 1 measurement predicts (tone curves, highlights, colour spaces). So Purelapse measures the result and corrects.</p>
+              <ol class="steps-list">
+                <li>Re-measurement of all developed frames (chapter 03).</li>
+                <li>Target curve over the measured values with strength <code>min(deflicker strength, 15)</code> and constant progression – only flicker is removed, the intended course stays.</li>
+                <li>Residual per frame <code>r = log₂(target / measurement)</code>, adjusted by the median. The figure of merit is the standard deviation σ of the residuals.</li>
+                <li>If σ is below <b>0.008 EV</b>, the target is reached and nothing more is written.</li>
+                <li>Otherwise the residual is added to the exposure in the profile. Total calibration per frame is limited to ±0.5 EV (with a warning); steps below 0.005 EV are not written.</li>
+                <li>Only the frames actually changed are re-developed; unchanged files (same modification time and size) are not measured again.</li>
+              </ol>
+              <div class="tbl"><table>
+                <thead><tr><th>Setting</th><th>Engine runs</th></tr></thead>
+                <tbody>
+                  <tr><td>Off</td><td>1</td></tr>
+                  <tr><td>1 pass</td><td>up to 2</td></tr>
+                  <tr><td>2 passes (default)</td><td>up to 3</td></tr>
+                  <tr><td>3 passes</td><td>up to 4</td></tr>
+                </tbody>
+              </table></div>
+              <p>Calibration values are kept in <code>purelapse_calib.json</code>, residuals per frame in <code>purelapse_result.json</code>; residual flicker can be shown as a curve in the chart. On the test bench the result stays at 0.0002–0.0006 EV even with the sun in the frame.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-bild">
+            <summary><span class="num">10</span><span class="ttl">Frame pipeline and effects<small>Order, camera move, motion blur, stabilisation, astro clean</small></span></summary>
+            <div class="chap-body">
+              <h4>Order per video frame</h4>
+              <ol class="steps-list">
+                <li>Load the frame (16 bit stays 16 bit); in the JPG workflow channel gains and hot-pixel correction.</li>
+                <li>Astro clean (needs both neighbouring frames).</li>
+                <li>Stabilisation.</li>
+                <li>Crop or camera move, scaling to the target resolution.</li>
+                <li>Motion blur.</li>
+                <li>Denoising (JPG workflow only).</li>
+                <li>Telemetry overlay.</li>
+                <li>Fade in and out.</li>
+                <li>Hand-over to FFmpeg.</li>
+              </ol>
+              <p>Loading, stabilisation and cropping run ahead in up to 4 helper threads; everything that depends on order stays in one thread.</p>
+              <h4>Camera move (16:9)</h4>
+              <ul>
+                <li>Start and end crop are drawn in the first and last frame; position and size are interpolated in between. Without a move, a centred 16:9 crop applies.</li>
+                <li>Motion profile: gentle acceleration and braking over 10 % of the run each (linearly rising or falling speed), steady in between.</li>
+                <li>Sampling with fractions of a pixel: first a Gaussian blur matched to the downscaling (σ = 0.4 target pixels), then cubic interpolation. Sharpness stays the same wherever the crop lies between two pixels (variation 0.1 %), and motion is even (±0.013 pixels).</li>
+              </ul>
+              <h4>Motion blur</h4>
+              <ul>
+                <li>Averages 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20 or 25 frames into one video frame, in 32-bit floating point and rounded.</li>
+                <li>Adapts to the shutter speed: below 1 s the full number of frames, from 3 s about half, linear in between – long night exposures already bring their own motion blur.</li>
+              </ul>
+              <h4>Optical stabilisation</h4>
+              <p>Up to 200 distinctive points per frame (downscaled to 800 pixels, greyscale) are tracked with optical flow (Lucas–Kanade); each frame pair yields a shift and rotation. The accumulated path is smoothed with a Gaussian filter (σ = 30 frames), and the difference is compensated. A 3 % zoom hides the edges.</p>
+              <h4>Astro clean</h4>
+              <p>Every frame is compared with its two neighbours. A pixel that is more than 30 levels brighter in both comparisons (satellites, aircraft) is replaced by the mean of the neighbours. The first and last frame stay unchanged.</p>
+              <h4>Dead and hot pixels</h4>
+              <p>For RAW the engine does this (darktable: “hot pixels” module, created when needed, keyframes included). For JPG Purelapse examines 15 frames spread across the sequence: a point that deviates by more than 24 levels from its 3×3 median in at least 85 % of them counts as defective and is replaced by the median. Stars and subject detail move, so they stay untouched.</p>
+              <h4>Further effects</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td>Denoise</td><td>JPG workflow only, from ISO 800: bilateral filter with diameter <code>(ISO − 400) / 250</code>, limited to 3–15.</td></tr>
+                  <tr><td>Telemetry</td><td>Bottom left: time, ISO, aperture and shutter speed from the EXIF data. The text never enters the motion-blur buffer.</td></tr>
+                  <tr><td>Fade in/out</td><td>0.5, 1, 2 or 3 seconds, linear from or to black.</td></tr>
+                  <tr><td>Reverse</td><td>Plays the sequence backwards; stabilisation follows the direction.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </details>
+
+          <details class="chap" id="t-video">
+            <summary><span class="num">11</span><span class="ttl">Video output<small>FFmpeg, colour space, codecs, self-test, file name</small></span></summary>
+            <div class="chap-body">
+              <h4>Hand-over and colour space</h4>
+              <ul>
+                <li>Frames go to FFmpeg uncompressed through a pipe (<code>rawvideo</code>, <code>bgr24</code>, or <code>bgr48le</code> in 16 bit).</li>
+                <li>Conversion to BT.709 in limited range: <code>scale=out_color_matrix=bt709:out_range=tv,format=…</code>, tagged with <code>-colorspace bt709 -color_primaries bt709 -color_trc bt709</code>. Without this FFmpeg converts using the SD standard BT.601, shifting greens and reds.</li>
+                <li>Resolution is always 16:9: width 1280, 1920, 2560, 3840 or 7680, height = width × 9/16.</li>
+                <li>Frame rates: 23.976 · 24 · 25 · 29.97 · 30 · 50 · 59.94 · 60 · 120 fps.</li>
+              </ul>
+              <h4>Codecs</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Codec</th><th>Encoder</th><th>Pixel format</th><th>Parameters</th><th>File</th></tr></thead>
+                <tbody>
+                  <tr><td>H.264 (CPU)</td><td><code>libx264</code></td><td>yuv420p</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (NVIDIA)</td><td><code>h264_nvenc</code></td><td>yuv420p</td><td><code>-preset p6 -cq Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265/HEVC (CPU)</td><td><code>libx265</code></td><td>yuv420p</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265/HEVC (NVIDIA)</td><td><code>hevc_nvenc</code></td><td>yuv420p</td><td><code>-preset p6 -cq Q</code></td><td>.mp4</td></tr>
+                  <tr><td>HEVC 10 bit (CPU)</td><td><code>libx265</code></td><td>yuv420p10le</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>HEVC 10 bit (NVIDIA)</td><td><code>hevc_nvenc</code></td><td>p010le</td><td><code>-preset p6 -cq Q -profile:v main10</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (Intel QuickSync)</td><td><code>h264_qsv</code></td><td>nv12</td><td><code>-preset slow -global_quality Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265 (Intel QuickSync)</td><td><code>hevc_qsv</code></td><td>nv12</td><td><code>-preset slow -global_quality Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (VAAPI)</td><td><code>h264_vaapi</code></td><td>nv12 → GPU</td><td><code>-rc_mode CQP -qp Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265 (VAAPI)</td><td><code>hevc_vaapi</code></td><td>nv12 → GPU</td><td><code>-rc_mode CQP -qp Q</code></td><td>.mp4</td></tr>
+                  <tr><td>Apple ProRes 422 HQ</td><td><code>prores_ks</code></td><td>yuv422p10le</td><td><code>-profile:v 3 -qscale:v 9</code></td><td>.mov</td></tr>
+                </tbody>
+              </table></div>
+              <p class="small">Q is the quality level: 16 (visually lossless), 20 (high), 23 (standard) or 28 (low). VAAPI finds the graphics card's render node by itself.</p>
+              <h4>Self-test and fallback</h4>
+              <ul>
+                <li>A hardware codec is tested when selected and before every run: FFmpeg encodes three black test frames into nothing (under a second). A driver that doesn't work is caught before hours of development, not after.</li>
+                <li>The system's FFmpeg is preferred (it matches the graphics driver), the bundled one is the fallback. If another FFmpeg can drive the encoder, Purelapse switches to it for this session.</li>
+                <li>If the codec doesn't run at all, Purelapse offers the equivalent CPU codec; in the queue it switches without asking and logs it.</li>
+              </ul>
+              <h4>File name and location</h4>
+              <ul>
+                <li>Name: <code>&lt;folder&gt;_Purelapse_&lt;resolution&gt;_&lt;fps&gt;fps</code>, with versioning <code>_v1</code>, <code>_v2</code> …; alternatively the file is overwritten.</li>
+                <li>Location: image folder, parent folder, program folder or a folder of your choice.</li>
+                <li>The size estimate uses <code>1.25 MB/s × resolution × quality × codec factor × fps/25</code> and also shows the video length.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-vorschau">
+            <summary><span class="num">12</span><span class="ttl">Preview and comparison<small>Five-frame preview, quick preview, untouched version, comparison video</small></span></summary>
+            <div class="chap-body">
+              <div class="tbl"><table>
+                <thead><tr><th>Tool</th><th>How it works</th></tr></thead>
+                <tbody>
+                  <tr><td>Preview (5 frames)</td><td>Five evenly spread frames. For RAW the engine develops with the pass 1 profiles and the keyframes (JPG quality 92), so pass 1 must have run; for JPG the smoothing is applied directly. Camera move and fade apply. Saves a complete failed run.</td></tr>
+                  <tr><td>Quick preview</td><td>Embedded camera preview images, at most 1280 pixels wide, smoothing as in the chart, crop and camera move apply. Encoded with <code>libx264 -preset ultrafast -crf 23</code>, file name with <code>_Schnellvorschau</code>. No engine, no keyframes, no effects.</td></tr>
+                  <tr><td>Untouched version</td><td>Every frame as neutral as possible (RAW with camera white balance, no auto brightness), centred 16:9 crop. Deflicker, keyframes, motion blur, denoising and stabilisation stay off; frame rate, resolution, codec and quality apply.</td></tr>
+                  <tr><td>Comparison video</td><td>Side by side (both scaled to 720 pixels height) or split (left half of video A, right half of video B); <code>libx264 -preset fast -crf 18</code>.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </details>
+
+          <details class="chap" id="t-stapel">
+            <summary><span class="num">13</span><span class="ttl">Queue and Telegram<small>Batch processing, notification</small></span></summary>
+            <div class="chap-body">
+              <h4>Queue</h4>
+              <ul>
+                <li>“Add to queue” stores the current folder with its step and all settings as a job; then you can load the next folder.</li>
+                <li>“Run queue” processes all open jobs one after another. Cancelling pauses the queue; the next start continues at the same point, developed frames are kept.</li>
+                <li>In the queue Purelapse switches a hardware codec that doesn't run to the CPU codec by itself instead of waiting for an answer.</li>
+              </ul>
+              <h4>Telegram</h4>
+              <ul>
+                <li>After every run (finished or failed) a message via the Telegram Bot API (<code>sendMessage</code>).</li>
+                <li>Setup: create a bot with @BotFather using <code>/newbot</code>, enter the token, write to the bot, “Find chat ID” (<code>getUpdates</code>), “Send test message”.</li>
+                <li>Content: result, folder, task, total time, each step with its duration, residual flicker and the final message.</li>
+                <li>The token is stored only in the configuration file, which is readable by the user alone.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-leistung">
+            <summary><span class="num">14</span><span class="ttl">Performance and memory<small>Threads, processes, limits</small></span></summary>
+            <div class="chap-body">
+              <div class="tbl"><table>
+                <thead><tr><th>Area</th><th>Rule</th></tr></thead>
+                <tbody>
+                  <tr><td>Filmstrip</td><td>cores − 1 threads</td></tr>
+                  <tr><td>Measurement</td><td>≤ 8 frames at once, ≤ configured cores, ≤ 50 % of free memory at 450 MB per frame</td></tr>
+                  <tr><td>ART / RawTherapee</td><td>Automatic: cores / 4 processes, at most 8, no more than cores and frames, at most free memory / 2.5 GB. Manual: 1, 2, 3, 4, 6 or 8.</td></tr>
+                  <tr><td>darktable-cli</td><td>As above, additionally at most 4 and at most free memory / 3 GB; time limit 600 s per frame</td></tr>
+                  <tr><td>Threads per engine process</td><td><code>OMP_NUM_THREADS</code> = cores / processes</td></tr>
+                  <tr><td>Video</td><td>up to 4 threads reading ahead (more only costs memory)</td></tr>
+                  <tr><td>Recalibration</td><td>develop only changed frames, reuse unchanged measurements</td></tr>
+                  <tr><td>EXIF</td><td>read once and cached</td></tr>
+                </tbody>
+              </table></div>
+              <p>Why several processes: ART and RawTherapee only use four to eight cores efficiently on a single frame. On a many-core machine several processes with a few threads each achieve clearly more than one process with all cores.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-dateien">
+            <summary><span class="num">15</span><span class="ttl">Files and settings<small>Configuration, working files, diagnostics, reset</small></span></summary>
+            <div class="chap-body">
+              <h4>Purelapse's own folders</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td><code>~/.config/purelapse/purelapse.json</code></td><td>The only configuration file (permissions 0600): theme, language, last folder, engine paths and base profiles, all settings, start/end frame per folder, queue, Telegram. Old individual files <code>~/.purelapse_*</code> are migrated on first start and removed.</td></tr>
+                  <tr><td><code>~/.local/share/purelapse</code></td><td>Base profiles created by the engine</td></tr>
+                  <tr><td><code>~/.cache/purelapse</code></td><td>Configuration folders of the darktable-cli processes, refreshed on every run</td></tr>
+                </tbody>
+              </table></div>
+              <h4>In the image folder</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td><code>*.arp</code> / <code>*.pp3</code> / <code>*.xmp</code></td><td>Engine profiles with correction and keyframe grading</td></tr>
+                  <tr><td><code>purelapse_deflicker.json</code></td><td>Pass 1 exposure values per frame</td></tr>
+                  <tr><td><code>purelapse_calib.json</code></td><td>Recalibration per frame</td></tr>
+                  <tr><td><code>purelapse_result.json</code></td><td>Residual deviation per frame after pass 2</td></tr>
+                  <tr><td><code>Deflickered_JPG/</code></td><td>Developed or deflickered frames (JPG or 16-bit TIFF) and the development record</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Diagnostic mode</h4>
+              <p>Additionally writes <code>purelapse_pass1.csv</code> (measurement, target, correction, clipping, white balance per frame), <code>purelapse_pass2.csv</code> (re-measurement and residual), <code>purelapse_profiles.csv</code> (profile values after keyframe distribution), <code>purelapse_arp_check.log</code> (format check) and <code>purelapse_art.log</code> (engine output). Meant for troubleshooting only; warnings appear in the log anyway.</p>
+              <h4>Reset</h4>
+              <p>Deletes, as chosen, logs and measurement data, working data (base values, calibration), developed frames and – marked in red – the sidecar files including edits and keyframes. RAW and JPG originals are never touched.</p>
+              <h4>Safe writing</h4>
+              <p>Profiles, darktable XMPs, measurement files, deflickered JPGs and the configuration are written atomically: first to a file next to the target, then moved into place in one step. If the computer goes down mid-write, the old version remains. If a profile can't be written (disk full, no permission), the run stops with a message.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-qs">
+            <summary><span class="num">16</span><span class="ttl">Tests and requirements<small>Test suite, system, what's included</small></span></summary>
+            <div class="chap-body">
+              <h4>Automated tests</h4>
+              <ul>
+                <li>About 3000 checks run through the whole program – with real measurement, real FFmpeg and finished videos, using stand-in engines that behave like ART, RawTherapee and darktable-cli.</li>
+                <li>They run on every push on GitHub (Ubuntu 24.04, Python 3.10 and 3.12) and locally with <code>python tests/alle.py</code>.</li>
+                <li>Test benches measure image quality: residual flicker with and without the sun, and evenness and sharpness of the camera move.</li>
+              </ul>
+              <h4>System</h4>
+              <ul>
+                <li>Linux x86_64, Linux Mint 21 / Ubuntu 22.04 and newer.</li>
+                <li>The AppImage contains Python, Qt 5, OpenCV, rawpy and FFmpeg; no installation needed.</li>
+                <li>For RAW: ART, RawTherapee or darktable with its command-line program. The darktable parameter layouts come from darktable 4.6.1; other module versions are detected and then taken from the nearer keyframe instead of being blended.</li>
+                <li>Interface in German and English, dark and light theme.</li>
+                <li>Licence GPL-3.0. ART, RawTherapee, darktable and FFmpeg run as separate programs under their own licences.</li>
+              </ul>
+            </div>
+          </details>
+
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -201,6 +725,28 @@
     var txt = b.getAttribute("data-text").replace(/\\n/g, "\n"), alt = b.textContent;
     var ok = function () { b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.textContent = alt; }, 1600); };
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(ok, function () {});
+  });
+  var kapitel = Array.prototype.slice.call(document.querySelectorAll("details.chap"));
+  var alle = document.querySelector(".toc-all");
+  var beschriften = function () {
+    if (!alle) return;
+    var offen = kapitel.length && kapitel.every(function (d) { return d.open; });
+    alle.textContent = alle.getAttribute(offen ? "data-close" : "data-open");
+  };
+  var zeige = function (id) {
+    var d = id && document.getElementById(id);
+    if (d && d.tagName === "DETAILS") { d.open = true; d.scrollIntoView(); }
+  };
+  kapitel.forEach(function (d) { d.addEventListener("toggle", beschriften); });
+  document.querySelectorAll(".toc a").forEach(function (a) {
+    a.addEventListener("click", function () { zeige(a.getAttribute("href").slice(1)); });
+  });
+  window.addEventListener("hashchange", function () { zeige(location.hash.slice(1)); });
+  if (location.hash.indexOf("#t-") === 0) zeige(location.hash.slice(1));
+  if (alle) alle.addEventListener("click", function () {
+    var auf = !kapitel.every(function (d) { return d.open; });
+    kapitel.forEach(function (d) { d.open = auf; });
+    beschriften();
   });
   document.querySelectorAll("[data-lang]").forEach(function (a) {
     a.addEventListener("click", function () { try { localStorage.setItem("purelapse-lang", a.getAttribute("data-lang")); } catch (e) {} });

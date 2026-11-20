@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=2">
+<link rel="stylesheet" href="assets/style.css?v=3">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});if(l==="en"||(!l&&!de)){location.replace("en.html"+location.hash)}}catch(e){}</script>
 </head>
 <body>
@@ -28,7 +28,7 @@
 <header class="nav">
   <div class="wrap">
     <a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="30" height="30">Purelapse</a>
-    <nav class="nav-links" aria-label="Navigation"><a href="#vergleich">Vergleich</a><a href="#ablauf">So geht's</a><a href="#funktionen">Funktionen</a><a href="#download">Download</a></nav>
+    <nav class="nav-links" aria-label="Navigation"><a href="#vergleich">Vergleich</a><a href="#ablauf">So geht's</a><a href="#funktionen">Funktionen</a><a href="#download">Download</a><a href="#technik">Technik</a></nav>
     <div class="lang" aria-label="Sprache / Language"><span>DE</span><a href="en.html" hreflang="en" data-lang="en">EN</a></div>
   </div>
 </header>
@@ -174,6 +174,530 @@
       </div>
     </div>
   </section>
+
+  <section id="technik" class="tech">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Technik</div>
+        <h2>Alles im Detail.</h2>
+        <p>Die vollständige technische Beschreibung von Purelapse 2.42: jede Funktion, jeder Rechenschritt, jeder Grenzwert. Die Kapitel lassen sich einzeln aufklappen.</p>
+      </div>
+      <div class="tech-layout">
+        <nav class="toc" aria-label="Inhalt der Technik-Beschreibung">
+          <div class="toc-head">Inhalt</div>
+          <ol>
+            <li><a href="#t-ablauf">Arbeitsablauf und Betriebsarten</a></li>
+            <li><a href="#t-sichtung">Einlesen und Sichtung</a></li>
+            <li><a href="#t-messung">Helligkeitsmessung</a></li>
+            <li><a href="#t-zielkurve">Zielkurve und Glättung</a></li>
+            <li><a href="#t-pass1">Pass 1: Profile schreiben</a></li>
+            <li><a href="#t-keyframes">Keyframes</a></li>
+            <li><a href="#t-schnell">Schnelleinstellungen</a></li>
+            <li><a href="#t-pass2">Pass 2: Entwicklung</a></li>
+            <li><a href="#t-kalib">Nachkalibrierung</a></li>
+            <li><a href="#t-bild">Bildstrecke und Effekte</a></li>
+            <li><a href="#t-video">Videoausgabe</a></li>
+            <li><a href="#t-vorschau">Vorschau und Vergleich</a></li>
+            <li><a href="#t-stapel">Warteschlange und Telegram</a></li>
+            <li><a href="#t-leistung">Leistung und Speicher</a></li>
+            <li><a href="#t-dateien">Dateien und Einstellungen</a></li>
+            <li><a href="#t-qs">Prüfungen und Voraussetzungen</a></li>
+          </ol>
+          <button type="button" class="toc-all" data-open="Alle aufklappen" data-close="Alle zuklappen">Alle aufklappen</button>
+        </nav>
+        <div class="chapters">
+
+          <details class="chap" id="t-ablauf">
+            <summary><span class="num">01</span><span class="ttl">Arbeitsablauf und Betriebsarten<small>Schritte, Arbeitsgänge, Ablaufanzeige</small></span></summary>
+            <div class="chap-body">
+              <h4>Schrittleiste</h4>
+              <p>Die Oberfläche führt durch vier Schritte: <b>Bilder laden</b> → <b>Helligkeit glätten</b> → <b>Keyframes bearbeiten</b> → <b>Video rendern</b>. Bei RAW entspricht „Helligkeit glätten“ Pass 1 und „Video rendern“ Pass 2; bei JPG entfällt der Keyframe-Schritt. Erledigte Schritte werden markiert, jeder bleibt anklickbar.</p>
+              <h4>Arbeitsgänge</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Arbeitsgang</th><th>Was passiert</th></tr></thead>
+                <tbody>
+                  <tr><td>JPG-Direkt</td><td>Misst alle JPGs, gleicht Helligkeit und Farbkanäle aus, legt die entflackerten Bilder (JPG-Qualität 95) in <code>Deflickered_JPG</code> ab und rendert in einem Durchgang das Video.</td></tr>
+                  <tr><td>RAW Pass 1</td><td>Misst jedes RAW in linearem Licht, berechnet die Zielkurve und schreibt die Belichtungskorrektur in die Begleitdatei der Engine (<code>.arp</code>, <code>.pp3</code> oder <code>.xmp</code>).</td></tr>
+                  <tr><td>RAW Pass 2</td><td>Verteilt die Keyframes, lässt die Engine entwickeln, misst das Ergebnis nach, kalibriert nach und rendert das Video.</td></tr>
+                  <tr><td>Vorschau (5 Bilder)</td><td>Entwickelt fünf gleichmäßig über die Sequenz verteilte Bilder mit allen aktuellen Einstellungen.</td></tr>
+                  <tr><td>Schnellvorschau</td><td>Grobes Video in Minuten aus den eingebetteten Kamera-Vorschaubildern.</td></tr>
+                  <tr><td>Rohfassung</td><td>Zeitraffer ganz ohne Bearbeitung, als Referenz.</td></tr>
+                  <tr><td>Vergleichsvideo</td><td>Zwei fertige Videos nebeneinander oder geteilt.</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Ordner und Formate</h4>
+              <ul>
+                <li>Ein Ordner enthält eine Sequenz – JPG oder RAW, nicht gemischt. Liegen beide vor, gilt RAW.</li>
+                <li>RAW-Formate: NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW.</li>
+                <li>Beim Programmstart bietet Purelapse den letzten Arbeitsgang an und zeigt dessen Stand: Anzahl RAW/JPG, „Pass 1 erledigt“, „Bilder entwickelt“, Anzahl fertiger Videos und den Zeitpunkt der letzten Änderung. Dafür werden nur Dateinamen gelesen, der Dialog erscheint sofort.</li>
+              </ul>
+              <h4>Ablaufanzeige und Protokoll</h4>
+              <ul>
+                <li>Vor jedem Lauf zeigt Purelapse die zu erwartenden Schritte (z. B. Entwicklung → Ergebnis messen → Nachkalibrierung → Stabilisierung → Video rendern). Jeder Schritt bekommt Laufzeit und Zustand; Fortschritt, Restzeit und Prozent stehen in der Statuszeile.</li>
+                <li>Das Protokollfenster zeigt jede Meldung mit Zeitstempel, farblich nach Fehler, Warnung und Erfolg. Bei einem Fehler öffnet es sich von selbst. Alle Meldungen gibt es auf Deutsch und Englisch.</li>
+                <li>„Abbrechen“ hält jeden Lauf an; laufende Engine-Prozesse werden sofort beendet.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-sichtung">
+            <summary><span class="num">02</span><span class="ttl">Einlesen und Sichtung<small>Bildleiste, Diagramm, Lücken, Lichter, Sonnenstand</small></span></summary>
+            <div class="chap-body">
+              <h4>Bildleiste</h4>
+              <ul>
+                <li>Vorschaubilder kommen aus dem in der RAW-Datei eingebetteten Kamera-JPEG; fehlt es, entwickelt rawpy das Bild in halber Größe. Jede Kachel (128 × 85 Punkte) trägt ein RGB-Histogramm.</li>
+                <li>Gelesen wird parallel mit allen Rechenkernen bis auf einen.</li>
+                <li>Keyframes sind markiert; „★ nur Keyframes“ blendet alle anderen Bilder aus, ohne die Verbindung zum Diagramm zu lösen. Knöpfe springen zum ersten und letzten Bild.</li>
+                <li><b>Startbild / Endbild</b> begrenzen den Arbeitsgang auf einen Ausschnitt der Sequenz. Die Wahl wird je Ordner gespeichert; danach Pass 1 neu laufen lassen.</li>
+              </ul>
+              <h4>Engine-Erkennung</h4>
+              <p>Liegen im Ordner bereits Begleitdateien genau einer Engine (<code>.arp</code>, <code>.pp3</code> oder echte darktable-<code>.xmp</code>), stellt Purelapse beim Einlesen selbst auf diese Engine um. XMP-Dateien, die nur eine Sternebewertung enthalten, zählen dabei nicht.</p>
+              <h4>Diagramm</h4>
+              <ul>
+                <li>Zwei Hauptkurven: gemessene Helligkeit („Original“) und Zielkurve. Jede Änderung an Stärke, Lichtverlauf oder Belichtung zeichnet die Zielkurve sofort neu.</li>
+                <li>Zusatzkurven zum Einblenden: Weißabgleich, Belichtung laut EXIF, Aufnahmeintervall, Clipping, Restflackern (nach Pass 2) und Sonnenstand.</li>
+                <li>Ein Klick ins Diagramm springt zum Bild; ein Band markiert den gerade sichtbaren Teil der Bildleiste; senkrechte Linien zeigen die Keyframes.</li>
+              </ul>
+              <h4>Fehlende Aufnahmen</h4>
+              <p>Aus den EXIF-Zeitstempeln entsteht die Folge der Intervalle. Verglichen wird jedes Intervall mit dem Median der 21 umliegenden – so gilt ein mit der Belichtungszeit wachsendes Intervall (Holy Grail) als normal. Ab dem 1,6-Fachen meldet Purelapse eine Lücke samt geschätzter Zahl fehlender Bilder (gerundetes Verhältnis − 1). Ausgewertet wird ab acht gültigen Intervallen; angezeigt werden zusätzlich kleinstes, mittleres und größtes übliches Intervall.</p>
+              <h4>Ausgefressene Lichter</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Zeitpunkt</th><th>Grundlage</th><th>Schwelle</th></tr></thead>
+                <tbody>
+                  <tr><td>Beim Einlesen (vorläufig)</td><td>Eingebettetes Vorschau-JPEG der Kamera</td><td>&gt; 1 % geklippte Pixel</td></tr>
+                  <tr><td>In Pass 1 (belastbar)</td><td>Sensordaten in 16 Bit: eine 2×2-Zelle des Farbfilters gilt als voll, sobald einer ihrer Sensorpunkte ≥ 98 % des Weißpunkts erreicht</td><td>&gt; 0,5 % der Bildpunkte</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Verfärbte Lichter (rosa Sonne)</h4>
+              <p>Ein Bildpunkt gilt als verfärbt, wenn er hell ist (stärkster Kanal ≥ 0,93), Rot ≥ 0,96 und Blau ≥ 0,88 am Anschlag stehen und Grün um mindestens 0,12 darunter bleibt. Ein Bild wird gemeldet, wenn mehr als 15 % seiner hellen Bildpunkte so verfärbt sind. Ein kräftiges, aber echtes Orange im Abendhimmel löst die Warnung nicht aus. Abhilfe ist die Lichter-Rekonstruktion in einem Keyframe (siehe Kapitel 07).</p>
+              <h4>Sonnenstand</h4>
+              <p>Aus Breiten- und Längengrad (von Hand oder „GPS aus Bild“) und dem Zeitzonen-Offset zur Aufnahmezeit berechnet Purelapse mit der Bibliothek <code>astral</code> den Sonnenstand je Bild. Das Diagramm markiert die Übergänge bei 0° (Sonnenauf-/-untergang), −6° (bürgerliche), −12° (nautische) und −18° (astronomische Dämmerung) – hilfreich, um dort Keyframes zu setzen. Auf den Deflicker selbst hat das keinen Einfluss.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-messung">
+            <summary><span class="num">03</span><span class="ttl">Helligkeitsmessung<small>RAW, JPG, Nachmessung, Messbereich</small></span></summary>
+            <div class="chap-body">
+              <h4>RAW (Pass 1)</h4>
+              <ul>
+                <li>rawpy entwickelt jedes Bild in halber Größe, mit Kamera-Weißabgleich, ohne Auto-Helligkeit, Gamma 1,0 und 16 Bit. Bei 8-Bit-Gamma-Ausgabe fielen in Nachtaufnahmen große Teile des Bildes auf Schwarz – der Mittelwert wäre dann kein Maß für die Belichtung mehr.</li>
+                <li>Helligkeit je Bildpunkt: <code>0,2989·R + 0,5870·G + 0,1140·B</code>, gerechnet in 32 Bit Gleitkomma.</li>
+                <li><b>Ausgebranntes zählt nicht mit:</b> Bildpunkte, die auf dem Sensor am Anschlag stehen (2×2-Zelle ≥ 98 % des Weißpunkts), bleiben unabhängig von der Belichtung gleich hell und würden den Messwert zu sich ziehen. Sie werden samt einem schmalen Saum (Radius ≈ 2 Punkte je 1000 Punkte Bildkante, mindestens 2) ausgelassen. Bleiben weniger als 20 % des Bildes übrig, wird über alle Punkte gemessen.</li>
+                <li>Gemittelt wird arithmetisch in linearem Licht – anders als ein logarithmisches Mittel hängt das nicht vom Rauschen ab, das sich mit der ISO-Stufe ändert.</li>
+                <li>Zusätzlich je Bild: Anteil geklippter und schwarzer Bildpunkte sowie die Weißabgleich-Faktoren der Kamera (Rot/Grün, Blau/Grün).</li>
+              </ul>
+              <h4>JPG-Ablauf</h4>
+              <p>Gemessen werden die Mittelwerte der drei Farbkanäle. Bildpunkte, deren stärkster Kanal 250 von 255 erreicht, bleiben samt Saum außen vor (wieder mit der 20-%-Untergrenze).</p>
+              <h4>Nachmessung in Pass 2</h4>
+              <ul>
+                <li>Die entwickelten Bilder werden vollständig gemessen, jeder Bildpunkt zählt. Die Umrechnung von sRGB in lineares Licht läuft exakt über Tabellen (256 Stufen bei JPG, 65 536 bei 16-Bit-TIFF).</li>
+                <li>Jedes Bild wird in Blöcke zerlegt (höchstens 256 je Bildbreite). Ein Block gilt als ausgebrannt, wenn ein Punkt darin 250/255 erreicht.</li>
+                <li>Ausgewertet werden nur Blöcke, die in <b>keinem</b> Bild der Sequenz ausbrennen, plus ein Block Saum. Grund: Im fertigen Bild hängt „ausgebrannt“ von der Korrektur ab – eine abgedunkelte Sonne ist grau statt weiß. Bild für Bild entschieden, würde die Nachkalibrierung Flackern „korrigieren“, das es nicht gab.</li>
+                <li>Bleiben weniger als 20 % übrig, entscheidet jedes Bild für sich.</li>
+              </ul>
+              <h4>Messbereich (ROI)</h4>
+              <p>Ein frei gezogenes Rechteck begrenzt alle Messungen – Pass 1, JPG, Nachmessung und Schnellvorschau – auf einen Bildteil. Gespeichert wird es relativ zur Bildgröße. Seit 2.42 ist es nur noch für Sonderfälle nötig, etwa bewegte Objekte, die den Bildeindruck dominieren.</p>
+              <h4>Parallelität</h4>
+              <p>Gemessen wird mit bis zu 8 Bildern gleichzeitig (mehr bremst die Platte, nicht der Rechner), höchstens mit so vielen, wie die Hälfte des freien Arbeitsspeichers bei 450 MB je Bild erlaubt, und nie mit mehr als den eingestellten Kernen.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-zielkurve">
+            <summary><span class="num">04</span><span class="ttl">Zielkurve und Glättung<small>Algorithmus, Stärke, Lichtverlauf, Belichtung</small></span></summary>
+            <div class="chap-body">
+              <h4>Algorithmus</h4>
+              <ol class="steps-list">
+                <li>Die Messwerte werden in Blendenstufen umgerechnet: <code>EV = log₂(Helligkeit)</code>.</li>
+                <li>Eine Ausgleichsgerade (lineare Regression) beschreibt den Grundverlauf; gearbeitet wird mit der Abweichung davon.</li>
+                <li>Erste Glättung: Gauß-Filter mit <code>σ₁ = min(1 + 0,6·s, n/3)</code> Bildern (s = Stärke in %, n = Anzahl Bilder).</li>
+                <li>Ausreißer werden begrenzt: Abweichungen über <code>2,5 · 1,4826 · MAD</code> (mindestens 0,05 EV) vom geglätteten Verlauf werden gekappt – ein einzelnes Fehlbild zieht die Kurve nicht mit.</li>
+                <li>Zweite Glättung mit <code>σ₂ = min(max(1, σ₁/3), n/6)</code>; die Gerade wird wieder addiert.</li>
+                <li>Ab einer Stärke von 85 % blendet die Kurve stufenlos in die reine Ausgleichsgerade über, bei 100 % ist sie die Gerade.</li>
+                <li>Bei „Sonnenaufgang“ bzw. „Sonnenuntergang“ erzwingt eine isotone Regression (Pool-Adjacent-Violators) einen nie fallenden bzw. nie steigenden Verlauf.</li>
+                <li>Die Belichtungsverschiebung wird aufgeschlagen; die Korrektur je Bild ist <code>log₂(Ziel / Messung)</code> in EV.</li>
+              </ol>
+              <h4>Regler</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Regler</th><th>Bereich</th><th>Wirkung</th></tr></thead>
+                <tbody>
+                  <tr><td>Deflicker-Stärke</td><td>1–100 %, Standard 50 %</td><td>Breite der Glättung. Niedrig entfernt nur schnelles Flackern, hoch formt auch den Lichtverlauf um.</td></tr>
+                  <tr><td>Lichtverlauf</td><td>Gleichbleibend · Sonnenaufgang · Sonnenuntergang</td><td>Gleichbleibend lässt den Verlauf, wie er ist; die anderen erzwingen Monotonie. Sequenzen mit einem „Buckel“ im Licht gehören auf Gleichbleibend.</td></tr>
+                  <tr><td>Belichtung</td><td>−3,0 bis +3,0 EV in 0,1er-Schritten</td><td>Verschiebt die Zielhelligkeit der ganzen Sequenz.</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Plausibilitätsprüfung</h4>
+              <p>Pass 1 vergleicht das gemessene Flackern (Standardabweichung jedes Bildes gegenüber dem Median seiner neun Nachbarn) mit der verlangten Korrektur. Ist die Korrektur größer als <code>max(0,15 EV, 3 × Flackern)</code>, weist Purelapse darauf hin, dass der Deflicker den Lichtverlauf umformt, nennt die Ursache (hohe Stärke, erzwungener Verlauf) und rechnet zum Vergleich den Wert bei Stärke 25 und „Gleichbleibend“ vor.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-pass1">
+            <summary><span class="num">05</span><span class="ttl">Pass 1: Profile schreiben<small>Basisprofil, Belichtung, darktable, Weißabgleich</small></span></summary>
+            <div class="chap-body">
+              <h4>Basisprofil (ART und RawTherapee)</h4>
+              <ul>
+                <li>Purelapse erzeugt keine Begleitdatei aus dem Nichts: Ein Profil, das nur aus <code>[Exposure]</code> besteht, verwerfen manche Engines, und die Korrektur bliebe wirkungslos. Gebraucht wird ein vollständiges Profil mit <code>[Version]</code>-Block.</li>
+                <li>Reihenfolge der Quellen: ein vorhandenes Engine-Profil im Bilderordner, das in den Einstellungen gewählte Basisprofil, sonst lässt Purelapse die Engine einmalig ihr Standardprofil erzeugen (<code>-Y -j80 -c</code> auf ein Beispielbild). Das Ergebnis liegt dauerhaft in <code>~/.local/share/purelapse</code>.</li>
+              </ul>
+              <h4>Was geschrieben wird</h4>
+              <ul>
+                <li>Belichtungskorrektur je Bild in <code>[Exposure] Compensation</code> (Automatik aus). Hat ein Keyframe schon eine eigene Belichtungsänderung, bleibt sie als Abstand zum Pass-1-Wert erhalten.</li>
+                <li>Die reinen Pass-1-Werte landen in <code>purelapse_deflicker.json</code>; Pass 2 braucht sie für exakte Keyframe-Übergänge.</li>
+                <li>Mit „Tote / heiße Pixel entfernen“ wird die Defektpixel-Korrektur der Engine eingeschaltet (ART/RawTherapee: Hot- und Dead-Pixel-Filter, Schwelle 100).</li>
+              </ul>
+              <h4>darktable</h4>
+              <ul>
+                <li>Purelapse schreibt in die XMP-Dateien, die darktable beim Import anlegt (Einstellung „XMP-Dateien schreiben: beim Import“). Fehlen sie, bricht Pass 1 sofort mit einer Erklärung ab – nicht erst nach der Messung.</li>
+                <li>Wirksam ist je Modul und Instanz-Priorität der letzte Verlaufseintrag unterhalb von <code>history_end</code>. Der Deflicker-Wert geht in genau diese Belichtungsinstanz; eine eigene Belichtungsänderung des Nutzers bleibt als Abstand erhalten. Auch eine benutzerdefinierte Modul-Reihenfolge wird unterstützt.</li>
+                <li>Frische Profile behalten darktables Grundeinstellungen (<code>auto_presets_applied</code>); nur aus Keyframes übernommene Stapel gelten als fertig.</li>
+              </ul>
+              <h4>Weißabgleich-Prüfung</h4>
+              <p>Aus den Kamera-Faktoren Rot/Grün und Blau/Grün berechnet Purelapse das Zappeln von Bild zu Bild und die Gesamtspanne. Unter 0,004 EV Zappeln und 0,02 EV Spanne gilt der Weißabgleich als konstant. Ab 0,004 EV Zappeln warnt Purelapse vor automatischem Weißabgleich – der Deflicker korrigiert nur Helligkeit – und empfiehlt, erstes und letztes Bild als Keyframe mit festem Weißabgleich zu versehen.</p>
+              <h4>Kontrollen</h4>
+              <p>Jedes geschriebene Profil wird zurückgelesen und gegen das Basisprofil geprüft. Abweichungen im Format meldet das Protokoll (Einzelheiten im Diagnose-Modus), ebenso Bilder mit ausgefressenen Lichtern.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-keyframes">
+            <summary><span class="num">06</span><span class="ttl">Keyframes<small>Markierung, Verteilung, Überblendung, darktable-Modulstapel</small></span></summary>
+            <div class="chap-body">
+              <h4>Markierung</h4>
+              <p>Ein Bild ist Keyframe, wenn es <b>5 Sterne</b> trägt – in der XMP-Bewertung oder als <code>Rank</code>/<code>Rating</code> im Profil. Gesetzt wird das in Purelapse per Häkchen an der Kachel oder in der Engine. Purelapse ändert in einer vorhandenen XMP nur die Bewertung. darktable liest XMP-Dateien nur beim ersten Import; wie es die Sterne übernimmt, erklärt ein Hinweis auf der Keyframe-Seite.</p>
+              <h4>Verteilung in Pass 2</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Bereich</th><th>Profil</th></tr></thead>
+                <tbody>
+                  <tr><td>Vor dem ersten Keyframe</td><td>Kopie des ersten Keyframes</td></tr>
+                  <tr><td>Zwischen zwei Keyframes</td><td>Überblendung mit <code>t = (i − s) / (e − s)</code></td></tr>
+                  <tr><td>Nach dem letzten Keyframe</td><td>Kopie des letzten Keyframes</td></tr>
+                </tbody>
+              </table></div>
+              <p>Die Belichtung wird dabei getrennt behandelt: <code>EV(i) = Pass1(i) + Δs + (Δe − Δs)·t + Kalibrierung(i)</code>, wobei Δ die eigene Belichtungsänderung eines Keyframes gegenüber seinem Pass-1- und Kalibrierwert ist. So bleibt der Deflicker in jedem Bild erhalten und die Gestaltung der Keyframes läuft weich darüber.</p>
+              <h4>ART und RawTherapee</h4>
+              <ul>
+                <li>Zahlen und Zahlenlisten gleicher Länge werden linear überblendet, ganze Zahlen gerundet.</li>
+                <li>Text und Kurven mit unterschiedlich vielen Punkten schalten in der Mitte (t = 0,5) um. Purelapse nennt vorher bis zu vier solcher Einstellungen je Keyframe-Paar.</li>
+                <li>Weißabgleich: Unterscheiden sich Temperatur, Grün oder Faktoren, wird der Modus auf „eigene Temperatur“ gestellt (ART <code>CustomTemp</code>, RawTherapee <code>Custom</code>) – sonst fiele die Engine still auf den Kamerawert zurück.</li>
+                <li>Ein Werkzeug ist eingeschaltet, sobald es in einem der beiden Keyframes eingeschaltet ist.</li>
+              </ul>
+              <h4>darktable: kompletter Modulstapel</h4>
+              <ul>
+                <li>Übertragen werden alle Module der Keyframes, nicht nur die Belichtung. Jede Modulinstanz wird über Operation und Instanz-Priorität zugeordnet.</li>
+                <li>Die Parameter liegen binär in der XMP. Purelapse entschlüsselt sie mit Layouts aus dem Quelltext von darktable 4.6.1 (67 Module) und prüft vor jeder Überblendung Modulversion und Datengröße.</li>
+                <li>Gleitkommawerte werden linear überblendet, Farbtöne auf dem kürzeren Weg um den Farbkreis. Ganzzahlen und Auswahllisten kommen vom näheren Keyframe.</li>
+                <li>Schalter, Masken und Überblendmodi sowie Module, die nur in einem Keyframe vorkommen, kommen ebenfalls vom näheren Keyframe.</li>
+                <li>Nie überblendet werden Geometrie und Retusche: Zuschneiden, Perspektive, Objektivkorrektur, Retusche, Flecken entfernen, Verflüssigen, Hotpixel und die Pflichtmodule der Pipeline.</li>
+                <li>Weich überblendet werden u. a. Weißabgleich, Farbkalibrierung, Schärfen, Farbbalance RGB, Filmic RGB, Sigmoid, Tonwert-Equalizer, lokaler Kontrast, Dunstentfernung und Verlaufsfilter.</li>
+                <li>Vor der Verteilung steht im Protokoll, welche Module übernommen und welche überblendet werden. Empfehlung: in allen Keyframes dieselben Module verwenden (Verlauf kopieren mit Strg+Umschalt+C / Strg+Umschalt+V).</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-schnell">
+            <summary><span class="num">07</span><span class="ttl">Schnelleinstellungen<small>Regler, Zuordnung je Engine, Automatik, echte Vorschau</small></span></summary>
+            <div class="chap-body">
+              <p>„Keyframe einstellen…“ bearbeitet das Profil eines Keyframes, ohne die Engine zu öffnen. Jeder Regler hat ein eigenes Häkchen: Ohne Häkchen wird der Wert im Profil nicht angefasst, eine in der Engine gemachte Bearbeitung bleibt also erhalten. Regler, deren Abschnitt im Profil fehlt, sind gesperrt, statt still einen Schlüssel zu schreiben, den die Engine verwerfen würde.</p>
+              <h4>Regler und Zuordnung</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Regler</th><th>Bereich</th><th>ART</th><th>RawTherapee</th><th>darktable</th></tr></thead>
+                <tbody>
+                  <tr><td>Farbtemperatur</td><td class="nw">2000–12000 K</td><td colspan="2"><code>[White Balance] Temperature</code></td><td>–</td></tr>
+                  <tr><td>Grünabgleich</td><td class="nw">0,6–1,8</td><td colspan="2"><code>[White Balance] Green</code></td><td>–</td></tr>
+                  <tr><td>Helligkeit</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Brightness</code></td><td><code>[Exposure] Brightness</code></td><td>Farbbalance RGB, Brillanz × 0,01</td></tr>
+                  <tr><td>Kontrast</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Contrast</code></td><td><code>[Exposure] Contrast</code></td><td>Farbbalance RGB, Kontrast × 0,01</td></tr>
+                  <tr><td>Sättigung</td><td class="nw">−100…100</td><td><code>[Saturation] Saturation</code></td><td><code>[Exposure] Saturation</code></td><td>Farbbalance RGB, Sättigung × 0,01</td></tr>
+                  <tr><td>Schärfe</td><td>1–1000 (darktable 1–800)</td><td colspan="2"><code>[Sharpening] Amount</code></td><td>Schärfen, Stärke ÷ 400 (200 → 0,5)</td></tr>
+                  <tr><td>Entrauschen Helligkeit</td><td class="nw">0–100</td><td><code>[Denoise] Luminance</code></td><td><code>[Directional Pyramid Denoising] Luma</code></td><td>–</td></tr>
+                  <tr><td>Entrauschen Farbe</td><td class="nw">0–100</td><td><code>[Denoise] Chrominance</code></td><td><code>[Directional Pyramid Denoising] Chroma</code></td><td>–</td></tr>
+                </tbody>
+              </table></div>
+              <p class="small">Weißabgleich und Entrauschen fehlen bei darktable bewusst: darktable speichert dort kameraabhängige Werte (Kanalfaktoren, Rauschprofil), die sich ohne die Farbmatrix der Kamera nicht aus Kelvin bzw. einer Stärke berechnen lassen.</p>
+              <h4>Automatisch optimieren</h4>
+              <p>Jeder Vorschlag beruht auf einer Messung, und jede Messung steht mit ihrer Zahl in der Begründung:</p>
+              <ul>
+                <li><b>Helligkeit:</b> Median des Bildes auf 0,44 in der Anzeige, höchstens ±25; unter 2 Punkten Änderung bleibt sie unverändert.</li>
+                <li><b>Kontrast:</b> nur wenn das Histogramm (2.–98. Perzentil) weniger als 0,88 der Skala nutzt; gestreckt Richtung 0,92, höchstens +28, unter 5 Punkten kein Vorschlag.</li>
+                <li><b>Sättigung:</b> nur bei blassen Bildern (mittlere Buntheit unter 0,28), höchstens +25; gedämpft, wenn zugleich der Kontrast steigt.</li>
+                <li><b>Schärfe:</b> 240 bis 380, stufenlos nach der Feinstruktur des Motivs (Abweichung von einer Gauß-Weichzeichnung).</li>
+                <li><b>Entrauschen:</b> nach dem ISO-Wert aus den EXIF-Daten (in einer verkleinerten Vorschau ist das Korn nicht messbar): bis ISO 200 Helligkeit 0 / Farbe 15, gestaffelt bis über ISO 6400 auf 45 / 40.</li>
+                <li><b>Lichter:</b> Sind mehr als 15 % der hellsten Stellen rosa verfärbt, wird die Lichter-Rekonstruktion eingeschaltet.</li>
+                <li><b>Weißabgleich</b> bleibt unverändert – aus einem Bild lässt sich nicht entscheiden, ob die Farbstimmung gewollt ist.</li>
+              </ul>
+              <h4>Lichter rekonstruieren</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Engine</th><th>Verfahren</th><th>Empfohlen</th></tr></thead>
+                <tbody>
+                  <tr><td>ART</td><td>Aus · Blend · Farbe · Ausgewogen (<code>[Exposure] HLRecovery</code>)</td><td>Farbe</td></tr>
+                  <tr><td>RawTherapee</td><td>Aus · Blend · Farbe · Farbfortsetzung (<code>[HLRecovery] Method</code>)</td><td>Farbfortsetzung</td></tr>
+                  <tr><td>darktable</td><td colspan="2">über das darktable-Modul „Lichter-Rekonstruktion“ im Keyframe</td></tr>
+                </tbody>
+              </table></div>
+              <p>Hintergrund: Im Kern der Sonne steht Grün zuerst am Anschlag, die Weißabgleich-Faktoren heben Rot und Blau danach weiter – aus Weiß wird Magenta. Eine negative Belichtungskorrektur hilft dagegen nicht; die Rekonstruktion schätzt den fehlenden Kanal aus den anderen.</p>
+              <h4>Echte Vorschau</h4>
+              <ul>
+                <li>Die Engine selbst entwickelt das Bild – mit genau dem Profil, das beim Speichern geschrieben würde, auf höchstens 2000 Punkte Kantenlänge (Reserve zum Zoomen). Speichern und Vorschau laufen durch dieselbe Funktion.</li>
+                <li>Gestartet wird 600 ms nach der letzten Reglerbewegung; bis zu 16 Zustände bleiben im Zwischenspeicher. Bis das Bild der Engine da ist, zeigt Purelapse eine Näherung.</li>
+                <li>Zoom bis 8-fach, „Vorher zeigen“, RGB-Histogramm, „Zurücksetzen“.</li>
+                <li>„Von anderem Keyframe übernehmen“ holt nur Werte, die das eigene Profil kennt und die dort vom Neutralwert abweichen.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-pass2">
+            <summary><span class="num">08</span><span class="ttl">Pass 2: Entwicklung<small>Vorbereitung, Engine-Aufruf, darktable-cli, 16 Bit, Fortsetzen</small></span></summary>
+            <div class="chap-body">
+              <h4>Vorbereitung</h4>
+              <ol class="steps-list">
+                <li>Prüfung, ob zu jedem Bild ein Profil der eingestellten Engine existiert und vollständig ist. Sind alle unvollständig, hält Purelapse an, statt ein unentflackertes Video zu liefern.</li>
+                <li><b>Automatik einfrieren</b> (ART/RawTherapee): Eine auto-angepasste Tonkurve würde für jedes Bild eine eigene Kurve berechnen – das flackert trotz sauberer Messung. Sie wird abgeschaltet; ist keine eigene Kurve hinterlegt, gilt die Standard-Filmkurve der Engine. Bei RawTherapee wird eine festgeschriebene Auto-Kurve aus dem Auto-Modus gelöst (dort würden Helligkeit und Kontrast ignoriert). Bei ART wird die Automatik des Log-Tone-Mappings abgeschaltet.</li>
+                <li>Keyframe-Verteilung (Kapitel 06).</li>
+              </ol>
+              <h4>ART und RawTherapee</h4>
+              <ul>
+                <li>Aufruf: <code>ART-cli -S -Y -o Deflickered_JPG -j100 -c &lt;Bilder&gt;</code> (RawTherapee zusätzlich <code>-d</code>). <code>-S</code> statt <code>-s</code>: Fehlt eine Begleitdatei, bricht die Engine ab, statt still mit dem Standardprofil zu entwickeln.</li>
+                <li>Mit 16-Bit-Zwischenbildern: <code>-tz -b16</code> (gepacktes 16-Bit-TIFF) statt <code>-j100</code>.</li>
+                <li>Mehrere Prozesse teilen sich die Bilder (jeder n-te). Jeder Prozess bekommt <code>OMP_NUM_THREADS = Kerne / Prozesse</code>.</li>
+                <li>Die Ausgabe der Engine wird nach Fehlern durchsucht; nicht geladene Profile werden gezählt und gemeldet.</li>
+              </ul>
+              <h4>darktable-cli</h4>
+              <ul>
+                <li>Ein Bild je Aufruf: <code>darktable-cli BILD BILD.xmp ZIEL --hq true --width 0 --height 0 --core --configdir SLOT --conf plugins/imageio/format/jpeg/quality=100</code>.</li>
+                <li>16 Bit: zusätzlich <code>tiff/bpp=16</code>, <code>pixelformat=0</code>, <code>compress=1</code>.</li>
+                <li>Bis zu 4 Prozesse gleichzeitig (mehr bringt auf einer Grafikkarte nichts), höchstens einer je 3 GB freiem Arbeitsspeicher.</li>
+                <li>darktable-cli sperrt seine Preset-Datenbank. Deshalb bekommt jeder Prozess einen eigenen Konfigurationsordner im Zwischenspeicher, in den <code>darktablerc</code> und <code>data.db</code> des Nutzers kopiert werden (aus <code>~/.config/darktable</code> oder der Flatpak-Fassung) – OpenCL-Einstellungen und eigene Presets gelten weiter. Nebenbei läuft Pass 2 so auch bei geöffnetem darktable.</li>
+                <li>Zeitlimit 10 Minuten je Bild; ein Abbruch beendet laufende Prozesse sofort und räumt liegengebliebene Sperrdateien weg.</li>
+              </ul>
+              <h4>16-Bit-Zwischenbilder</h4>
+              <p>Option in den Einstellungen. Die Engine entwickelt nach 16-Bit-TIFF, das Video wird durchgehend in 16 Bit gerechnet (Übergabe an FFmpeg als <code>bgr48le</code>). Feine Verläufe im Himmel bleiben frei von Stufen, besonders mit HEVC 10 Bit oder ProRes. Vorher prüft Purelapse den Platz: <code>Breite × Höhe × 6 Byte × 0,85</code> je Bild, plus 5 % Reserve (bei 24 Megapixeln rund 120 MB je Bild). Wer umschaltet, bekommt die Bilder neu entwickelt.</p>
+              <h4>Fortsetzen und Abbruch</h4>
+              <ul>
+                <li>In <code>Deflickered_JPG/.purelapse_developed.json</code> merkt sich Purelapse je Bild den Fingerabdruck seines Profils (SHA-1) und das Format. Beim nächsten Lauf wird nur entwickelt, was fehlt oder dessen Profil sich geändert hat.</li>
+                <li>Nach einem Abbruch bleiben fertige Bilder erhalten. Die jüngsten Dateien – eine je laufendem Prozess – werden verworfen, weil sie mitten im Schreiben unterbrochen worden sein können.</li>
+                <li>Ins Video kommt genau das entwickelte Bild jedes Quellbildes, nicht einfach alles im Ausgabeordner; fehlt eines, nennt Purelapse es.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-kalib">
+            <summary><span class="num">09</span><span class="ttl">Nachkalibrierung<small>Geschlossener Regelkreis bis unter 0,008 EV</small></span></summary>
+            <div class="chap-body">
+              <p>Die Engine entwickelt nie exakt so, wie die Messung in Pass 1 es vorhersagt (Tonkurven, Lichter, Farbräume). Purelapse misst deshalb das Ergebnis und regelt nach.</p>
+              <ol class="steps-list">
+                <li>Nachmessung aller entwickelten Bilder (Kapitel 03).</li>
+                <li>Zielkurve über die gemessenen Werte mit Stärke <code>min(Deflicker-Stärke, 15)</code> und gleichbleibendem Verlauf – nur Flackern wird entfernt, der gewollte Verlauf bleibt.</li>
+                <li>Rest je Bild <code>r = log₂(Ziel / Messung)</code>, um den Median bereinigt. Kennzahl ist die Standardabweichung σ der Reste.</li>
+                <li>Ist σ unter <b>0,008 EV</b>, ist das Ziel erreicht und es wird nichts mehr geschrieben.</li>
+                <li>Sonst wird der Rest auf die Belichtung im Profil aufgeschlagen. Die Gesamtkalibrierung je Bild ist auf ±0,5 EV begrenzt (mit Warnung); Schritte unter 0,005 EV werden nicht geschrieben.</li>
+                <li>Neu entwickelt werden nur die tatsächlich geänderten Bilder; unveränderte Dateien (gleiche Änderungszeit und Größe) werden nicht neu gemessen.</li>
+              </ol>
+              <div class="tbl"><table>
+                <thead><tr><th>Einstellung</th><th>Läufe der Engine</th></tr></thead>
+                <tbody>
+                  <tr><td>Aus</td><td>1</td></tr>
+                  <tr><td>1 Durchgang</td><td>bis 2</td></tr>
+                  <tr><td>2 Durchgänge (Standard)</td><td>bis 3</td></tr>
+                  <tr><td>3 Durchgänge</td><td>bis 4</td></tr>
+                </tbody>
+              </table></div>
+              <p>Kalibrierwerte stehen in <code>purelapse_calib.json</code>, die Reste je Bild in <code>purelapse_result.json</code>; das Restflackern lässt sich als Kurve im Diagramm einblenden. Auf dem Prüfstand bleibt das Ergebnis auch mit Sonne im Bild bei 0,0002–0,0006 EV.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-bild">
+            <summary><span class="num">10</span><span class="ttl">Bildstrecke und Effekte<small>Reihenfolge, Kamerafahrt, Motion Blur, Stabilisierung, Astro-Clean</small></span></summary>
+            <div class="chap-body">
+              <h4>Reihenfolge je Videobild</h4>
+              <ol class="steps-list">
+                <li>Bild laden (16 Bit bleibt 16 Bit); im JPG-Ablauf Kanalverstärkung und Hotpixel-Korrektur.</li>
+                <li>Astro-Clean (braucht beide Nachbarbilder).</li>
+                <li>Stabilisierung.</li>
+                <li>Bildausschnitt bzw. Kamerafahrt, Skalierung auf die Zielauflösung.</li>
+                <li>Motion Blur.</li>
+                <li>Entrauschen (nur JPG-Ablauf).</li>
+                <li>Telemetrie-Einblendung.</li>
+                <li>Ein- und Ausblenden.</li>
+                <li>Übergabe an FFmpeg.</li>
+              </ol>
+              <p>Laden, Stabilisieren und Ausschnitt laufen in bis zu 4 Hilfsthreads voraus; alles, was die Reihenfolge braucht, bleibt in einem Thread.</p>
+              <h4>Kamerafahrt (16:9)</h4>
+              <ul>
+                <li>Start- und Endausschnitt werden im ersten bzw. letzten Bild gezogen; dazwischen wird Position und Größe interpoliert. Ohne Fahrt gilt ein mittiger 16:9-Ausschnitt.</li>
+                <li>Bewegungsprofil: je 10 % der Laufzeit sanftes Anfahren und Abbremsen (linear steigende bzw. fallende Geschwindigkeit), dazwischen gleichmäßig.</li>
+                <li>Abtastung mit Bruchteilen von Bildpunkten: erst eine Gauß-Weichzeichnung passend zur Verkleinerung (σ = 0,4 Zielpunkte), dann kubische Interpolation. So bleibt die Schärfe gleich, egal wo zwischen zwei Bildpunkten der Ausschnitt liegt (Schwankung 0,1 %), und die Bewegung gleichmäßig (±0,013 Bildpunkte).</li>
+              </ul>
+              <h4>Motion Blur</h4>
+              <ul>
+                <li>Mittelt 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20 oder 25 Bilder zu einem Videobild, in 32 Bit Gleitkomma und gerundet.</li>
+                <li>Passt sich der Belichtungszeit an: unter 1 s volle Bildzahl, ab 3 s etwa die Hälfte, dazwischen linear – lange Nachtbelichtungen bringen ihre Bewegungsunschärfe schon mit.</li>
+              </ul>
+              <h4>Optische Stabilisierung</h4>
+              <p>Bis zu 200 markante Punkte je Bild (auf 800 Punkte verkleinert, Graustufen) werden per optischem Fluss (Lucas-Kanade) verfolgt; daraus entsteht je Bildpaar eine Verschiebung und Drehung. Die aufsummierte Bahn wird mit einem Gauß-Filter (σ = 30 Bilder) geglättet, ausgeglichen wird die Differenz. Ein Zoom von 3 % verdeckt die Ränder.</p>
+              <h4>Astro-Clean</h4>
+              <p>Jedes Bild wird mit seinen beiden Nachbarn verglichen. Ein Bildpunkt, der in beiden Vergleichen um mehr als 30 Stufen heller ist (Satelliten, Flugzeuge), wird durch den Mittelwert der Nachbarn ersetzt. Erstes und letztes Bild bleiben unverändert.</p>
+              <h4>Tote und heiße Pixel</h4>
+              <p>Bei RAW übernimmt das die Engine (darktable: Modul „Hotpixel“, wird bei Bedarf angelegt, auch in den Keyframes). Bei JPG prüft Purelapse 15 über die Sequenz verteilte Bilder: Ein Punkt, der in mindestens 85 % davon um mehr als 24 Stufen vom 3×3-Median abweicht, gilt als defekt und wird durch den Median ersetzt. Sterne und Motivdetails wandern und bleiben deshalb unangetastet.</p>
+              <h4>Weitere Effekte</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td>Entrauschen</td><td>Nur JPG-Ablauf, ab ISO 800: bilateraler Filter mit Durchmesser <code>(ISO − 400) / 250</code>, begrenzt auf 3–15.</td></tr>
+                  <tr><td>Telemetrie</td><td>Unten links: Uhrzeit, ISO, Blende und Belichtungszeit aus den EXIF-Daten. Der Text kommt nicht in den Bildpuffer des Motion Blur.</td></tr>
+                  <tr><td>Ein-/Ausblenden</td><td>0,5, 1, 2 oder 3 Sekunden linear aus Schwarz bzw. nach Schwarz.</td></tr>
+                  <tr><td>Rückwärts</td><td>Spielt die Sequenz rückwärts; die Stabilisierung folgt der Richtung.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </details>
+
+          <details class="chap" id="t-video">
+            <summary><span class="num">11</span><span class="ttl">Videoausgabe<small>FFmpeg, Farbraum, Codecs, Selbsttest, Dateiname</small></span></summary>
+            <div class="chap-body">
+              <h4>Übergabe und Farbraum</h4>
+              <ul>
+                <li>Die Bilder gehen unkomprimiert per Pipe an FFmpeg (<code>rawvideo</code>, <code>bgr24</code> bzw. <code>bgr48le</code> bei 16 Bit).</li>
+                <li>Umrechnung nach BT.709 im eingeschränkten Bereich: <code>scale=out_color_matrix=bt709:out_range=tv,format=…</code>, Kennzeichnung mit <code>-colorspace bt709 -color_primaries bt709 -color_trc bt709</code>. Ohne das rechnet FFmpeg nach der SD-Norm BT.601 um, und Grün- und Rottöne verschieben sich.</li>
+                <li>Auflösung immer 16:9: Breite 1280, 1920, 2560, 3840 oder 7680, Höhe = Breite × 9/16.</li>
+                <li>Bildraten: 23,976 · 24 · 25 · 29,97 · 30 · 50 · 59,94 · 60 · 120 fps.</li>
+              </ul>
+              <h4>Codecs</h4>
+              <div class="tbl"><table>
+                <thead><tr><th>Codec</th><th>Encoder</th><th>Pixelformat</th><th>Parameter</th><th>Datei</th></tr></thead>
+                <tbody>
+                  <tr><td>H.264 (CPU)</td><td><code>libx264</code></td><td>yuv420p</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (NVIDIA)</td><td><code>h264_nvenc</code></td><td>yuv420p</td><td><code>-preset p6 -cq Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265/HEVC (CPU)</td><td><code>libx265</code></td><td>yuv420p</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265/HEVC (NVIDIA)</td><td><code>hevc_nvenc</code></td><td>yuv420p</td><td><code>-preset p6 -cq Q</code></td><td>.mp4</td></tr>
+                  <tr><td>HEVC 10 Bit (CPU)</td><td><code>libx265</code></td><td>yuv420p10le</td><td><code>-preset slow -crf Q</code></td><td>.mp4</td></tr>
+                  <tr><td>HEVC 10 Bit (NVIDIA)</td><td><code>hevc_nvenc</code></td><td>p010le</td><td><code>-preset p6 -cq Q -profile:v main10</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (Intel QuickSync)</td><td><code>h264_qsv</code></td><td>nv12</td><td><code>-preset slow -global_quality Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265 (Intel QuickSync)</td><td><code>hevc_qsv</code></td><td>nv12</td><td><code>-preset slow -global_quality Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.264 (VAAPI)</td><td><code>h264_vaapi</code></td><td>nv12 → GPU</td><td><code>-rc_mode CQP -qp Q</code></td><td>.mp4</td></tr>
+                  <tr><td>H.265 (VAAPI)</td><td><code>hevc_vaapi</code></td><td>nv12 → GPU</td><td><code>-rc_mode CQP -qp Q</code></td><td>.mp4</td></tr>
+                  <tr><td>Apple ProRes 422 HQ</td><td><code>prores_ks</code></td><td>yuv422p10le</td><td><code>-profile:v 3 -qscale:v 9</code></td><td>.mov</td></tr>
+                </tbody>
+              </table></div>
+              <p class="small">Q ist die Qualitätsstufe: 16 (visuell verlustfrei), 20 (hoch), 23 (Standard) oder 28 (niedrig). VAAPI sucht den Render-Knoten der Grafikkarte selbst.</p>
+              <h4>Selbsttest und Rückfall</h4>
+              <ul>
+                <li>Ein Hardware-Codec wird bei der Auswahl und vor jedem Lauf geprüft: FFmpeg kodiert drei schwarze Testbilder ins Leere (unter einer Sekunde). So fällt ein untauglicher Treiber nicht erst nach Stunden Entwicklung auf.</li>
+                <li>Bevorzugt wird das FFmpeg des Systems (passend zum Grafiktreiber), Rückfall ist das mitgelieferte. Kann ein anderes FFmpeg den Encoder, schaltet Purelapse für diesen Programmlauf darauf um.</li>
+                <li>Läuft der Codec gar nicht, bietet Purelapse den gleichwertigen CPU-Codec an; in der Warteschlange wird ohne Rückfrage umgestellt und protokolliert.</li>
+              </ul>
+              <h4>Dateiname und Speicherort</h4>
+              <ul>
+                <li>Name: <code>&lt;Ordner&gt;_Purelapse_&lt;Auflösung&gt;_&lt;fps&gt;fps</code>, bei Versionierung mit <code>_v1</code>, <code>_v2</code> …; alternativ wird überschrieben.</li>
+                <li>Speicherort: Bilderordner, übergeordneter Ordner, Programmordner oder ein eigener Ordner.</li>
+                <li>Die Größenschätzung rechnet mit <code>1,25 MB/s × Auflösungs- × Qualitäts- × Codec-Faktor × fps/25</code> und zeigt dazu die Videolänge.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-vorschau">
+            <summary><span class="num">12</span><span class="ttl">Vorschau und Vergleich<small>Fünf-Bild-Vorschau, Schnellvorschau, Rohfassung, Vergleichsvideo</small></span></summary>
+            <div class="chap-body">
+              <div class="tbl"><table>
+                <thead><tr><th>Werkzeug</th><th>Technik</th></tr></thead>
+                <tbody>
+                  <tr><td>Vorschau (5 Bilder)</td><td>Fünf gleichmäßig verteilte Bilder. Bei RAW entwickelt die Engine mit den Pass-1-Profilen und den Keyframes (JPG-Qualität 92), deshalb muss Pass 1 gelaufen sein; bei JPG wird die Glättung direkt angewandt. Kamerafahrt und Blende gelten. Spart einen kompletten Fehldurchlauf.</td></tr>
+                  <tr><td>Schnellvorschau</td><td>Eingebettete Kamera-Vorschaubilder, höchstens 1280 Punkte breit, Glättung wie im Diagramm, Ausschnitt und Kamerafahrt gelten. Kodierung mit <code>libx264 -preset ultrafast -crf 23</code>, Dateiname mit <code>_Schnellvorschau</code>. Keine Engine, keine Keyframes, keine Effekte.</td></tr>
+                  <tr><td>Rohfassung</td><td>Jedes Bild so neutral wie möglich (RAW mit Kamera-Weißabgleich, ohne Auto-Helligkeit), mittiger 16:9-Ausschnitt. Deflicker, Keyframes, Motion Blur, Entrauschen und Stabilisierung bleiben aus; Bildrate, Auflösung, Codec und Qualität gelten.</td></tr>
+                  <tr><td>Vergleichsvideo</td><td>Nebeneinander (beide auf 720 Punkte Höhe) oder geteilt (linke Hälfte von Video A, rechte von Video B); <code>libx264 -preset fast -crf 18</code>.</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          </details>
+
+          <details class="chap" id="t-stapel">
+            <summary><span class="num">13</span><span class="ttl">Warteschlange und Telegram<small>Stapelbetrieb, Benachrichtigung</small></span></summary>
+            <div class="chap-body">
+              <h4>Warteschlange</h4>
+              <ul>
+                <li>„Zur Warteschlange“ legt den aktuellen Ordner mit Arbeitsschritt und allen Einstellungen als Auftrag ab; danach kann der nächste Ordner eingelesen werden.</li>
+                <li>„Stapel abarbeiten“ arbeitet alle offenen Aufträge nacheinander ab. Abbrechen hält den Stapel an; beim nächsten Start geht es an derselben Stelle weiter, entwickelte Bilder bleiben erhalten.</li>
+                <li>Im Stapel stellt Purelapse einen nicht laufenden Hardware-Codec selbst auf den CPU-Codec um, statt auf eine Antwort zu warten.</li>
+              </ul>
+              <h4>Telegram</h4>
+              <ul>
+                <li>Nach jedem Lauf (fertig oder Fehler) eine Nachricht über die Telegram-Bot-API (<code>sendMessage</code>).</li>
+                <li>Einrichtung: bei @BotFather mit <code>/newbot</code> einen Bot anlegen, Token eintragen, dem Bot schreiben, „Chat-ID ermitteln“ (<code>getUpdates</code>), „Testnachricht senden“.</li>
+                <li>Inhalt: Ergebnis, Ordner, Arbeitsgang, Gesamtzeit, jeder Schritt mit Dauer, Restflackern und die Abschlussmeldung.</li>
+                <li>Der Token steht nur in der Konfigurationsdatei, die ausschließlich für den Benutzer lesbar ist.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="chap" id="t-leistung">
+            <summary><span class="num">14</span><span class="ttl">Leistung und Speicher<small>Threads, Prozesse, Grenzwerte</small></span></summary>
+            <div class="chap-body">
+              <div class="tbl"><table>
+                <thead><tr><th>Bereich</th><th>Regel</th></tr></thead>
+                <tbody>
+                  <tr><td>Bildleiste</td><td>Kerne − 1 Threads</td></tr>
+                  <tr><td>Messung</td><td>≤ 8 Bilder gleichzeitig, ≤ eingestellte Kerne, ≤ 50 % des freien Speichers bei 450 MB je Bild</td></tr>
+                  <tr><td>ART / RawTherapee</td><td>Automatisch: Kerne / 4 Prozesse, höchstens 8, höchstens so viele wie Kerne und Bilder, höchstens freier Speicher / 2,5 GB. Von Hand: 1, 2, 3, 4, 6 oder 8.</td></tr>
+                  <tr><td>darktable-cli</td><td>Wie oben, zusätzlich höchstens 4 und höchstens freier Speicher / 3 GB; Zeitlimit 600 s je Bild</td></tr>
+                  <tr><td>Threads je Engine-Prozess</td><td><code>OMP_NUM_THREADS</code> = Kerne / Prozesse</td></tr>
+                  <tr><td>Video</td><td>bis 4 Threads Vorauslesen (mehr kostet nur Speicher)</td></tr>
+                  <tr><td>Nachkalibrierung</td><td>nur geänderte Bilder entwickeln, unveränderte Messungen wiederverwenden</td></tr>
+                  <tr><td>EXIF</td><td>einmal gelesen und zwischengespeichert</td></tr>
+                </tbody>
+              </table></div>
+              <p>Warum mehrere Prozesse: ART und RawTherapee nutzen bei einem einzelnen Bild nur vier bis acht Kerne sinnvoll. Auf einem vielkernigen Rechner bringen mehrere Prozesse mit je wenigen Threads deutlich mehr als einer mit allen Kernen.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-dateien">
+            <summary><span class="num">15</span><span class="ttl">Dateien und Einstellungen<small>Konfiguration, Arbeitsdateien, Diagnose, Zurücksetzen</small></span></summary>
+            <div class="chap-body">
+              <h4>Ordner von Purelapse</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td><code>~/.config/purelapse/purelapse.json</code></td><td>Die einzige Konfigurationsdatei (Rechte 0600): Design, Sprache, letzter Ordner, Engine-Pfade und Basisprofile, alle Einstellungen, Start-/Endbild je Ordner, Warteschlange, Telegram. Alte Einzeldateien <code>~/.purelapse_*</code> werden beim ersten Start übernommen und entfernt.</td></tr>
+                  <tr><td><code>~/.local/share/purelapse</code></td><td>Von der Engine erzeugte Basisprofile</td></tr>
+                  <tr><td><code>~/.cache/purelapse</code></td><td>Konfigurationsordner der darktable-cli-Prozesse, bei jedem Lauf aufgefrischt</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Im Bilderordner</h4>
+              <div class="tbl"><table>
+                <tbody>
+                  <tr><td><code>*.arp</code> / <code>*.pp3</code> / <code>*.xmp</code></td><td>Profile der Engine mit Korrektur und Keyframe-Gestaltung</td></tr>
+                  <tr><td><code>purelapse_deflicker.json</code></td><td>Pass-1-Belichtungswerte je Bild</td></tr>
+                  <tr><td><code>purelapse_calib.json</code></td><td>Nachkalibrierung je Bild</td></tr>
+                  <tr><td><code>purelapse_result.json</code></td><td>Restabweichung je Bild nach Pass 2</td></tr>
+                  <tr><td><code>Deflickered_JPG/</code></td><td>Entwickelte bzw. entflackerte Bilder (JPG oder 16-Bit-TIFF) und der Entwicklungsmerker</td></tr>
+                </tbody>
+              </table></div>
+              <h4>Diagnose-Modus</h4>
+              <p>Schreibt zusätzlich <code>purelapse_pass1.csv</code> (Messung, Ziel, Korrektur, Clipping, Weißabgleich je Bild), <code>purelapse_pass2.csv</code> (Nachmessung und Rest), <code>purelapse_profiles.csv</code> (Profilwerte nach der Keyframe-Verteilung), <code>purelapse_arp_check.log</code> (Formatprüfung) und <code>purelapse_art.log</code> (Ausgabe der Engine). Nur für die Fehlersuche; Warnungen stehen ohnehin im Protokoll.</p>
+              <h4>Zurücksetzen</h4>
+              <p>Löscht wahlweise Protokolle und Messdaten, Betriebsdaten (Basiswerte, Kalibrierung), entwickelte Bilder und – deutlich rot markiert – die Begleitdateien samt Bearbeitungen und Keyframes. RAW- und JPG-Originale werden nie angetastet.</p>
+              <h4>Sicheres Schreiben</h4>
+              <p>Profile, darktable-XMPs, Messdateien, entflackerte JPGs und die Konfiguration werden atomar geschrieben: erst in eine Datei daneben, dann in einem Schritt an ihren Platz. Bricht der Rechner mitten im Schreiben ab, bleibt die alte Fassung stehen. Kann ein Profil nicht geschrieben werden (Platte voll, keine Rechte), hält der Lauf mit einer Meldung an.</p>
+            </div>
+          </details>
+
+          <details class="chap" id="t-qs">
+            <summary><span class="num">16</span><span class="ttl">Prüfungen und Voraussetzungen<small>Testumgebung, System, Lieferumfang</small></span></summary>
+            <div class="chap-body">
+              <h4>Automatische Prüfungen</h4>
+              <ul>
+                <li>Rund 3000 Prüfungen durchlaufen das ganze Programm – mit echter Messung, echtem FFmpeg und fertigen Videos, mit Ersatz-Engines, die sich wie ART, RawTherapee und darktable-cli verhalten.</li>
+                <li>Sie laufen bei jedem Push auf GitHub (Ubuntu 24.04, Python 3.10 und 3.12) und lokal mit <code>python tests/alle.py</code>.</li>
+                <li>Prüfstände messen die Bildqualität nach: Restflackern mit und ohne Sonne sowie Gleichmäßigkeit und Schärfe der Kamerafahrt.</li>
+              </ul>
+              <h4>System</h4>
+              <ul>
+                <li>Linux x86_64, Linux Mint 21 / Ubuntu 22.04 und neuer.</li>
+                <li>Die AppImage enthält Python, Qt 5, OpenCV, rawpy und FFmpeg; eine Installation ist nicht nötig.</li>
+                <li>Für RAW: ART, RawTherapee oder darktable mit Kommandozeilenprogramm. Die darktable-Parameter-Layouts stammen aus darktable 4.6.1; andere Modulversionen werden erkannt und dann nicht überblendet, sondern vom näheren Keyframe übernommen.</li>
+                <li>Oberfläche auf Deutsch und Englisch, dunkles und helles Design.</li>
+                <li>Lizenz GPL-3.0. ART, RawTherapee, darktable und FFmpeg laufen als eigenständige Programme unter ihren eigenen Lizenzen.</li>
+              </ul>
+            </div>
+          </details>
+
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -201,6 +725,28 @@
     var txt = b.getAttribute("data-text").replace(/\\n/g, "\n"), alt = b.textContent;
     var ok = function () { b.textContent = b.getAttribute("data-done"); setTimeout(function () { b.textContent = alt; }, 1600); };
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(ok, function () {});
+  });
+  var kapitel = Array.prototype.slice.call(document.querySelectorAll("details.chap"));
+  var alle = document.querySelector(".toc-all");
+  var beschriften = function () {
+    if (!alle) return;
+    var offen = kapitel.length && kapitel.every(function (d) { return d.open; });
+    alle.textContent = alle.getAttribute(offen ? "data-close" : "data-open");
+  };
+  var zeige = function (id) {
+    var d = id && document.getElementById(id);
+    if (d && d.tagName === "DETAILS") { d.open = true; d.scrollIntoView(); }
+  };
+  kapitel.forEach(function (d) { d.addEventListener("toggle", beschriften); });
+  document.querySelectorAll(".toc a").forEach(function (a) {
+    a.addEventListener("click", function () { zeige(a.getAttribute("href").slice(1)); });
+  });
+  window.addEventListener("hashchange", function () { zeige(location.hash.slice(1)); });
+  if (location.hash.indexOf("#t-") === 0) zeige(location.hash.slice(1));
+  if (alle) alle.addEventListener("click", function () {
+    var auf = !kapitel.every(function (d) { return d.open; });
+    kapitel.forEach(function (d) { d.open = auf; });
+    beschriften();
   });
   document.querySelectorAll("[data-lang]").forEach(function (a) {
     a.addEventListener("click", function () { try { localStorage.setItem("purelapse-lang", a.getAttribute("data-lang")); } catch (e) {} });
