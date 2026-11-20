@@ -8,7 +8,9 @@ const DB = { prepare(sql) { let args = []; const st = {
   async run() { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; } }; return st; } };
 const env = { DB, TURNSTILE_SECRET: "geheim", ADMIN_TOKEN: "admin123", ERLAUBT: "https://purelapse.org" };
 let tsOk = true;
-globalThis.fetch = async (u, o) => ({ json: async () => ({ success: tsOk && o.body.get("secret") === "geheim" && o.body.get("response") === "tok" }) });
+globalThis.fetch = async (u, o) => ({ json: async () => {
+  if (o.body.get("secret") !== "geheim") return { success: false, "error-codes": ["invalid-input-secret"] };
+  return o.body.get("response") === "tok" && tsOk ? { success: true } : { success: false, "error-codes": ["invalid-input-response"] }; } });
 let ok = 0, fehl = 0;
 const pruef = (b, t) => { if (b) ok++; else { fehl++; console.log("FEHLER:", t); } };
 async function rufe(method, pfad, body, kopf = {}, ip = "1.2.3.4", land = "DE") {
@@ -31,7 +33,9 @@ r = await rufe("POST", "/pins", gut, {}, "5.6.7.8", "AT"); pruef(r.s === 201, "a
 r = await rufe("POST", "/pins", { ...gut, zustimmung: false }, {}, "9.9.9.1"); pruef(r.s === 400, "ohne Zustimmung");
 r = await rufe("POST", "/pins", { ...gut, reaktion: "<script>" }, {}, "9.9.9.2"); pruef(r.s === 400, "falsche Reaktion");
 r = await rufe("POST", "/pins", { ...gut, lat: 200 }, {}, "9.9.9.3"); pruef(r.s === 400, "falscher Ort");
-r = await rufe("POST", "/pins", { ...gut, token: "falsch" }, {}, "9.9.9.4"); pruef(r.s === 403 && r.d.fehler === "pruefung", "Turnstile");
+r = await rufe("POST", "/pins", { ...gut, token: "falsch" }, {}, "9.9.9.4"); pruef(r.s === 403 && r.d.fehler === "pruefung" && r.d.codes[0] === "invalid-input-response", "Turnstile " + JSON.stringify(r.d));
+env.TURNSTILE_SECRET = "falsch"; r = await rufe("POST", "/pins", gut, {}, "9.9.9.8"); env.TURNSTILE_SECRET = "geheim";
+pruef(r.s === 403 && r.d.codes[0] === "invalid-input-secret", "falsches Secret wird benannt " + JSON.stringify(r.d));
 r = await rufe("POST", "/pins", gut, { "Origin": "https://boese.example" }, "9.9.9.5"); pruef(r.s === 403, "fremde Herkunft");
 r = await rufe("POST", "/pins", { ...gut, lat: 89.9, lon: -179.9 }, {}, "9.9.9.6"); pruef(r.s === 201, "Rand");
 r = await rufe("GET", "/pins"); pruef(r.d.pins.at(-1).lat === 85 && r.d.pins.at(-1).lon === -180, "Rand begrenzt " + JSON.stringify(r.d.pins.at(-1)));

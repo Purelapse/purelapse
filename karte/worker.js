@@ -59,8 +59,12 @@ function antwort(daten, status, kopf) {
   });
 }
 
-async function turnstileOk(env, token, ip) {
-  if (!token || typeof token !== "string" || token.length > 4096) return false;
+// Rueckgabe: Liste der Fehlercodes von Turnstile, leer = bestanden.
+// Die Codes (z. B. "invalid-input-secret") verraten nichts Geheimes und
+// helfen bei der Einrichtung.
+async function turnstileFehler(env, token, ip) {
+  if (!token || typeof token !== "string" || token.length > 4096) return ["missing-input-response"];
+  if (!env.TURNSTILE_SECRET) return ["missing-input-secret"];
   const form = new FormData();
   form.append("secret", env.TURNSTILE_SECRET || "");
   form.append("response", token);
@@ -69,9 +73,10 @@ async function turnstileOk(env, token, ip) {
     const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify",
       { method: "POST", body: form });
     const d = await r.json();
-    return d.success === true;
+    if (d.success === true) return [];
+    return Array.isArray(d["error-codes"]) && d["error-codes"].length ? d["error-codes"] : ["unbekannt"];
   } catch (e) {
-    return false;
+    return ["siteverify-nicht-erreichbar"];
   }
 }
 
@@ -115,7 +120,8 @@ export default {
           return antwort({ fehler: "daten" }, 400, cors);
         }
         const ip = req.headers.get("CF-Connecting-IP") || "";
-        if (!(await turnstileOk(env, d.token, ip))) return antwort({ fehler: "pruefung" }, 403, cors);
+        const codes = await turnstileFehler(env, d.token, ip);
+        if (codes.length) return antwort({ fehler: "pruefung", codes }, 403, cors);
 
         const tag = new Date().toISOString().slice(0, 10);
         await env.DB.prepare("DELETE FROM sperre WHERE tag < ?").bind(tag).run();
