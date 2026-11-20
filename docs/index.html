@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=4">
+<link rel="stylesheet" href="assets/style.css?v=5">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});if(l==="en"||(!l&&!de)){location.replace("en.html"+location.hash)}}catch(e){}</script>
 </head>
 <body>
@@ -161,6 +161,37 @@
         </div>
         <p class="req">Läuft auf Linux Mint 21 / Ubuntu 22.04 und neuer (x86_64). <a href="versionen.html">Was ist neu? Alle Versionen →</a></p>
       </div>
+    </div>
+  </section>
+
+  <section id="karte" class="karte" data-api="https://purelapse-karte.silvio-boenig.workers.dev" data-sitekey="0x4AAAAAAGKrT-gioaOFMFul">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Community</div>
+        <h2>Purelapse in aller Welt.</h2>
+        <p>Nutzt du Purelapse? Setz einen Pin auf die Karte – ganz grob, auf etwa 50&nbsp;km gerundet, nie auf die Hausnummer genau.</p>
+      </div>
+      <div class="map-card">
+        <div class="map-top">
+          <p class="map-stats" aria-live="polite"></p>
+          <button type="button" class="btn btn-primary map-set">Pin setzen</button>
+        </div>
+        <div class="map-frame">
+          <div class="map-hint" hidden></div>
+          <svg class="map" viewBox="0 0 360 136" role="img" aria-label="Weltkarte mit den Pins der Purelapse-Nutzer"><image href="assets/welt.svg" x="0" y="0" width="360" height="136"/><g class="pins"></g><g class="pick"></g></svg>
+          <div class="map-tip" hidden></div>
+        </div>
+        <div class="map-legend"><span><i style="background:#f2a24b"></i>ART</span><span><i style="background:#a99df9"></i>RawTherapee</span><span><i style="background:#35b8a8"></i>darktable</span><span><i style="background:#5b9cf6"></i>JPG</span><span><i style="background:#a2aaba"></i>Andere</span></div>
+        <form class="map-form" hidden>
+          <fieldset><legend>Wie läuft's?</legend><div class="map-chips"><label><input type="radio" name="reaktion" value="laeuft"><span>Läuft</span></label><label><input type="radio" name="reaktion" value="holygrail"><span>Holy Grail geschafft</span></label><label><input type="radio" name="reaktion" value="danke"><span>Danke</span></label><label><input type="radio" name="reaktion" value="begeistert"><span>Begeistert</span></label><label><input type="radio" name="reaktion" value="getueftelt"><span>Am Tüfteln</span></label></div></fieldset>
+          <fieldset><legend>Womit entwickelst du?</legend><div class="map-chips"><label><input type="radio" name="engine" value="art"><span>ART</span></label><label><input type="radio" name="engine" value="rt"><span>RawTherapee</span></label><label><input type="radio" name="engine" value="dt"><span>darktable</span></label><label><input type="radio" name="engine" value="jpg"><span>JPG</span></label><label><input type="radio" name="engine" value="andere"><span>Andere</span></label></div></fieldset>
+          <label class="map-consent"><input type="checkbox" name="zustimmung"><span>Ich bin einverstanden, dass mein ungefährer Ort (auf etwa 50&nbsp;km gerundet), meine Reaktion und die Engine öffentlich auf dieser Karte erscheinen.</span></label>
+          <div class="map-turnstile"></div>
+          <div class="map-actions"><button type="submit" class="btn btn-primary" disabled>Pin absenden</button><button type="button" class="btn map-cancel">Abbrechen</button></div>
+        </form>
+        <p class="map-msg" aria-live="polite"></p>
+      </div>
+      <details class="map-privacy"><summary>Datenschutz der Karte</summary><div><p><b>Was gespeichert wird:</b> der auf 0,5° (etwa 50&nbsp;km) gerundete Ort – gerundet schon in deinem Browser –, die gewählte Reaktion und Engine, das Land, das Cloudflare beim Absenden aus deiner Verbindung ableitet, und der Zeitpunkt (angezeigt wird nur der Monat). Kein Name, keine E-Mail-Adresse, keine IP-Adresse.</p><p><b>Ein Pin je Tag:</b> Damit niemand die Karte zuschüttet, wird beim Absenden ein Prüfwert (Hash) aus IP-Adresse, Datum und einem geheimen Schlüssel gebildet und bis zum nächsten Tag aufbewahrt. Die IP-Adresse selbst wird nicht gespeichert; ohne den geheimen Schlüssel lässt sich aus dem Prüfwert nicht auf sie schließen.</p><p><b>Dienste:</b> Die Pins liegen in einer Datenbank von Cloudflare im Hoheitsgebiet der EU. Erst wenn du bis zur Karte scrollst, lädt dein Browser die Pins von Cloudflare (<code>purelapse-karte.silvio-boenig.workers.dev</code>); dabei sieht Cloudflare wie jeder Webserver deine IP-Adresse. Der Bot-Schutz Cloudflare Turnstile wird erst geladen, wenn du einen Pin setzen willst.</p><p><b>Freiwillig und löschbar:</b> Ein Pin erscheint nur mit deiner ausdrücklichen Zustimmung. Soll er wieder verschwinden, nenne seine Nummer (steht im Hinweis am Pin) über <a href="https://github.com/slvobng/purelapse/issues">GitHub</a> – er wird dann aus der Datenbank gelöscht.</p><p>Der Quelltext des Dienstes ist offen: <a href="https://github.com/slvobng/purelapse/blob/main/karte/worker.js">karte/worker.js</a>.</p></div></details>
     </div>
   </section>
 
@@ -754,5 +785,6 @@
   });
 })();
 </script>
+<script src="assets/karte.js?v=1" defer></script>
 </body>
 </html>

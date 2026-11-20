@@ -3,6 +3,17 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+### Webseite
+- **Weltkarte „Purelapse in aller Welt“:** Besucher setzen einen Pin mit
+  Reaktion und Engine, der Ort wird schon im Browser auf etwa 50 km
+  gerundet. Gespeichert wird über einen Cloudflare Worker mit D1-Datenbank
+  (Hoheitsgebiet EU); ein Pin je Besucher und Tag, Bot-Schutz mit Cloudflare
+  Turnstile, der erst beim Setzen eines Pins lädt. Keine IP-Adressen, keine
+  fremden Kartenkacheln – die Karte ist eine eigene Punktgrafik. Quelltext
+  und Prüfung in `karte/`.
+
 ## [2.42.1-beta] – 2026-11-20
 
 Fehlerbehebung für 2.42.0. Wer mit 16-Bit-Zwischenbildern arbeitet, sollte
