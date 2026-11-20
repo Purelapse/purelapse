@@ -14,3 +14,16 @@ archiv/
 # Protokolle und Messdaten, die Purelapse im Bilderordner anlegt
 purelapse_*.csv
 purelapse_*.log
+
+# Begleitdateien von Bildern (Bewertungen, Darktable-Verlauf) - enthalten
+# u. a. den Namen des Fotografen und gehoeren nicht ins Repository
+*.xmp
+*.XMP
+# ... ausser den bereinigten Beispielen der Pruefungen (ohne Name/E-Mail)
+!tests/daten/*.xmp
+
+# Arbeitsdateien der Pruefungen
+purelapse_pruefung/
+
+# Bildschirmfotos zum Hochladen in Releases (liegen im Release, nicht im Code)
+*_screenshot.jpg

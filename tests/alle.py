@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Laesst alle Pruefungen laufen:  python tests/alle.py  [Muster]
+
+Gebraucht werden Python 3.9+, NumPy, SciPy, OpenCV und FFmpeg. Qt, rawpy,
+exifread, pyqtgraph und die Engines sind in tests/pruefstand nachgebaut.
+"""
+import os, sys, glob, subprocess, time
+hier = os.path.dirname(os.path.abspath(__file__))
+muster = sys.argv[1] if len(sys.argv) > 1 else "test_*.py"
+fehler = []
+for t in sorted(glob.glob(os.path.join(hier, muster))):
+    t0 = time.time()
+    r = subprocess.run([sys.executable, t], capture_output=True, text=True)
+    letzte = (r.stdout.strip().splitlines() or [""])[-1]
+    ok = r.returncode == 0
+    print(f"{'OK    ' if ok else 'FEHLER'} {os.path.basename(t):24s} {time.time() - t0:5.0f} s  {letzte}")
+    if not ok:
+        fehler.append(t)
+        print("\n".join((r.stdout + r.stderr).strip().splitlines()[-25:]))
+print(f"\n{len(fehler)} von {len(glob.glob(os.path.join(hier, muster)))} Pruefreihen fehlgeschlagen")
+sys.exit(1 if fehler else 0)

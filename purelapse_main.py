@@ -56,27 +56,24 @@ pg.setConfigOptions(antialias=True)
 # Engine-Logik (ART / RawTherapee / Darktable) kommt aus einem eigenen
 # Modul - purelapse_engines.py muss im selben Ordner liegen wie diese Datei.
 from purelapse_engines import *
-from purelapse_engines import _dt_load, _qn
+from purelapse_texte import *
+from purelapse_design import *
+from purelapse_design import _rgb
+import purelapse_design as design
 
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.39.0-beta"
+VERSION = "2.42.0-beta"
 # ======================
 
-CONFIG_FILE = os.path.expanduser("~/.purelapse_last_path")
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
-# ganzen Arbeitsgang aussen vor.
-BEREICH_FILE = os.path.expanduser("~/.purelapse_bereiche.json")
+# ganzen Arbeitsgang aussen vor. Steht in der Konfiguration ('bereiche').
 
 
 def lade_bereiche():
-    try:
-        with open(BEREICH_FILE, "r", encoding="utf-8") as f:
-            d = json.load(f)
-        return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    d = konfig_lesen('bereiche', standard={})
+    return d if isinstance(d, dict) else {}
 
 
 def speichere_bereich(ordner, start, ende):
@@ -85,11 +82,7 @@ def speichere_bereich(ordner, start, ende):
         d[ordner] = [start or "", ende or ""]
     else:
         d.pop(ordner, None)
-    try:
-        with open(BEREICH_FILE, "w", encoding="utf-8") as f:
-            json.dump(d, f, indent=1)
-    except OSError:
-        pass
+    konfig_setzen('bereiche', d)
 
 
 def bereich_anwenden(files, start_name, end_name):
@@ -136,13 +129,11 @@ def find_original_raw(target_dir, stem):
                 return p
     return os.path.join(target_dir, stem + ".NEF")  # Fallback wie zuvor
 
-SETTINGS_FILE = os.path.expanduser("~/.purelapse_settings.json")
 # Datei im Bilderordner, in der Pass 1 seine reinen Deflicker-Werte ablegt.
 DEFLICKER_DB = "purelapse_deflicker.json"
 CALIB_DB = "purelapse_calib.json"
 DEV_INDEX = ".purelapse_developed.json"
 RESULT_DB = "purelapse_result.json"
-QUEUE_FILE = os.path.expanduser("~/.purelapse_queue.json")
 
 if os.environ.get("APPIMAGE"):
     # AppImage: das Programm liegt in einem schreibgeschuetzten Abbild.
@@ -688,7 +679,7 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
     spanne = max(1e-3, p98 - p2)
     if darf('contrast'):
         if spanne >= AUTO_SPANNE_GENUG:
-            grund.append(f"Kontrast unveraendert: Histogramm nutzt schon "
+            grund.append("Kontrast unveraendert: Histogramm nutzt schon "
                          f"{spanne:.2f} der Skala")
         else:
             k = min(1.45, AUTO_SPANNE_ZIEL / spanne)
@@ -1163,7 +1154,7 @@ def log_art(zeile):
         return 'fort', text
     if ("ffmpeg" in text and " -" in text) or "-cli" in text and " -" in text:
         return 'befehl', text
-    if (text.startswith(("Fertig", "Erfolg", "Ziel erreicht", "Done"))
+    if (text.startswith(("Fertig", "Erfolg", "Ziel erreicht", "Done", "Target reached"))
             or "✔" in text or "erfolgreich" in text.lower()):
         return 'ok', text
     return 'text', text
@@ -1227,10 +1218,23 @@ def log_html(msg, wann, farben):
 #  Arbeitspuffern) und der Anzahl der Bilder.
 # ==========================================================================
 THREADS_PRO_PROZESS = 4      # Zielgroesse je Instanz
+VIDEO_THREADS_MAX = 4        # Vorauslesen beim Rendern; mehr kostet nur Speicher
+DT_MAX_PROZESSE = 4          # darktable-cli: mehr bringt auf einer Grafikkarte nichts
+DT_GB_PRO_PROZESS = 3.0      # darktable-cli braucht mehr Speicher als ART
+DT_ZEITLIMIT_S = 600         # haengt ein darktable-cli laenger, wird es beendet
 GB_PRO_PROZESS = 2.5         # Schaetzung des Speicherbedarfs je Instanz
 MAX_PROZESSE = 8             # darueber bringt es erfahrungsgemaess nichts
 # Auswahl in der Oberflaeche; 0 bedeutet "automatisch"
 PROZESS_WAHL = [0, 1, 2, 3, 4, 6, 8]
+
+
+def cache_ordner():
+    """Zwischenspeicher von Purelapse (keine Einstellungen, nur Wegwerfbares)."""
+    if os.name == 'nt':
+        basis = os.environ.get('LOCALAPPDATA') or os.path.expanduser("~")
+        return os.path.join(basis, "purelapse", "cache")
+    basis = os.environ.get('XDG_CACHE_HOME') or os.path.expanduser("~/.cache")
+    return os.path.join(basis, "purelapse")
 
 
 def freier_speicher_gb():
@@ -1384,7 +1388,7 @@ def find_dri_device():
 #  Aufruf, Groessenschaetzung und Selbsttest lesen alle aus derselben Zeile.
 #
 #  WICHTIG: Der Index ist Teil der gespeicherten Einstellungen
-#  (codec_idx in ~/.purelapse_settings.json und in der Warteschlange).
+#  (codec_idx in der Konfigurationsdatei und in der Warteschlange).
 #  Neue Codecs deshalb nur ANHAENGEN, niemals dazwischen einfuegen.
 #
 #  Felder
@@ -1400,15 +1404,23 @@ def find_dri_device():
 #    fb     Index des CPU-Codecs, auf den zurueckgefallen wird
 # ==========================================================================
 def _args_x26x(crf):
-    return ["-preset", "fast", "-crf", crf]
+    # "slow" statt "fast": bei gleicher Qualitaetsstufe sichtbar weniger
+    # Artefakte in feinen Strukturen (Wolken, Laub), kostet nur Kodierzeit.
+    return ["-preset", "slow", "-crf", crf]
 
 
 def _args_nvenc(crf):
-    return ["-preset", "p4", "-cq", crf]
+    # p6 statt p4: gruendlichere Bewegungssuche, auf jeder NVENC-Generation
+    # verfuegbar, die p4 kennt.
+    return ["-preset", "p6", "-cq", crf]
+
+
+def _args_nvenc10(crf):
+    return _args_nvenc(crf) + ["-profile:v", "main10"]
 
 
 def _args_qsv(crf):
-    return ["-global_quality", crf]
+    return ["-preset", "slow", "-global_quality", crf]
 
 
 def _args_vaapi(crf):
@@ -1431,7 +1443,8 @@ VIDEO_CODECS = [
     # ProRes kann MP4 nicht aufnehmen - FFmpeg bricht sonst mit
     # "Could not find tag for codec prores" ab, bevor ein Bild geschrieben ist.
     dict(label="Apple ProRes 422 HQ",         enc="prores_ks",  args=_args_prores,
-         pix=None,      pre=[], vf=None, ext=".mov", mult=12.0, hw=None,     fb=4),
+         pix=None,      pre=[], vf=None, ext=".mov", mult=12.0, hw=None,     fb=4,
+         pix_intern="yuv422p10le"),
     # --- ab hier angehaengt (Version 2.12.0) -----------------------------
     dict(label="H.264 (Intel QuickSync)",     enc="h264_qsv",   args=_args_qsv,
          pix="nv12",    pre=[], vf=None, ext=".mp4", mult=1.1,  hw="qsv",    fb=0),
@@ -1443,6 +1456,11 @@ VIDEO_CODECS = [
     dict(label="H.265/HEVC (VAAPI: AMD/Intel)", enc="hevc_vaapi", args=_args_vaapi,
          pix=None,      pre=["-vaapi_device", "@DRI@"],
          vf="format=nv12,hwupload", ext=".mp4", mult=0.7, hw="vaapi", fb=2),
+    # --- ab hier angehaengt (Version 2.42.0) -----------------------------
+    dict(label="H.265/HEVC 10 Bit (CPU)",     enc="libx265",    args=_args_x26x,
+         pix="yuv420p10le", pre=[], vf=None, ext=".mp4", mult=0.65, hw=None,  fb=9),
+    dict(label="H.265/HEVC 10 Bit (NVIDIA GPU)", enc="hevc_nvenc", args=_args_nvenc10,
+         pix="p010le",  pre=[], vf=None, ext=".mp4", mult=0.65, hw="nvenc", fb=9),
 ]
 
 
@@ -1451,6 +1469,25 @@ def codec_def(idx):
     if isinstance(idx, int) and 0 <= idx < len(VIDEO_CODECS):
         return VIDEO_CODECS[idx]
     return VIDEO_CODECS[0]
+
+
+# Farbraum des Videos. Die JPGs sind sRGB; Player gehen bei HD-Video von
+# BT.709 aus. Ohne Angabe rechnete FFmpeg nach BT.601 (Standard-Definition)
+# um und kennzeichnete nichts - Gruen- und Rottoene waren leicht
+# verschoben. Jetzt wird nach BT.709 umgerechnet und das auch so in die
+# Datei geschrieben.
+FARBRAUM_ARGS = ["-colorspace", "bt709", "-color_primaries", "bt709",
+                 "-color_trc", "bt709"]
+
+
+def codec_filter(c):
+    """Filterkette: RGB -> YUV mit BT.709 im eingeschraenkten Bereich,
+    dann das Pixelformat des Encoders (bzw. dessen eigener Filter)."""
+    umrechnen = "scale=out_color_matrix=bt709:out_range=tv"
+    if c.get('vf'):
+        return f"{umrechnen},{c['vf']}"
+    ziel = c.get('pix') or c.get('pix_intern')
+    return f"{umrechnen},format={ziel}" if ziel else umrechnen
 
 
 def codec_pre_args(c):
@@ -1492,11 +1529,11 @@ def _probe_mit(programm, idx, crf="23", timeout=30):
     cmd = [programm, "-hide_banner", "-loglevel", "error"]
     cmd += codec_pre_args(c)
     cmd += ["-f", "lavfi", "-i", "color=c=black:s=640x360:r=25:d=0.4"]
-    if c['vf']:
-        cmd += ["-vf", c['vf']]
+    cmd += ["-vf", codec_filter(c)]
     cmd += ["-c:v", c['enc']] + c['args'](crf)
     if c['pix']:
         cmd += ["-pix_fmt", c['pix']]
+    cmd += FARBRAUM_ARGS
     cmd += ["-frames:v", "3", "-f", "null", "-"]
     try:
         proc = subprocess.run(cmd, stdout=subprocess.DEVNULL,
@@ -1518,671 +1555,19 @@ def _probe_mit(programm, idx, crf="23", timeout=30):
     return False, grund or f"FFmpeg endete mit Fehlercode {proc.returncode}."
 
 
-# ==========================================================================
-#  ZWEISPRACHIGKEIT
-# ==========================================================================
-LANG_FILE = os.path.expanduser("~/.purelapse_lang")
-TRANSLATIONS = {
-    # Gruppen (siehe _build_ui). Die Reihenfolge zeigt die Schrittleiste,
-    # deshalb tragen die Gruppen keine Nummern mehr.
-    "Zeitraffer-Ordner": "Timelapse folder",
-    "Format": "Format",
-    "Helligkeit und Deflicker": "Brightness and deflicker",
-    "Engine und Leistung": "Engine and performance",
-    "Video": "Video",
-    "Bild und Effekte": "Image and effects",
-    "Speicherort und Dateinamen": "Location and file names",
-    "Aktionen": "Actions",
-    "Keyframes": "Keyframes",
-    "Darstellung": "Appearance",
-    "Aufnahmeort für die Sonnenstand-Kurve (optional)": "Location for the sun elevation curve (optional)",
-    " Einstellungen…": " Settings…",
-    " Schließen": " Close",
-    " Bilder neu einlesen": " Re-read images",
-    " Vorschau (5 Bilder)": " Preview (5 frames)",
-    " Zur Warteschlange": " Add to queue",
-    " Warteschlange…": " Queue…",
-    " Weitere": " More",
-    "Jeder Auftrag merkt sich Ordner, Schritt und alle Einstellungen. "
-    "Neue Aufträge legst du im Hauptfenster mit „Zur Warteschlange“ an.":
-        "Each job remembers its folder, step and all settings. "
-        "Add new jobs in the main window with “Add to queue”.",
-    " Entfernen": " Remove",
-    " Leeren": " Clear",
-    " Stapel abarbeiten": " Run queue",
-    # Beschriftungen
-    "Kein Ordner gewählt.": "No folder selected.",
-    "Lichtverlauf:": "Light progression:",
-    "Weitere Kurven:": "More curves:",
-    "Breitengrad:": "Latitude:",
-    "Längengrad:": "Longitude:",
-    "Zeitzone (UTC+):": "Time zone (UTC+):",
-    "Deflicker-Stärke:": "Deflicker strength:",
-    "Belichtung (EV):": "Exposure (EV):",
-    "CPU-Kerne:": "CPU cores:",
-    "ART-Programm:": "ART program:",
-    "ART-Basisprofil:": "ART base profile:",
-    "RawTherapee-Programm:": "RawTherapee program:",
-    "RawTherapee-Basisprofil:": "RawTherapee base profile:",
-    "Entwicklungs-Engine:": "Development engine:",
-    "Nachkalibrierung:": "Recalibration:",
-    "Noch nicht gestartet.": "Not started yet.",
-    "Framerate (fps):": "Frame rate (fps):",
-    "16:9-Auflösung:": "16:9 resolution:",
-    "Video-Codec:": "Video codec:",
-    "Parallele Prozesse:": "Parallel processes:",
-    "★ nur Keyframes": "★ keyframes only",
-    "Keyframe einstellen…": "Edit keyframe…",
-    "Automatisch": "Automatic",
-    "1 (seriell)": "1 (serial)",
-    "Render-Qualität:": "Render quality:",
-    "Motion Blur:": "Motion blur:",
-    "Ein-/Ausblenden:": "Fade in / out:",
-    "Aus": "Off",
-    "0,5 Sekunden": "0.5 seconds",
-    "1 Sekunde": "1 second",
-    "2 Sekunden": "2 seconds",
-    "3 Sekunden": "3 seconds",
-    "Standard (Mitte)": "Default (centred)",
-    "Statisch (Festgelegter 16:9 Crop)": "Static (fixed 16:9 crop)",
-    "Dynamisch (Start \u2192 Ende)": "Dynamic (start \u2192 end)",
-    "Bildausschnitt:": "Framing:",
-    "Zum ersten Bild": "Go to first frame",
-    "Benachrichtigung (Telegram)": "Notification (Telegram)",
-    "Nach jedem Lauf eine Nachricht schicken (fertig oder Fehler)":
-        "Send a message after every run (done or error)",
-    " Chat-ID ermitteln": " Find chat ID",
-    " Testnachricht senden": " Send test message",
-    " \u26a1 Schnellvorschau": " \u26a1 Quick preview",
-    "\u21e4 Startbild": "\u21e4 Start frame",
-    "Endbild \u21e5": "End frame \u21e5",
-    "Zum letzten Bild": "Go to last frame",
-    " 16:9 Kamerafahrt / Crop \u2026": " 16:9 camera move / crop \u2026",
-    "Geschätzte Dateigröße: -- MB": "Estimated file size: -- MB",
-    "Speichern in:": "Save to:",
-    "Wenn Datei existiert:": "If file exists:",
-    "Bereit.": "Ready.",
-    "Sprache:": "Language:",
-    "Design:": "Theme:",
-    "Dunkel": "Dark",
-    "Hell": "Light",
-    "Sonnenstand": "Sun elevation",
-    "GPS aus Bild": "GPS from image",
-    # Schalter
-    "Video erstellen": "Create video",
-    "Optische Stabilisierung": "Optical stabilisation",
-    "Denoise": "Denoise",
-    "Rückwärts rendern": "Render in reverse",
-    "Telemetrie-Overlay": "Telemetry overlay",
-    "Astro-Clean (Satelliten entfernen)": "Astro clean (remove satellites)",
-    "Tote / heiße Pixel entfernen": "Remove dead / hot pixels",
-    "Weißabgleich": "White balance",
-    "Belichtung (EXIF)": "Exposure (EXIF)",
-    "Intervall": "Interval",
-    "Clipping": "Clipping",
-    "Restflackern": "Residual flicker",
-    "Diagnose-Modus (Protokolldateien schreiben)": "Diagnostic mode (write log files)",
-    "JPG (Direkt-Workflow)": "JPG (direct workflow)",
-    "NEF / RAW (RAW-Workflow)": "NEF / RAW (RAW workflow)",
-    " Durchsuchen…": " Browse…",
-    " Aktualisieren": " Refresh",
-    " [+] Messbereich (ROI) festlegen": " [+] Set measuring area (ROI)",
-    " [✔] Messbereich (ROI) ist AKTIV! (Klick = neu)": " [✔] Measuring area (ROI) ACTIVE! (click to redo)",
-    " [✥] 16:9 Kamerafahrt / Crop": " [✥] 16:9 camera move / crop",
-    " Zurücksetzen…": " Reset…",
-    " Rohfassung": " Untouched",
-    " Vergleich…": " Compare…",
-    " Ordner öffnen": " Open folder",
-    " Abbrechen": " Cancel",
-    "Bitte Zeitraffer-Ordner wählen…": "Please select a timelapse folder…",
-    "wird im Bilderordner gesucht": "searched for in the image folder",
-    # Darktable-Hinweistext
-    "Darktable braucht kein Basisprofil: Purelapse ändert nur die "
-    "Belichtung in der vorhandenen .xmp und lässt alle anderen "
-    "Module unangetastet.":
-        "Darktable doesn't need a base profile: Purelapse only changes "
-        "the exposure in the existing .xmp and leaves all other modules "
-        "untouched.",
-    # Auswahllisten
-    "Pass 1 – Anti-Flacker": "Pass 1 – anti-flicker",
-    "Pass 2 – Rendern": "Pass 2 – render",
-    "Sonnenaufgang (heller werdend)": "Sunrise (getting brighter)",
-    "Sonnenuntergang (dunkler werdend)": "Sunset (getting darker)",
-    "Gleichbleibend": "Constant",
-    "Aus (1 Lauf)": "Off (1 run)",
-    "1 Durchgang (2 Läufe)": "1 round (2 runs)",
-    "2 Durchgänge (3 Läufe)": "2 rounds (3 runs)",
-    "3 Durchgänge (4 Läufe)": "3 rounds (4 runs)",
-    "720p (HD Ready)": "720p (HD Ready)",
-    "1080p (FHD)": "1080p (FHD)",
-    "Visuell Verlustfrei (CRF 16)": "Visually lossless (CRF 16)",
-    "Hoch (CRF 20)": "High (CRF 20)",
-    "Standard (CRF 23)": "Standard (CRF 23)",
-    "Niedrig (CRF 28)": "Low (CRF 28)",
-    "H.264 (CPU Standard)": "H.264 (CPU standard)",
-    "1. Quell-Ordner (Bilder)": "1. Source folder (images)",
-    "2. Übergeordneter Ordner": "2. Parent folder",
-    "3. Programmverzeichnis (purelapse)": "3. Program directory (purelapse)",
-    "4. Eigener Ordner wählen...": "4. Choose your own folder...",
-    "Neue Version anlegen (_v1, _v2)": "Create new version (_v1, _v2)",
-    "Datei überschreiben": "Overwrite file",
-    # Hinweistexte
-    "TT_FOLDER": "Ordner mit den Einzelbildern des Zeitraffers. JPG oder RAW, nicht gemischt.",
-    "TT_REFRESH": "Liest den Ordner neu ein: Vorschaubilder, Helligkeitskurve und Keyframe-Markierungen.",
-    "TT_FORMAT": "JPG rechnet direkt und schnell. RAW gibt die Bilder an die Engine weiter und erlaubt Keyframes.",
-    "TT_RAWSTEP": "Pass 1 misst die Helligkeit und legt die Korrektur in den Sidecar-Dateien ab.\nPass 2 laesst die Engine entwickeln, verteilt die Keyframe-Profile und baut das Video.",
-    "TT_SCENE": "Gleichbleibend lässt den Lichtverlauf, wie er ist.\nSonnenaufgang und Sonnenuntergang erzwingen einen nie fallenden bzw. nie steigenden Verlauf.\nBei Sequenzen mit einem Buckel im Licht gehört das auf Gleichbleibend.",
-    "TT_SETTINGS": "Engine, Rechenkerne, Nachkalibrierung, Design und Sprache.",
-    "TT_QOPEN": "Zeigt die eingereihten Aufträge und arbeitet sie als Stapel ab.",
-    "TT_LOG": "Blendet die ausführlichen Meldungen des Programms ein oder aus.\nBei einem Fehler öffnet sich das Protokoll von selbst.",
-    "TT_MORE": "Rohfassung ohne Bearbeitung erzeugen oder zwei fertige Videos vergleichen.",
-    "TT_SMOOTH": "Breite der Glaettung. Niedrig entfernt nur schnelles Flackern,\nhoch formt auch den Lichtverlauf um. Ab 85% blendet der Regler\nstufenlos in eine reine Ausgleichsgerade ueber.",
-    "TT_EV": "Verschiebt die Zielhelligkeit der gesamten Sequenz.",
-    "TT_ROI": "Beschraenkt die Helligkeitsmessung auf einen Bildbereich.\nSinnvoll, wenn Sonne, Lampen oder bewegte Objekte die Messung stoeren.",
-    "TT_CORES": "Anzahl der Rechenkerne, die die Engine benutzen darf.",
-    "TT_KFFILTER": ("Zeigt in der Bildleiste nur die als Keyframe\n"
-                    "markierten Bilder. Praktisch, um die gesetzten\n"
-                    "Stuetzstellen zu pruefen, ohne durch tausend\n"
-                    "Vorschaubilder zu rollen.\n\n"
-                    "Die Bilder werden nur ausgeblendet, nicht entfernt -\n"
-                    "die Verbindung zum Diagramm bleibt dadurch erhalten."),
-    "TT_PROCS": ("Wie viele Bilder gleichzeitig entwickelt werden.\n\n"
-                 "ART und RawTherapee nutzen bei einem einzelnen Bild nur\n"
-                 "vier bis acht Kerne sinnvoll aus. Auf einem vielkernigen\n"
-                 "Rechner bringen mehrere Prozesse mit je wenigen Threads\n"
-                 "deshalb deutlich mehr als ein Prozess mit allen Kernen.\n\n"
-                 "Automatisch richtet sich nach Kernzahl und freiem\n"
-                 "Arbeitsspeicher. Jede Instanz braucht rund 2 bis 3 GB.\n"
-                 "Bei wenig Speicher auf 1 oder 2 stellen.\n\n"
-                 "Gilt nur fuer ART und RawTherapee, nicht fuer Darktable."),
-    "TT_ARTCLI": "Ausfuehrbare Datei der Entwicklungs-Engine. Wird fuer Pass 2 benoetigt.",
-    "TT_ENGINE": "ART, RawTherapee oder Darktable. ART und RawTherapee teilen sich\\n"
-                 "Kommandozeile und Profilformat (.arp bzw. .pp3). Darktable nutzt\\n"
-                 "dieselbe .xmp, die es selbst schreibt - Purelapse ergaenzt dort nur\\n"
-                 "ein eigenes Belichtungs-Modul, ohne bestehende Bearbeitungen anzufassen.\\n"
-                 "Pro Ordner muss man sich festlegen; liegen bereits Begleitdateien\\n"
-                 "vor, stellt Purelapse beim Einlesen selbst um.",
-    "TT_CALIB": "Purelapse misst das Ergebnis der Engine und schreibt die verbleibende\nAbweichung in die Sidecars zurueck, dann entwickelt die Engine erneut.\nAb Runde 2 nur noch die tatsaechlich geaenderten Bilder.\nEin Durchgang genuegt in aller Regel.",
-    "TT_CAMPATH": "Legt den 16:9 Ausschnitt fuer das erste und das letzte Bild fest.\nDazwischen faehrt die Kamera weich von A nach B.",
-    "TT_STAB": "Gleicht Verwacklungen zwischen den Bildern aus. Kostet etwas Bildrand.",
-    "TT_DENOISE": "Rauschminderung, staerker bei hohen ISO-Werten.",
-    "TT_REVERSE": "Spielt die Sequenz rueckwaerts ab.",
-    "TT_TEL": "Blendet Uhrzeit, ISO, Blende und Belichtungszeit ins Bild ein.",
-    "TT_ASTRO": "Entfernt Satellitenspuren, indem jedes Bild mit seinen beiden Nachbarn verglichen wird.",
-    "TT_HOTPIX": "Beseitigt defekte Sensorpixel.\\nBei RAW uebernimmt das ART/RawTherapee.\\nBei Darktable derzeit ohne Wirkung (siehe Log-Hinweis).\\nBei JPG sucht Purelapse zuerst die Punkte, die in der ganzen Sequenz\\nan derselben Stelle auffallen - Sterne und Motivdetails bleiben\\ndadurch unangetastet.",
-    "TT_RESET": "Loescht Arbeitsdateien im Bilderordner, um sauber neu zu beginnen.\nWas geloescht wird, waehlst du im naechsten Fenster.",
-    "TT_LANG": "Sprache der Oberflaeche.",
-    "TT_FADE": "Blendet den Videoanfang aus Schwarz auf und das Ende nach Schwarz ab.",
-    "TT_BLUR": "Mittelt mehrere Bilder zu einem Videoframe. Erzeugt weiche Bewegung,\nkostet aber zeitliche Schaerfe.",
-    "TT_START": "Startet den gewaehlten Arbeitsschritt.",
-    "TT_PLAIN": "Erzeugt den Zeitraffer ohne jede Bildbearbeitung.\\nNur Ordner, Bildrate, Aufloesung, Codec und Qualitaet werden beachtet.\\nDeflicker, Keyframes, Motion Blur, Denoise und Stabilisierung bleiben aus.\\nDient als Referenz zum Vergleich.",
-    "TT_QADD": "Legt den aktuellen Ordner mit allen Einstellungen als Auftrag ab.\\nDanach kannst du den naechsten Ordner einlesen und ebenfalls einreihen.",
-    "TT_QRUN": "Arbeitet alle offenen Auftraege nacheinander ab.\\nAbbrechen haelt den Stapel an; beim naechsten Start geht es an\\nderselben Stelle weiter, bereits entwickelte Bilder bleiben erhalten.",
-    "TT_PREVIEW": "Entwickelt fuenf ueber die Sequenz verteilte Bilder mit den\\naktuellen Einstellungen und zeigt sie an. Bei RAW laeuft dafuer\\ndie Engine, deshalb muss Pass 1 vorher gelaufen sein.\\nSpart einen kompletten Fehldurchlauf.",
-    "TT_OPENDIR": "Oeffnet den Ordner, in dem das fertige Video liegt,\\nim Dateimanager des Systems.",
-    "TT_COMPARE": "Stellt zwei fertige Videos gegenueber - nebeneinander oder\\nals geteiltes Bild mit Schnitt durch die Mitte.",
-    "TT_SUN": "Breiten- und Laengengrad des Aufnahmeortes plus Zeitzonen-Offset\n"
-              "zur Aufnahmezeit (z.B. 2 fuer MESZ). Zeigt den Sonnenstand als\n"
-              "Zusatzkurve - hilfreich, um Keyframes an den Daemmerungsgrenzen\n"
-              "(gepunktete Linien: buergerlich/nautisch/astronomisch) zu setzen.\n"
-              "Hat keinen Einfluss auf die Deflicker-Berechnung selbst.",
-}
-TRANSLATIONS_TT_EN = {
-    "TT_SETTINGS": "Engine, CPU cores, recalibration, theme and language.",
-    "TT_QOPEN": "Shows the queued jobs and runs them as a batch.",
-    "TT_LOG": "Shows or hides the program's detailed messages.\nThe log opens by itself when an error occurs.",
-    "TT_MORE": "Build an untouched version or compare two finished videos.",
-    "TT_FOLDER": "Folder holding the timelapse frames. JPG or RAW, not mixed.",
-    "TT_REFRESH": "Re-reads the folder: thumbnails, brightness curve and keyframe marks.",
-    "TT_FORMAT": "JPG is processed directly and quickly. RAW is handed to the engine and allows keyframes.",
-    "TT_RAWSTEP": "Pass 1 measures brightness and stores the correction in the sidecar files.\nPass 2 lets the engine develop, distributes the keyframe profiles and builds the video.",
-    "TT_SCENE": "Constant leaves the light curve alone.\nSunrise and Sunset force a never-falling resp. never-rising curve.\nFor sequences with a hump in the light, use Constant.",
-    "TT_SMOOTH": "Width of the smoothing. Low removes only fast flicker,\nhigh also reshapes the light curve. From 85% the slider fades\ncontinuously into a pure straight-line fit.",
-    "TT_EV": "Shifts the target brightness of the whole sequence.",
-    "TT_ROI": "Limits the brightness measurement to one area of the frame.\nUseful when sun, lamps or moving objects disturb the measurement.",
-    "TT_CORES": "Number of CPU cores the engine may use.",
-    "TT_KFFILTER": ("Shows only the images marked as keyframes in the\n"
-                    "gallery. Handy for checking the chosen anchor\n"
-                    "points without scrolling through a thousand\n"
-                    "thumbnails.\n\n"
-                    "The images are only hidden, not removed, so the\n"
-                    "link to the graph stays intact."),
-    "TT_PROCS": ("How many images are developed at the same time.\n\n"
-                 "ART and RawTherapee only make good use of four to eight\n"
-                 "cores on a single image. On a many-core machine several\n"
-                 "processes with a few threads each are therefore much\n"
-                 "faster than one process with every core.\n\n"
-                 "Automatic follows core count and free memory. Each\n"
-                 "instance needs roughly 2 to 3 GB. Set it to 1 or 2 if\n"
-                 "memory is tight.\n\n"
-                 "Applies to ART and RawTherapee only, not to Darktable."),
-    "TT_ARTCLI": "Executable of the development engine. Required for pass 2.",
-    "TT_ENGINE": "ART, RawTherapee or Darktable. ART and RawTherapee share the\\n"
-                 "command line and profile format (.arp resp. .pp3). Darktable uses\\n"
-                 "the same .xmp it writes itself - Purelapse only adds its own\\n"
-                 "exposure module there, without touching existing edits.\\n"
-                 "You have to commit per folder; if sidecars are present already,\\n"
-                 "Purelapse switches automatically when reading the folder.",
-    "TT_CALIB": "Purelapse measures the engine's result and writes the remaining deviation\nback into the sidecars, then the engine develops again.\nFrom round 2 on, only the frames that actually changed.\nOne round is usually enough.",
-    "TT_CAMPATH": "Defines the 16:9 crop for the first and the last frame.\nIn between the camera moves smoothly from A to B.",
-    "TT_STAB": "Compensates camera shake between frames. Costs a little image border.",
-    "TT_DENOISE": "Noise reduction, stronger at high ISO values.",
-    "TT_REVERSE": "Plays the sequence backwards.",
-    "TT_TEL": "Overlays time, ISO, aperture and shutter speed onto the frame.",
-    "TT_ASTRO": "Removes satellite trails by comparing each frame with its two neighbours.",
-    "TT_HOTPIX": "Fixes defective sensor pixels.\\nFor RAW this is handled by ART/RawTherapee.\\nCurrently without effect for Darktable (see log message).\\nFor JPG, Purelapse first locates the points that stand out at the same\\nposition throughout the whole sequence - stars and image detail are\\nleft untouched.",
-    "TT_RESET": "Deletes working files in the image folder to start over cleanly.\nYou choose what to delete in the next window.",
-    "TT_LANG": "Language of the user interface.",
-    "TT_FADE": "Fades the start of the video in from black and the end out to black.",
-    "TT_BLUR": "Averages several frames into one video frame. Creates smooth motion\nat the cost of temporal sharpness.",
-    "TT_START": "Starts the selected step.",
-    "TT_PLAIN": "Builds the timelapse without any image processing.\\nOnly folder, frame rate, resolution, codec and quality apply.\\nDeflicker, keyframes, motion blur, denoise and stabilisation stay off.\\nUseful as a reference for comparison.",
-    "TT_QADD": "Stores the current folder together with all settings as a job.\\nYou can then load the next folder and queue it as well.",
-    "TT_QRUN": "Works through all pending jobs one after another.\\nCancel pauses the batch; the next start resumes at the same point,\\nkeeping images that were already developed.",
-    "TT_PREVIEW": "Develops five frames spread across the sequence using the current\\nsettings and shows them. For RAW this runs the engine, so pass 1 must\\nhave completed first.\\nSaves a whole wasted run.",
-    "TT_OPENDIR": "Opens the folder containing the finished video\\nin the system file manager.",
-    "TT_COMPARE": "Places two finished videos side by side, or as a split screen\\ndivided down the middle.",
-    "TT_SUN": "Latitude and longitude of the shooting location plus the UTC\n"
-              "offset at capture time (e.g. 2 for CEST). Shows sun elevation as\n"
-              "an extra curve - useful for placing keyframes at twilight\n"
-              "boundaries (dotted lines: civil/nautical/astronomical).\n"
-              "Has no effect on the deflicker calculation itself.",
-}
-# ==========================================================================
-#  ERSCHEINUNGSBILD
-# ==========================================================================
-THEME_FILE = os.path.expanduser("~/.purelapse_theme")
-THEMES = {
-    'dark': {
-        # Ruhige, neutrale Grautoene in drei Stufen: Fenster, Flaeche
-        # (Gruppen, Karten), Bedienelement. Die Raender sind nur einen
-        # Schritt heller als die Flaeche, auf der sie liegen - sie gliedern,
-        # ohne ein Gitter zu zeichnen. Farbe tragen allein der aktive
-        # Schritt, der Hauptknopf und die Zustaende (gut, Warnung, Fehler).
-        'bg': "#14161a", 'panel': "#1b1e24", 'panel2': "#242830",
-        'hover': "#2c313b", 'border': "#2b3039", 'border2': "#3a404c",
-        'text': "#e4e7ec", 'dim': "#8d95a3", 'faint': "#5e6674",
-        'accent': "#5b9cf6", 'accent_hi': "#7db1f8", 'accent_text': "#0d1117",
-        'warn': "#f0a94a", 'ok': "#56c27a", 'err': "#f2777a",
-        # Eine Farbe je Arbeitsschritt (siehe thema_mit_schritt).
-        'steps': {'load': "#5b9cf6", 'smooth': "#35b8a8",
-                  'keys': "#e2b340", 'render': "#a48cf7"},
-        'log_bg': "#111317", 'log_fg': "#cdd2da",
-        'graph_bg': "#171a1f", 'gallery': "#181b20", 'sel': "#2b4f78",
-        'curves': {'raw': "#a8b0bb", 'target': "#ff9800", 'wb': "#4fc3f7",
-                   'ev': "#f06fd0", 'interval': "#66d97e", 'clip': "#ff5252",
-                   'residual': "#ffffff", 'kf': "#ffee58", 'sun': "#ba68c8"},
-    },
-    'light': {
-        # Weisser Hintergrund, graue Gruppen, weisse Eingabefelder -
-        # dadurch treten die Gruppen als Flaeche hervor.
-        'bg': "#ffffff", 'panel': "#eef1f6", 'panel2': "#ffffff",
-        'hover': "#f3f6fa", 'border': "#d5dbe5", 'border2': "#b9c2cf",
-        'text': "#1b2027", 'dim': "#5f6975", 'faint': "#8b95a2",
-        'accent': "#1f7ad4", 'accent_hi': "#2f8ae4", 'accent_text': "#ffffff",
-        'warn': "#a55f00", 'ok': "#1f7a45", 'err': "#b3261e",
-        'steps': {'load': "#1b6fc2", 'smooth': "#0b7d73",
-                  'keys': "#8a6400", 'render': "#6a3fc4"},
-        'log_bg': "#f7f9fc", 'log_fg': "#27303b",
-        'graph_bg': "#ffffff", 'gallery': "#f4f6fa", 'sel': "#cfe2f7",
-        'curves': {'raw': "#6b7480", 'target': "#e65100", 'wb': "#0277bd",
-                   'ev': "#9c27b0", 'interval': "#2e7d32", 'clip': "#c62828",
-                   'residual': "#37474f", 'kf': "#b28704", 'sun': "#7b1fa2"},
-    },
-}
-
-# ==========================================================================
-#  FARBE JE ARBEITSSCHRITT
-#
-#  Jeder Schritt der Schrittleiste hat seine eigene Farbe. Sie ersetzt die
-#  Akzentfarbe des Farbschemas - alles, was bisher blau war (Hauptknopf,
-#  aktiver Schritt, Rahmen des angeklickten Feldes, Fortschrittsbalken),
-#  traegt dann die Farbe des Schritts. So sieht man ohne zu lesen, ob man
-#  bei "Bilder laden" oder bei "Helligkeit glaetten" steht.
-#
-#    Bilder laden          Blau     wie bisher
-#    Helligkeit glaetten   Tuerkis
-#    Keyframes             Gold     dieselbe Farbe wie die Keyframe-Sterne
-#    Video rendern         Violett
-#
-#  Gruen und Orange bleiben frei: sie bedeuten im Programm bereits
-#  "erledigt" und "Warnung".
-# ==========================================================================
-def _rgb(hexfarbe):
-    h = str(hexfarbe).lstrip('#')
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-
-def farbe_mischen(a, b, anteil):
-    """Mischt Farbe a mit dem Anteil 'anteil' von Farbe b."""
-    ra, rb = _rgb(a), _rgb(b)
-    return "#" + "".join(f"{int(round(x + (y - x) * anteil)):02x}"
-                         for x, y in zip(ra, rb))
-
-
-def leuchtdichte(hexfarbe):
-    """Relative Leuchtdichte nach WCAG, 0 (schwarz) bis 1 (weiss)."""
-    werte = []
-    for v in _rgb(hexfarbe):
-        c = v / 255.0
-        werte.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
-    return 0.2126 * werte[0] + 0.7152 * werte[1] + 0.0722 * werte[2]
-
-
-def kontrast(a, b):
-    """Kontrastverhaeltnis zweier Farben nach WCAG, 1 bis 21."""
-    la, lb = leuchtdichte(a), leuchtdichte(b)
-    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
-
-
-def kontrast_text(hintergrund):
-    """Dunkle oder helle Schrift - je nachdem, was besser lesbar ist."""
-    dunkel, hell = "#0d1117", "#ffffff"
-    return dunkel if kontrast(hintergrund, dunkel) >= kontrast(hintergrund, hell) else hell
-
-
-def thema_mit_schritt(thema, schritt):
-    """
-    Das Farbschema mit der Farbe des Arbeitsschritts als Akzent.
-
-    Die Schriftfarbe auf dem Akzent wird gerechnet und nicht aus der
-    Tabelle genommen: Gold braucht dunkle Schrift, Violett helle, und das
-    soll nicht davon abhaengen, dass jemand beim Aendern einer Farbe an
-    die zweite denkt.
-    """
-    t = dict(THEMES.get(thema, THEMES['dark']))
-    farbe = t.get('steps', {}).get(schritt)
-    if farbe:
-        t['accent'] = farbe
-        t['accent_hi'] = farbe_mischen(farbe, "#ffffff", 0.18)
-        t['accent_text'] = kontrast_text(farbe)
-    return t
-
-
-# ==========================================================================
-#  KLEINE BILDER FUER BEDIENELEMENTE
-#
-#  Ein Stylesheet kann weder einen Pfeil noch einen Haken zeichnen - es
-#  kann nur Bilddateien einbinden. Der Pfeil der Auswahlfelder war bisher
-#  ein Trick mit Rahmenlinien, den Qt als kleinen Balken darstellt, und
-#  ein angekreuztes Kaestchen war nur eine gefuellte Flaeche.
-#
-#  Die Bilder entstehen beim Start in einem eigenen Arbeitsordner, in den
-#  Farben des Schemas, und verschwinden beim Beenden wieder.
-# ==========================================================================
-_UI_BILD_ORDNER = None
-
-
-def _ui_ordner():
-    global _UI_BILD_ORDNER
-    if _UI_BILD_ORDNER is None or not os.path.isdir(_UI_BILD_ORDNER):
-        import atexit
-        _UI_BILD_ORDNER = tempfile.mkdtemp(prefix="purelapse_ui_")
-        atexit.register(shutil.rmtree, _UI_BILD_ORDNER, True)
-    return _UI_BILD_ORDNER
-
-
-def ui_bild(form, farbe):
-    """
-    Pfad zu einem kleinen Bild in der gewuenschten Farbe.
-
-    form: 'pfeil_ab', 'pfeil_auf', 'haken', 'punkt'
-    Gezeichnet wird achtfach vergroessert und dann verkleinert - das
-    ergibt glatte Kanten. Rueckgabe "" wenn es nicht gelingt; das
-    Bedienelement bleibt dann einfach ohne Bild.
-    """
-    masse = {'pfeil_ab': (10, 6), 'pfeil_auf': (10, 6),
-             'haken': (11, 11), 'punkt': (7, 7),
-             'stern_voll': (18, 18), 'stern_leer': (18, 18)}
-    if form not in masse:
-        return ""
-    try:
-        pfad = os.path.join(_ui_ordner(),
-                            f"{form}_{str(farbe).lstrip('#')}.png")
-        if os.path.exists(pfad):
-            return pfad.replace("\\", "/")
-        b, h = masse[form]
-        f = 8
-        maske = np.zeros((h * f, b * f), dtype=np.uint8)
-        def pkt(*xy):
-            return np.array([[int(round(x * f)), int(round(y * f))]
-                             for x, y in xy], dtype=np.int32)
-        if form == 'pfeil_ab':
-            cv2.polylines(maske, [pkt((1.2, 1.2), (5.0, 4.8), (8.8, 1.2))],
-                          False, 255, int(1.5 * f), cv2.LINE_AA)
-        elif form == 'pfeil_auf':
-            cv2.polylines(maske, [pkt((1.2, 4.8), (5.0, 1.2), (8.8, 4.8))],
-                          False, 255, int(1.5 * f), cv2.LINE_AA)
-        elif form == 'haken':
-            cv2.polylines(maske, [pkt((2.2, 5.8), (4.6, 8.0), (8.8, 3.0))],
-                          False, 255, int(1.7 * f), cv2.LINE_AA)
-        elif form in ('stern_voll', 'stern_leer'):
-            ecken = []
-            for i in range(10):
-                radius = 7.6 if i % 2 == 0 else 3.3
-                winkel = math.pi * (i / 5.0 - 0.5)
-                ecken.append((9.0 + radius * math.cos(winkel),
-                              9.6 + radius * math.sin(winkel)))
-            if form == 'stern_voll':
-                cv2.fillPoly(maske, [pkt(*ecken)], 255, cv2.LINE_AA)
-            else:
-                cv2.polylines(maske, [pkt(*ecken)], True, 255,
-                              int(1.2 * f), cv2.LINE_AA)
-        else:
-            cv2.circle(maske, (b * f // 2, h * f // 2), int(3.0 * f), 255,
-                       -1, cv2.LINE_AA)
-        klein = cv2.resize(maske, (b, h), interpolation=cv2.INTER_AREA)
-        r, g, bl = _rgb(farbe)
-        bild = np.zeros((h, b, 4), dtype=np.uint8)
-        bild[..., 0], bild[..., 1], bild[..., 2] = bl, g, r
-        bild[..., 3] = klein
-        ok, daten = cv2.imencode(".png", bild)
-        if not ok:
-            return ""
-        daten.tofile(pfad)
-        return pfad.replace("\\", "/")
-    except Exception:
-        return ""
-
-
-def build_stylesheet(t):
-    """Flaches, ruhiges Erscheinungsbild fuer beide Farbschemata."""
-    pfeil_ab = ui_bild('pfeil_ab', t['dim'])
-    pfeil_auf = ui_bild('pfeil_auf', t['accent'])
-    haken = ui_bild('haken', t['accent_text'])
-    punkt = ui_bild('punkt', t['accent_text'])
-    stern_voll = ui_bild('stern_voll', t['curves']['kf'])
-    stern_leer = ui_bild('stern_leer', t['dim'])
-    aktiv_bg = farbe_mischen(t['panel2'], t['accent'], 0.10)
-    aktiv_rand = farbe_mischen(t['border'], t['accent'], 0.45)
-    warn_bg = farbe_mischen(t['panel'], t['warn'], 0.16)
-    return f"""
-    QWidget {{ background: {t['bg']}; color: {t['text']};
-               font-size: 12px; }}
-    QLabel {{ background: transparent; }}
-    QGroupBox {{ background: {t['panel']}; border: 1px solid {t['border']};
-                 border-radius: 8px; margin-top: 0px;
-                 padding: 24px 6px 6px 6px; }}
-    QGroupBox::title {{ subcontrol-origin: padding;
-                        subcontrol-position: top left;
-                        left: 15px; top: 9px; color: {t['dim']}; }}
-    QLineEdit, QComboBox, QAbstractSpinBox {{
-        background: {t['panel2']}; border: 1px solid {t['border2']};
-        border-radius: 6px; padding: 5px 8px; min-height: 18px;
-        selection-background-color: {t['accent']};
-        selection-color: {t['accent_text']}; }}
-    QPlainTextEdit, QListWidget {{
-        background: {t['panel2']}; border: 1px solid {t['border']};
-        border-radius: 6px; padding: 4px 7px;
-        selection-background-color: {t['accent']};
-        selection-color: {t['accent_text']}; }}
-    QLineEdit:hover, QComboBox:hover {{ border: 1px solid {t['faint']}; }}
-    QLineEdit:focus, QComboBox:focus {{ border: 1px solid {t['accent']}; }}
-    QLineEdit:read-only {{ color: {t['dim']}; }}
-    QComboBox::drop-down {{ border: none; width: 22px; }}
-    QComboBox::down-arrow {{ image: url({pfeil_ab}); width: 10px; height: 6px;
-                             margin-right: 10px; }}
-    QComboBox::down-arrow:on {{ image: url({pfeil_auf}); }}
-    QComboBox:disabled, QLineEdit:disabled {{ color: {t['faint']};
-        background: {t['panel']}; border: 1px solid {t['border']}; }}
-    QComboBox QAbstractItemView {{ background: {t['panel2']};
-        border: 1px solid {t['border2']}; padding: 3px;
-        selection-background-color: {t['accent']}; selection-color: {t['accent_text']};
-        outline: none; }}
-    QPushButton {{ background: {t['panel2']}; border: 1px solid {t['border2']};
-                   border-radius: 6px; padding: 6px 12px; min-height: 16px; }}
-    QPushButton:hover {{ background: {t['hover']}; border: 1px solid {t['faint']}; }}
-    QPushButton:pressed {{ background: {t['border2']}; }}
-    QPushButton:disabled {{ color: {t['faint']}; background: {t['panel']};
-                            border: 1px solid {t['border']}; }}
-    QPushButton#primary {{ background: {t['accent']}; color: {t['accent_text']};
-                           border: 1px solid {t['accent']}; font-weight: bold;
-                           padding: 8px 14px; }}
-    QPushButton#primary:hover {{ background: {t['accent_hi']};
-                                 border: 1px solid {t['accent_hi']}; }}
-    QPushButton#primary:disabled {{ background: {t['panel2']}; color: {t['faint']};
-                                    border: 1px solid {t['border']}; }}
-    QPushButton#step {{ background: {t['panel']}; color: {t['dim']};
-                        border: 1px solid {t['border']};
-                        text-align: left; padding: 9px 12px; }}
-    QPushButton#step[done="true"] {{ color: {t['ok']}; }}
-    QPushButton#step:hover {{ color: {t['text']}; background: {t['panel2']}; }}
-    QPushButton#step[schritt="load"] {{ border-bottom: 3px solid {t['steps']['load']}; }}
-    QPushButton#step[schritt="smooth"] {{ border-bottom: 3px solid {t['steps']['smooth']}; }}
-    QPushButton#step[schritt="keys"] {{ border-bottom: 3px solid {t['steps']['keys']}; }}
-    QPushButton#step[schritt="render"] {{ border-bottom: 3px solid {t['steps']['render']}; }}
-    QPushButton#step:checked {{ background: {t['accent']}; color: {t['accent_text']};
-                                border: 2px solid {t['accent']}; font-weight: bold;
-                                padding: 8px 11px; }}
-    QPushButton#step[done="true"]:checked {{ color: {t['accent_text']}; }}
-    QFrame#stepline {{ background: {t['accent']}; border: none;
-                       min-height: 3px; max-height: 3px; }}
-    QPushButton#toggle:checked {{ border: 1px solid {t['accent']};
-                                  color: {t['accent']}; }}
-    QPushButton::menu-indicator {{ subcontrol-position: right center;
-                                   subcontrol-origin: padding; right: 8px; }}
-    QLabel#steparrow {{ color: {t['faint']}; font-size: 18px; padding: 0 2px; }}
-    QLabel#hint {{ color: {t['dim']}; }}
-    QMenu {{ background: {t['panel2']}; border: 1px solid {t['border2']}; padding: 4px; }}
-    QMenu::item {{ padding: 6px 18px; border-radius: 4px; }}
-    QMenu::item:selected {{ background: {t['accent']}; color: {t['accent_text']}; }}
-    QMenu::item:disabled {{ color: {t['faint']}; }}
-    QTabWidget::pane {{ border: 1px solid {t['border']}; border-radius: 8px;
-                        background: {t['panel']}; top: -1px; }}
-    QTabBar::tab {{ background: transparent; color: {t['dim']};
-                    padding: 7px 16px; margin-right: 2px;
-                    border-top-left-radius: 7px; border-top-right-radius: 7px; }}
-    QTabBar::tab:selected {{ background: {t['panel']}; color: {t['text']};
-                             border: 1px solid {t['border']}; border-bottom: none; }}
-    QTabBar::tab:hover:!selected {{ color: {t['text']}; }}
-    QTabBar::tab:disabled {{ color: {t['faint']}; }}
-    QCheckBox, QRadioButton {{ spacing: 8px; background: transparent; }}
-    QCheckBox:disabled, QRadioButton:disabled {{ color: {t['faint']}; }}
-    QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px;
-        border: 1px solid {t['border2']}; background: {t['panel2']}; }}
-    QCheckBox::indicator {{ border-radius: 4px; }}
-    QRadioButton::indicator {{ border-radius: 8px; }}
-    QCheckBox::indicator:hover, QRadioButton::indicator:hover {{
-        border: 1px solid {t['accent']}; }}
-    QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
-        background: {t['accent']}; border: 1px solid {t['accent']}; }}
-    QCheckBox::indicator:checked {{ image: url({haken}); }}
-    QRadioButton::indicator:checked {{ image: url({punkt}); }}
-    QCheckBox#stern {{ spacing: 0px; }}
-    QCheckBox#stern::indicator {{ width: 18px; height: 18px; border: none;
-        background: transparent; image: url({stern_leer}); }}
-    QCheckBox#stern::indicator:hover {{ border: none; image: url({stern_voll}); }}
-    QCheckBox#stern::indicator:checked {{ border: none; background: transparent;
-        image: url({stern_voll}); }}
-    QPushButton#mini {{ padding: 6px 4px; min-width: 22px; }}
-    QCheckBox::indicator:checked:disabled, QRadioButton::indicator:checked:disabled {{
-        background: {t['faint']}; border: 1px solid {t['faint']}; }}
-    QCheckBox::indicator:disabled, QRadioButton::indicator:disabled {{
-        border: 1px solid {t['border']}; background: {t['panel']}; }}
-    QSlider::groove:horizontal {{ height: 4px; background: {t['border2']};
-                                  border-radius: 2px; }}
-    QSlider::sub-page:horizontal {{ background: {t['accent']}; border-radius: 2px; }}
-    QSlider::handle:horizontal {{ background: {t['panel']};
-        border: 2px solid {t['accent']}; width: 13px; height: 13px;
-        margin: -6px 0; border-radius: 8px; }}
-    QProgressBar {{ background: {t['panel2']}; border: none;
-                    border-radius: 4px; min-height: 8px; max-height: 8px;
-                    text-align: center; color: transparent; }}
-    QProgressBar::chunk {{ background: {t['accent']}; border-radius: 4px; }}
-    QFrame#statuscard {{ background: {t['panel']}; border: 1px solid {t['border']};
-                         border-radius: 8px; }}
-    QWidget#ladeschirm {{ background: rgba(0, 0, 0, 150); }}
-    QLabel#statustitel {{ font-size: 14px; font-weight: bold; color: {t['text']}; }}
-    QLabel#statuszeit {{ color: {t['dim']}; }}
-    QLabel#prozent {{ font-weight: bold; color: {t['text']}; }}
-    QFrame#ablauf {{ background: transparent; border: none; }}
-    QFrame#phase {{ background: {t['panel2']}; border: 1px solid {t['border']};
-                    border-radius: 6px; }}
-    QFrame#phase[zustand="aktiv"] {{ background: {aktiv_bg};
-                                     border: 1px solid {aktiv_rand}; }}
-    QFrame#phasenstrich {{ background: {t['border2']}; border: none;
-                           border-radius: 1px; min-height: 3px; max-height: 3px; }}
-    QFrame#phasenstrich[zustand="fertig"] {{ background: {t['ok']}; }}
-    QFrame#phasenstrich[zustand="aktiv"] {{ background: {t['accent']}; }}
-    QFrame#phasenstrich[zustand="fehler"] {{ background: {t['err']}; }}
-    QLabel#phasename {{ font-weight: bold; color: {t['text']}; }}
-    QLabel#phasename[zustand="aktiv"] {{ color: {t['accent']}; }}
-    QLabel#phasename[zustand="offen"] {{ color: {t['faint']}; }}
-    QLabel#phasename[zustand="entfallen"] {{ color: {t['faint']}; }}
-    QLabel#phasename[zustand="fehler"] {{ color: {t['err']}; }}
-    QLabel#phasezeit {{ color: {t['dim']}; font-size: 11px; }}
-    QLabel#phasezeit[zustand="offen"] {{ color: {t['faint']}; }}
-    QLabel#phasezeit[zustand="entfallen"] {{ color: {t['faint']}; }}
-    QLabel#badge {{ background: {t['panel2']}; color: {t['dim']};
-                    border-radius: 9px; padding: 2px 10px; font-size: 11px; }}
-    QLabel#badge[art="aktiv"] {{ background: {warn_bg}; color: {t['warn']};
-                                 font-weight: bold; }}
-    QLabel#badge[art="fest"] {{ color: {t['text']}; }}
-    QFrame#trenner {{ background: {t['border']}; border: none;
-                      min-height: 1px; max-height: 1px; }}
-    QScrollBar:vertical {{ background: transparent; width: 11px; margin: 0; }}
-    QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 0; }}
-    QScrollBar::handle {{ background: {t['border2']}; border-radius: 5px;
-                          min-height: 28px; min-width: 28px; }}
-    QScrollBar::handle:hover {{ background: {t['faint']}; }}
-    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
-    QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
-    QScrollArea {{ background: transparent; border: none; }}
-    QSplitter::handle {{ background: {t['border']}; }}
-    QToolTip {{ background: {t['panel2']}; color: {t['text']};
-                border: 1px solid {t['border2']}; padding: 5px; }}
-    QDialog {{ background: {t['bg']}; }}
-    """
-
 def get_theme():
-    try:
-        with open(THEME_FILE, "r") as f:
-            v = f.read().strip()
-        return v if v in THEMES else 'dark'
-    except OSError:
-        return 'dark'
+    v = konfig_lesen('design', standard='dark')
+    return v if v in THEMES else 'dark'
 
 def save_theme(name):
-    try:
-        with open(THEME_FILE, "w") as f:
-            f.write(name)
-    except OSError:
-        pass
+    konfig_setzen('design', name)
 
 def get_lang():
-    try:
-        with open(LANG_FILE, "r") as f:
-            v = f.read().strip()
-        return v if v in ("de", "en") else "de"
-    except OSError:
-        return "de"
+    v = konfig_lesen('sprache', standard='de')
+    return v if v in ("de", "en") else "de"
 
 def save_lang(lang):
-    try:
-        with open(LANG_FILE, "w") as f:
-            f.write(lang)
-    except OSError:
-        pass
+    konfig_setzen('sprache', lang)
 
 # ==========================================================================
 #  KERN-FUNKTIONEN
@@ -2212,17 +1597,10 @@ def load_preview_image(filepath, max_width=None):
     return np.ascontiguousarray(img)
 
 def get_last_path():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f:
-            return f.read().strip()
-    return ""
+    return str(konfig_lesen('letzter_ordner', standard="") or "")
 
 def save_last_path(path):
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            f.write(path)
-    except Exception:
-        pass
+    konfig_setzen('letzter_ordner', path)
 
 def get_brightness_jpg(filepath, roi_rel=None):
     img = cv2.imdecode(np.fromfile(filepath, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -2236,11 +1614,75 @@ def get_brightness_jpg(filepath, roi_rel=None):
         w1 = max(1, min(int(rw * w), w - x1))
         h1 = max(1, min(int(rh * h), h - y1))
         roi_img = img[y1:y1 + h1, x1:x1 + w1]
-        b_mean, g_mean, r_mean = cv2.mean(roi_img)[:3]
+        b_mean, g_mean, r_mean = cv2.mean(roi_img, jpg_lichtermaske(roi_img))[:3]
     else:
-        b_mean, g_mean, r_mean = cv2.mean(img)[:3]
+        b_mean, g_mean, r_mean = cv2.mean(img, jpg_lichtermaske(img))[:3]
     luma = 0.2989 * r_mean + 0.5870 * g_mean + 0.1140 * b_mean
     return (luma, b_mean, g_mean, r_mean)
+
+def _srgb_tabelle():
+    x = np.arange(256, dtype=np.float64) / 255.0
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+_SRGB16 = None
+
+
+def _srgb_tabelle16():
+    global _SRGB16
+    if _SRGB16 is None:
+        x = np.arange(65536, dtype=np.float64) / 65535.0
+        _SRGB16 = np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+    return _SRGB16
+
+
+def jpg_lichtermaske(img, grenze=250):
+    """Maske (255 = messen) ohne ausgebrannte Bildpunkte eines 8- oder
+    16-Bit-Bildes; None, wenn so viel ausgebrannt ist, dass ueber alles
+    gemessen wird. grenze gilt fuer 8 Bit und wird fuer 16 Bit umgerechnet."""
+    if img.dtype == np.uint16:
+        grenze = grenze * 257
+    b, g, r = cv2.split(img)
+    hoechst = cv2.max(cv2.max(b, g), r)
+    voll = cv2.compare(hoechst, grenze, cv2.CMP_GE)
+    if not cv2.countNonZero(voll):
+        return None
+    maske = np.where(lichter_saum(voll > 0), 0, 255).astype(np.uint8)
+    gut = cv2.countNonZero(maske)
+    if gut == maske.size:
+        return None
+    if gut < MESS_MIN_ANTEIL * maske.size:
+        return None
+    return maske
+
+
+def jpg_belichtung(img, maske=None):
+    """
+    Mittlere Helligkeit eines 8-Bit-BGR-Bildes in linearem Licht.
+
+    Exakt und ohne Gleitkomma-Zwischenbilder: weil das Mittel linear ist,
+    genuegt je Farbkanal ein Histogramm der 256 Stufen, gewichtet mit
+    ihrem linearen Wert. maske (uint8, 0 = auslassen) begrenzt die
+    Messung auf bestimmte Bildpunkte.
+    """
+    anzahl = (img.shape[0] * img.shape[1]) if maske is None else int(cv2.countNonZero(maske))
+    if anzahl <= 0:
+        return None
+    mittel = []
+    if img.dtype == np.uint16:
+        lin = _srgb_tabelle16()
+        auswahl = None if maske is None else (maske > 0)
+        for kanal in range(3):
+            werte = img[..., kanal] if auswahl is None else img[..., kanal][auswahl]
+            hist = np.bincount(werte.ravel(), minlength=65536)
+            mittel.append(float(np.dot(hist.astype(np.float64), lin)) / anzahl)
+    else:
+        lin = _srgb_tabelle()
+        for kanal in range(3):
+            hist = cv2.calcHist([img], [kanal], maske, [256], [0, 256]).ravel()
+            mittel.append(float(np.dot(hist.astype(np.float64), lin)) / anzahl)
+    return 0.1140 * mittel[0] + 0.5870 * mittel[1] + 0.2989 * mittel[2]
+
 
 _SRGB_LUT = None
 def srgb_to_linear(values):
@@ -2253,11 +1695,18 @@ def srgb_to_linear(values):
     return _SRGB_LUT[values]
 
 def measure_jpg_linear(filepath, roi_rel=None):
-    """Helligkeit eines entwickelten JPGs in linearem Licht."""
-    img = cv2.imdecode(np.fromfile(filepath, dtype=np.uint8), cv2.IMREAD_COLOR)
+    """
+    Helligkeit eines entwickelten JPGs in linearem Licht.
+
+    Frueher wurde das Bild vor der Messung auf 320 x 213 Punkte verkleinert,
+    und zwar ohne Mittelung: von 20 x 20 Punkten blieb einer stehen. Sterne
+    und feine Details erzeugten so Messrauschen, das in die
+    Nachkalibrierung ging. Jetzt zaehlt jeder Bildpunkt (siehe
+    jpg_belichtung).
+    """
+    img = bild_lesen(filepath)
     if img is None:
         return None
-    img = cv2.resize(img, (320, 213))
     if roi_rel:
         h, w = img.shape[:2]
         rx, ry, rw, rh = roi_rel
@@ -2266,9 +1715,7 @@ def measure_jpg_linear(filepath, roi_rel=None):
         w1 = max(1, min(int(rw * w), w - x1))
         h1 = max(1, min(int(rh * h), h - y1))
         img = img[y1:y1 + h1, x1:x1 + w1]
-    lin = srgb_to_linear(img)
-    lum = 0.1140 * lin[:, :, 0] + 0.5870 * lin[:, :, 1] + 0.2989 * lin[:, :, 2]
-    return float(lum.mean())
+    return jpg_belichtung(img, jpg_lichtermaske(img))
 
 def measure_nef(filepath, roi_rel=None):
     """
@@ -2278,6 +1725,7 @@ def measure_nef(filepath, roi_rel=None):
     kein verlässliches Maß für die Belichtung mehr.
     """
     wb = None
+    zellen_voll = None
     try:
         with rawpy.imread(filepath) as raw:
             # Ausgebrannt ist, was auf dem Sensor am Anschlag steht. Nach
@@ -2293,7 +1741,8 @@ def measure_nef(filepath, roi_rel=None):
                     # Sensor ist auch ein einzelner voller Kanal verloren.
                     h2, w2 = (roh.shape[0] // 2) * 2, (roh.shape[1] // 2) * 2
                     zellen = roh[:h2, :w2].reshape(h2 // 2, 2, w2 // 2, 2).max(axis=(1, 3))
-                    sensor_clip = float((zellen >= 0.98 * weiss).mean())
+                    zellen_voll = zellen >= 0.98 * weiss
+                    sensor_clip = float(zellen_voll.mean())
             except Exception:
                 sensor_clip = None
             rgb = raw.postprocess(use_camera_wb=True, half_size=True,
@@ -2304,6 +1753,17 @@ def measure_nef(filepath, roi_rel=None):
                 wb = None
     except Exception:
         return None
+    # Ausgebrannte Bildpunkte: vom Sensor (je Bildpunkt eine 2x2-Zelle,
+    # passt zur halben Groesse von postprocess), sonst aus dem Bild.
+    voll = None
+    if zellen_voll is not None and abs(zellen_voll.shape[0] - rgb.shape[0]) <= 2 \
+            and abs(zellen_voll.shape[1] - rgb.shape[1]) <= 2:
+        hh = min(zellen_voll.shape[0], rgb.shape[0])
+        ww = min(zellen_voll.shape[1], rgb.shape[1])
+        rgb = rgb[:hh, :ww]
+        voll = zellen_voll[:hh, :ww]
+    if voll is None:
+        voll = rgb[..., :3].max(axis=2) >= 64000
     if roi_rel:
         h, w = rgb.shape[:2]
         rx, ry, rw, rh = roi_rel
@@ -2312,9 +1772,13 @@ def measure_nef(filepath, roi_rel=None):
         w1 = max(1, min(int(rw * w), w - x1))
         h1 = max(1, min(int(rh * h), h - y1))
         rgb = rgb[y1:y1 + h1, x1:x1 + w1]
-    lum = np.dot(rgb[..., :3].astype(np.float64), [0.2989, 0.5870, 0.1140])
+        voll = voll[y1:y1 + h1, x1:x1 + w1]
+    # 32 statt 64 Bit: halber Speicher je Mess-Thread, Ergebnis gleich
+    lum = rgb[..., 0].astype(np.float32) * np.float32(0.2989)
+    lum += rgb[..., 1].astype(np.float32) * np.float32(0.5870)
+    lum += rgb[..., 2].astype(np.float32) * np.float32(0.1140)
     res = {
-        'luma': float(lum.mean()),
+        'luma': belichtung_ohne_lichter(lum, voll),
         # Anteil der PIXEL, in denen mindestens ein Kanal anschlaegt.
         # Vorher war es das Mittel ueber alle Kanalwerte: ein Sonnenball,
         # in dem nur Rot anschlaegt, zaehlte dann nur zu einem Drittel und
@@ -2328,6 +1792,131 @@ def measure_nef(filepath, roi_rel=None):
         res['wb_rg'] = wb[0] / wb[1]
         res['wb_bg'] = wb[2] / wb[1]
     return res
+
+# Anteil der Bildpunkte, der fuer die Messung mindestens uebrig bleiben
+# muss. Ist mehr ausgebrannt, wird ueber alle gemessen wie frueher.
+MESS_MIN_ANTEIL = 0.20
+
+
+def lichter_saum(voll):
+    """
+    Erweitert die ausgebrannten Flaechen um einen schmalen Saum.
+
+    Am Rand einer ausgebrannten Flaeche (Sonnenrand) liegen Bildpunkte
+    knapp unter der Grenze. Ob sie gerade noch mitzaehlen, wechselt von
+    Bild zu Bild - und weil sie sehr hell sind, wackelte der Messwert.
+    Ohne Saum zeigte sich das als Flackern in der Nachkalibrierung.
+    """
+    if voll is None or not voll.any():
+        return voll
+    r = max(2, int(round(max(voll.shape) / 1000.0)) * 2)
+    kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+    return cv2.dilate(voll.astype(np.uint8), kern) > 0
+
+
+def belichtung_ohne_lichter(lum, voll):
+    """
+    Mittlere Helligkeit in linearem Licht - ohne ausgebrannte Bildpunkte.
+
+    Ausgebranntes (Sonne, Lampen) bleibt gleich hell, egal wie die Kamera
+    belichtet. Im Mittel zieht es den Messwert zu sich: eine Blende, die
+    5 % mehr Licht durchlaesst, wurde dann als weniger gemessen und zu
+    schwach ausgeglichen. Darum zaehlen nur Bildpunkte, die das Licht
+    noch abbilden. Das Mittel bleibt dabei ein gewoehnliches - anders als
+    ein logarithmisches haengt es nicht vom Rauschen ab, das sich mit der
+    ISO-Stufe aendert.
+    """
+    if voll is None or not voll.any():
+        return float(lum.mean(dtype=np.float64))
+    voll = lichter_saum(voll)
+    gut = ~voll
+    if gut.mean() < MESS_MIN_ANTEIL:
+        return float(lum.mean(dtype=np.float64))
+    return float(lum[gut].mean(dtype=np.float64))
+
+
+# ==========================================================================
+#  NACHMESSUNG IN PASS 2: AUSGEBRANNTES FUER DIE GANZE SEQUENZ
+#
+#  Im fertigen Bild haengt "ausgebrannt" von der Korrektur ab, die gerade
+#  gemessen werden soll: eine Sonne, die um 0,3 EV abgedunkelt wurde, ist im
+#  JPG grau statt weiss. Je Bild entschieden, zaehlte sie mal mit und mal
+#  nicht - die Nachkalibrierung "korrigierte" dann Flackern, das es nicht
+#  gab, und machte es sichtbar. Deshalb misst jedes Bild Blocksummen und
+#  merkt sich, welche Bloecke ausgebrannt sind; ausgewertet wird ueber die
+#  Bloecke, die in KEINEM Bild der Sequenz ausgebrannt sind.
+# ==========================================================================
+BLOCK_RASTER = 256        # hoechstens so viele Bloecke je Bildbreite
+
+
+def jpg_bloecke(filepath, roi_rel=None):
+    """
+    Blocksummen der linearen Helligkeit eines entwickelten Bildes.
+    Rueckgabe: (Summen float32, ausgebrannt bool, Bildpunkte je Block) oder None
+    """
+    img = bild_lesen(filepath)
+    if img is None:
+        return None
+    if roi_rel:
+        h, w = img.shape[:2]
+        rx, ry, rw, rh = roi_rel
+        x1 = min(max(0, int(rx * w)), w - 1)
+        y1 = min(max(0, int(ry * h)), h - 1)
+        w1 = max(1, min(int(rw * w), w - x1))
+        h1 = max(1, min(int(rh * h), h - y1))
+        img = img[y1:y1 + h1, x1:x1 + w1]
+    h, w = img.shape[:2]
+    bs = max(2, -(-w // BLOCK_RASTER))
+    gh, gw = h // bs, w // bs
+    if gh < 1 or gw < 1:
+        return None
+    img = img[:gh * bs, :gw * bs]
+    tief = img.dtype == np.uint16
+    tab = (_srgb_tabelle16() if tief else _srgb_tabelle()).astype(np.float32)
+    lum = tab[img[..., 0]] * np.float32(0.1140)
+    lum += tab[img[..., 1]] * np.float32(0.5870)
+    lum += tab[img[..., 2]] * np.float32(0.2989)
+    summen = lum.reshape(gh, bs, gw, bs).sum(axis=(1, 3), dtype=np.float64).astype(np.float32)
+    grenze = 250 * 257 if tief else 250
+    voll = (img.max(axis=2) >= grenze).reshape(gh, bs, gw, bs).any(axis=(1, 3))
+    return summen, voll, bs * bs
+
+
+def sequenz_helligkeit(bloecke):
+    """
+    Helligkeit je Bild ueber die Bloecke, die in keinem Bild ausgebrannt
+    sind (plus ein Block Saum). Bleibt so zu wenig uebrig, entscheidet
+    jedes Bild fuer sich.
+    bloecke: Liste von jpg_bloecke-Ergebnissen (None = unlesbar)
+    Rueckgabe: Liste der Helligkeiten (None fuer unlesbare Bilder)
+    """
+    gueltig = [b for b in bloecke if b is not None]
+    if not gueltig:
+        return [None] * len(bloecke)
+    form = gueltig[0][0].shape
+    kern = np.ones((3, 3), np.uint8)
+    gemeinsam = np.zeros(form, bool)
+    for b in gueltig:
+        if b[0].shape == form:
+            gemeinsam |= b[1]
+    gemeinsam = cv2.dilate(gemeinsam.astype(np.uint8), kern) > 0
+    gemeinsam_ok = (~gemeinsam).mean() >= MESS_MIN_ANTEIL
+    out = []
+    for b in bloecke:
+        if b is None:
+            out.append(None)
+            continue
+        summen, voll, n_px = b
+        if gemeinsam_ok and summen.shape == form:
+            gut = ~gemeinsam
+        else:
+            gut = ~(cv2.dilate(voll.astype(np.uint8), kern) > 0)
+            if gut.mean() < MESS_MIN_ANTEIL:
+                gut = np.ones_like(voll)
+        anzahl = int(gut.sum())
+        out.append(float(summen[gut].sum(dtype=np.float64)) / (anzahl * n_px) if anzahl else None)
+    return out
+
 
 def get_brightness_nef(filepath, roi_rel=None):
     res = measure_nef(filepath, roi_rel)
@@ -2573,11 +2162,10 @@ def format_shutter(s):
 #  DEFLICKER-BASISWERTE UND DATEI-HELFER
 # ==========================================================================
 def save_base_ev(target_dir, mapping):
-    try:
-        with open(os.path.join(target_dir, DEFLICKER_DB), "w", encoding="utf-8") as f:
-            json.dump(mapping, f, indent=1)
-    except OSError as e:
-        print(f"Fehler beim Speichern der Deflicker-Basiswerte: {e}")
+    # Ohne diese Werte fehlen Pass 2 die Grundlagen der Keyframe-Uebergaenge:
+    # ein Fehler muss den Lauf anhalten, nicht nur auf der Konsole stehen.
+    datei_atomar(os.path.join(target_dir, DEFLICKER_DB),
+                 json.dumps(mapping, indent=1))
 
 def arp_fingerprint(arp_path):
     try:
@@ -2594,48 +2182,74 @@ def load_dev_index(out_dir):
         return {}
 
 def save_dev_index(out_dir, index):
+    # Nur ein Merker zum Ueberspringen - fehlt er, wird neu entwickelt.
     try:
-        with open(os.path.join(out_dir, DEV_INDEX), "w", encoding="utf-8") as f:
-            json.dump(index, f, indent=0)
+        datei_atomar(os.path.join(out_dir, DEV_INDEX), json.dumps(index, indent=0))
     except OSError:
         pass
 
-def pending_development(files, out_dir):
+# Zwischenbilder der Engine: JPG (Standard) oder 16-Bit-TIFF
+ZW_JPG = (".jpg", ".JPG")
+ZW_TIF = (".tif", ".TIF", ".tiff")
+
+
+def zw_endungen(tief=False):
+    return ZW_TIF if tief else ZW_JPG
+
+
+def zw_datei(out_dir, stem, tief=False):
+    """Pfad des vorhandenen Zwischenbildes oder None."""
+    for ext in zw_endungen(tief):
+        pfad = os.path.join(out_dir, stem + ext)
+        if os.path.exists(pfad):
+            return pfad
+    return None
+
+
+def _dev_kennung(f, tief):
+    # Das Format gehoert zum Entwicklungsstand: wer umschaltet, bekommt die
+    # Bilder neu entwickelt, statt alte im falschen Format weiterzuverwenden.
+    return arp_fingerprint(sidecar(f)) + ("|16" if tief else "")
+
+
+def pending_development(files, out_dir, tief=False):
     index = load_dev_index(out_dir)
     todo = []
     for f in files:
         stem = os.path.splitext(os.path.basename(f))[0]
-        fertig = (os.path.exists(os.path.join(out_dir, stem + ".jpg")) or
-                  os.path.exists(os.path.join(out_dir, stem + ".JPG")))
-        if not fertig or index.get(stem, "") != arp_fingerprint(sidecar(f)):
+        if zw_datei(out_dir, stem, tief) is None or index.get(stem, "") != _dev_kennung(f, tief):
             todo.append(f)
     return todo
 
-def mark_developed(files, out_dir):
+def mark_developed(files, out_dir, tief=False):
     """Merkt sich, mit welchem Profilstand ein Bild entwickelt wurde -
-    aber nur fuer Bilder, deren JPG auch wirklich da ist."""
+    aber nur fuer Bilder, deren Zwischenbild auch wirklich da ist."""
     index = load_dev_index(out_dir)
     for f in files:
         stem = os.path.splitext(os.path.basename(f))[0]
-        if (os.path.exists(os.path.join(out_dir, stem + ".jpg"))
-                or os.path.exists(os.path.join(out_dir, stem + ".JPG"))):
-            index[stem] = arp_fingerprint(sidecar(f))
+        if zw_datei(out_dir, stem, tief) is not None:
+            index[stem] = _dev_kennung(f, tief)
     save_dev_index(out_dir, index)
 
-def load_queue():
+
+def bild_lesen(pfad):
+    """JPG (8 Bit) oder TIFF (16 Bit bleibt 16 Bit), immer als BGR."""
     try:
-        with open(QUEUE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (OSError, ValueError):
-        return []
+        daten = np.fromfile(pfad, dtype=np.uint8)
+    except OSError:
+        return None
+    return cv2.imdecode(daten, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_COLOR)
+
+
+def bild_hoechstwert(img):
+    return 65535 if img.dtype == np.uint16 else 255
+
+def load_queue():
+    data = konfig_lesen('warteschlange', standard=[])
+    return data if isinstance(data, list) else []
 
 def save_queue(jobs):
-    try:
-        with open(QUEUE_FILE, "w", encoding="utf-8") as f:
-            json.dump(jobs, f, indent=1)
-    except OSError:
-        pass
+    konfig_setzen('warteschlange', list(jobs))
 
 def load_residuals(target_dir, files=None):
     """
@@ -2662,9 +2276,9 @@ def load_residuals(target_dir, files=None):
     return out
 
 def save_residuals(target_dir, mapping):
+    # Nur fuer die Anzeige im Diagramm.
     try:
-        with open(os.path.join(target_dir, RESULT_DB), "w", encoding="utf-8") as f:
-            json.dump(mapping, f, indent=0)
+        datei_atomar(os.path.join(target_dir, RESULT_DB), json.dumps(mapping, indent=0))
     except OSError:
         pass
 
@@ -2676,11 +2290,9 @@ def load_calib(target_dir):
         return {}
 
 def save_calib(target_dir, mapping):
-    try:
-        with open(os.path.join(target_dir, CALIB_DB), "w", encoding="utf-8") as f:
-            json.dump(mapping, f, indent=1)
-    except OSError as e:
-        print(f"Fehler beim Speichern der Kalibrierung: {e}")
+    # Gehoert zu den Korrekturen in den Sidecars: geht sie verloren, rechnet
+    # der naechste Lauf mit falschen Ausgangswerten.
+    datei_atomar(os.path.join(target_dir, CALIB_DB), json.dumps(mapping, indent=1))
 
 def write_check_log(target_dir, filename, header, issues, checked):
     try:
@@ -2804,6 +2416,94 @@ def build_hotpixel_map(files, status_sig, check_abort, samples=15, threshold=24)
     mask = counter >= max(3, int(used * 0.85))
     idx = np.nonzero(mask)
     return idx if idx[0].size else None
+
+# ==========================================================================
+#  KAMERAFAHRT
+#
+#  Der Ausschnitt wurde bisher auf ganze Bildpunkte gerundet, Breite und
+#  Hoehe jeweils fuer sich. Bei einer langsamen Fahrt sprang er dadurch
+#  sichtbar, und das Seitenverhaeltnis "atmete" um einen Punkt. Jetzt wird
+#  er mit Bruchteilen von Bildpunkten gesetzt (siehe ausschnitt_subpixel).
+# ==========================================================================
+KAMERA_RAMPE = 0.10    # Anteil der Laufzeit fuer Anfahren und Abbremsen
+KAMERA_WEICH = 0.4     # Weichzeichnung vor dem Abtasten, in Zielpunkten
+
+
+def kamera_verlauf(t, rampe=KAMERA_RAMPE):
+    """
+    Fortschritt der Kamerafahrt fuer t in [0, 1].
+
+    In der Mitte gleichmaessig, am Anfang und Ende sanft an- und
+    abgebremst (Geschwindigkeit steigt bzw. faellt linear). Vorher fuhr die
+    Kamera mit voller Geschwindigkeit los und hielt schlagartig an.
+    """
+    t = min(1.0, max(0.0, float(t)))
+    r = min(0.45, max(0.0, float(rampe)))
+    if r <= 0.0:
+        return t
+    if t < r:
+        return t * t / (2.0 * r * (1.0 - r))
+    if t > 1.0 - r:
+        return 1.0 - (1.0 - t) ** 2 / (2.0 * r * (1.0 - r))
+    return (t - r / 2.0) / (1.0 - r)
+
+
+def ausschnitt_subpixel(img, x0, y0, bw, bh, width, height):
+    """
+    Schneidet das Rechteck (x0, y0, bw, bh) - in Bildpunkten, mit
+    Nachkommastellen - aus und bringt es auf width x height.
+
+    Erst wird so weichgezeichnet, wie es die Verkleinerung verlangt (sonst
+    Treppen und Moire), dann wird mit Bruchteilen von Bildpunkten genau
+    abgetastet. Anders als bei einer Verschiebung hinterher bleibt die
+    Schaerfe dabei gleich, egal wo zwischen zwei Bildpunkten der
+    Ausschnitt gerade liegt - sonst wuerde feine Struktur bei einer
+    langsamen Fahrt im Takt der Bildpunkte flimmern.
+    """
+    ih, iw = img.shape[:2]
+    bw = max(1.0, min(float(bw), iw))
+    bh = max(1.0, min(float(bh), ih))
+    x0 = max(0.0, min(float(x0), iw - bw))
+    y0 = max(0.0, min(float(y0), ih - bh))
+    sx, sy = width / bw, height / bh            # Zielpunkte je Quellpunkt
+    rand = 6
+    ix0 = max(0, int(math.floor(x0)) - rand)
+    iy0 = max(0, int(math.floor(y0)) - rand)
+    ix1 = min(iw, int(math.ceil(x0 + bw)) + rand)
+    iy1 = min(ih, int(math.ceil(y0 + bh)) + rand)
+    grob = img[iy0:iy1, ix0:ix1]
+    if sx < 1.0 or sy < 1.0:
+        grob = cv2.GaussianBlur(grob, (0, 0),
+                                sigmaX=KAMERA_WEICH / min(1.0, sx),
+                                sigmaY=KAMERA_WEICH / min(1.0, sy))
+    # Zielpunkt (u, v) -> Quellpunkt im Ausschnitt (Pixelmitten)
+    m = np.array([[1.0 / sx, 0.0, x0 - ix0 + 0.5 / sx - 0.5],
+                  [0.0, 1.0 / sy, y0 - iy0 + 0.5 / sy - 0.5]], dtype=np.float64)
+    return cv2.warpAffine(grob, m, (int(width), int(height)),
+                          flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP,
+                          borderMode=cv2.BORDER_REPLICATE)
+
+
+_EXIF_MERKER = {}
+
+
+def exif_gemerkt(pfad):
+    """get_exif_data mit Zwischenspeicher - beim Rendern wird jedes Bild
+    sonst ein weiteres Mal aus der RAW-Datei gelesen."""
+    try:
+        st = os.stat(pfad)
+        key = (pfad, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return get_exif_data(pfad)
+    merker = _EXIF_MERKER
+    wert = merker.get(key)
+    if wert is None:
+        wert = get_exif_data(pfad)
+        if len(merker) > 20000:
+            merker.clear()
+        merker[key] = wert
+    return dict(wert)
+
 
 def apply_hotpixel_fix(img, idx):
     """Ersetzt die als defekt erkannten Punkte durch den lokalen Median."""
@@ -3139,8 +2839,8 @@ class ResetDialog(QtWidgets.QDialog):
                 g['state'].append(p)
         out = os.path.join(d, "Deflickered_JPG")
         if os.path.isdir(out):
-            g['output'] = sorted(glob.glob(os.path.join(out, "*.jpg")) +
-                                 glob.glob(os.path.join(out, "*.JPG")))
+            g['output'] = sorted({p for ext in ZW_JPG + ZW_TIF
+                                  for p in glob.glob(os.path.join(out, "*" + ext))})
         # Ueber ein Set gesammelt, damit .xmp (Darktable-Endung) nicht doppelt
         # gezaehlt wird, wenn eng('ext') bereits '.xmp' ist.
         sidecar_paths = set()
@@ -3492,11 +3192,16 @@ class EngineVorschau(QtCore.QThread):
                'fehler': "", 'abgebrochen': False, 'faden': self}
         ordner = tempfile.mkdtemp(prefix="purelapse_vorschau_")
         try:
-            profil_pfad = os.path.join(ordner, "vorschau" + eng('ext'))
-            ziel = os.path.join(ordner, "vorschau.jpg")
-            write_arp_dict_ini(profil_pfad,
-                               vorschau_profil(self.profil, self.kante))
-            cmd = vorschau_befehl(self.cli, self.bild, profil_pfad, ziel)
+            if eng('kind') == 'darktable':
+                slots, _q = dt_konfig_slots(1, os.path.join(cache_ordner(), "darktable_vorschau"))
+                cmd, ziel = dt_vorschau_befehl(self.cli, self.bild, self.profil,
+                                               ordner, self.kante, configdir=slots[0])
+            else:
+                profil_pfad = os.path.join(ordner, "vorschau" + eng('ext'))
+                ziel = os.path.join(ordner, "vorschau.jpg")
+                write_arp_dict_ini(profil_pfad,
+                                   vorschau_profil(self.profil, self.kante))
+                cmd = vorschau_befehl(self.cli, self.bild, profil_pfad, ziel)
             self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT)
             if self._abbruch:
@@ -3557,7 +3262,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         # RAW, einem auffindbaren Programm und einem INI-Profil.
         self._profil0 = {sec: dict(par) for sec, par in (profil or {}).items()}
         self._cli = None
-        if (cli_pfad and os.path.isfile(cli_pfad) and eng('kind') == 'ini'
+        if (cli_pfad and os.path.isfile(cli_pfad) and eng('kind') in ('ini', 'darktable')
                 and bild_pfad and is_raw_file(bild_pfad)
                 and profile_is_complete(profil)):
             self._cli = cli_pfad
@@ -3688,7 +3393,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         self._echt_timer.timeout.connect(self._echt_starten)
         self.lbl_vorschau_hinweis = QtWidgets.QLabel(self._t(
             "Näherung: Weißabgleich, Helligkeit, Kontrast, Sättigung. "
-            f"Schärfe und Entrauschen zeigt sie nicht. Das endgültige "
+            "Schärfe und Entrauschen zeigt sie nicht. Das endgültige "
             f"Aussehen bestimmt {eng('label')}."
             if self._cli is None else
             f"Das Bild entwickelt {eng('label')} selbst - so sieht es "
@@ -3805,9 +3510,9 @@ class QuickLookDialog(QtWidgets.QDialog):
             chk.setChecked(abweichung > toleranz)
             chk.setToolTip(self._t(
                 f"Schreibt [{d['sec']}] {d['key']} in das Profil.\n"
-                f"Ohne Haekchen bleibt der vorhandene Wert unberuehrt.",
+                "Ohne Haekchen bleibt der vorhandene Wert unberuehrt.",
                 f"Writes [{d['sec']}] {d['key']} into the profile.\n"
-                f"Without the tick the existing value stays untouched."))
+                "Without the tick the existing value stays untouched."))
             faktor = 10 ** d['dezimal']
             sl = QtWidgets.QSlider(QtCore.Qt.Horizontal)
             sl.setMinimum(int(round(d['ui_min'] * faktor)))
@@ -4506,42 +4211,37 @@ class Worker(QtCore.QThread):
     def cancel(self):
         self._abort = True
 
+    def _t(self, de, en):
+        """Text in der Sprache der Oberflaeche - fuer Fehlermeldungen, die
+        als Dialog beim Benutzer ankommen."""
+        return en if self.p.get('lang') == 'en' else de
+
     def _check_abort(self):
         if self._abort:
-            raise RuntimeError("Vom Benutzer abgebrochen.")
+            raise RuntimeError(self._t("Vom Benutzer abgebrochen.", "Cancelled by user."))
 
     def _apply_camera_move(self, img, step, total_steps, width, calc_height):
         orig_h, orig_w = img.shape[:2]
         if self.p.get('cam_keyframes'):
             kf = self.p['cam_keyframes']
-            progress = step / max(1, total_steps - 1)
+            t = kamera_verlauf(step / max(1, total_steps - 1))
             sx, sy, sw, sh = kf['start']
             ex, ey, ew, eh = kf['end']
-            cx = sx + (ex - sx) * progress
-            cy = sy + (ey - sy) * progress
-            cw = sw + (ew - sw) * progress
-            ch = sh + (eh - sh) * progress
-            abs_x = int(cx * orig_w)
-            abs_y = int(cy * orig_h)
-            abs_w = int(cw * orig_w)
-            abs_h = int(ch * orig_h)
-            abs_x = max(0, min(abs_x, orig_w - 1))
-            abs_y = max(0, min(abs_y, orig_h - 1))
-            abs_w = max(1, min(abs_w, orig_w - abs_x))
-            abs_h = max(1, min(abs_h, orig_h - abs_y))
-            img_crop = img[abs_y:abs_y + abs_h, abs_x:abs_x + abs_w]
+            return ausschnitt_subpixel(
+                img, (sx + (ex - sx) * t) * orig_w, (sy + (ey - sy) * t) * orig_h,
+                (sw + (ew - sw) * t) * orig_w, (sh + (eh - sh) * t) * orig_h,
+                width, calc_height)
+        target_ratio = width / calc_height
+        img_ratio = orig_w / orig_h
+        if img_ratio > target_ratio:
+            new_h = orig_h
+            new_w = int(orig_h * target_ratio)
         else:
-            target_ratio = width / calc_height
-            img_ratio = orig_w / orig_h
-            if img_ratio > target_ratio:
-                new_h = orig_h
-                new_w = int(orig_h * target_ratio)
-            else:
-                new_w = orig_w
-                new_h = int(orig_w / target_ratio)
-            start_x = (orig_w - new_w) // 2
-            start_y = (orig_h - new_h) // 2
-            img_crop = img[start_y:start_y + new_h, start_x:start_x + new_w]
+            new_w = orig_w
+            new_h = int(orig_w / target_ratio)
+        start_x = (orig_w - new_w) // 2
+        start_y = (orig_h - new_h) // 2
+        img_crop = img[start_y:start_y + new_h, start_x:start_x + new_w]
         return cv2.resize(img_crop, (width, calc_height), interpolation=cv2.INTER_AREA)
 
     def _fade(self, frame, step, total):
@@ -4560,7 +4260,7 @@ class Worker(QtCore.QThread):
             f = (total - step) / (span + 1)
         else:
             return frame
-        return (frame.astype(np.float32) * f).astype(np.uint8)
+        return (frame.astype(np.float32) * f + 0.5).astype(frame.dtype)
 
     def _start_encoder(self, ffmpeg_cmd):
         """
@@ -4593,11 +4293,13 @@ class Worker(QtCore.QThread):
             pass
         proc.wait()
         if proc.returncode not in (0, None):
-            raise RuntimeError(
-                f"Der Video-Encoder (FFmpeg) endete mit Fehlercode "
-                f"{proc.returncode}.\nUrsache: {self._encoder_error()[:800]}")
+            raise RuntimeError(self._t(
+                "Der Video-Encoder (FFmpeg) endete mit Fehlercode "
+                f"{proc.returncode}.\nUrsache: {self._encoder_error()[:800]}",
+                "The video encoder (FFmpeg) exited with code "
+                f"{proc.returncode}.\nReason: {self._encoder_error()[:800]}"))
 
-    def _build_ffmpeg_cmd(self, width, calc_height, out_video):
+    def _build_ffmpeg_cmd(self, width, calc_height, out_video, tief=False):
         """Baut den FFmpeg-Aufruf aus der Codec-Tabelle (siehe VIDEO_CODECS)."""
         fps = str(self.p['fps'])
         crf_vals = ["16", "20", "23", "28"]
@@ -4606,13 +4308,13 @@ class Worker(QtCore.QThread):
         cmd = [FFMPEG_BIN, "-y", "-loglevel", "error"]
         cmd += codec_pre_args(c)
         cmd += ["-f", "rawvideo", "-vcodec", "rawvideo",
-                "-s", f"{width}x{calc_height}", "-pix_fmt", "bgr24",
+                "-s", f"{width}x{calc_height}", "-pix_fmt", "bgr48le" if tief else "bgr24",
                 "-r", fps, "-i", "-"]
-        if c['vf']:
-            cmd += ["-vf", c['vf']]
+        cmd += ["-vf", codec_filter(c)]
         cmd += ["-c:v", c['enc']] + c['args'](crf)
         if c['pix']:
             cmd += ["-pix_fmt", c['pix']]
+        cmd += FARBRAUM_ARGS
         cmd.append(out_video)
         return cmd
 
@@ -4644,6 +4346,155 @@ class Worker(QtCore.QThread):
                 counter += 1
                 out_video_path = os.path.join(out_base, f"{base_filename}_v{counter}{ext}")
         return out_video_path
+
+    def _video_bauen(self, eintraege, laden, exif_von, ffmpeg_proc, stab_diffs,
+                     width, calc_height, speichern=None, entrauschen=False):
+        """
+        Die Bildstrecke vom geladenen Einzelbild bis zum Encoder - eine fuer
+        den JPG-Ablauf und fuer RAW Pass 2 (vorher zweimal fast gleich).
+
+        eintraege   Dateien in Abspielreihenfolge
+        laden(f)    -> BGR-Bild (uint8) oder None; laeuft in Hilfsthreads
+        exif_von(f) -> Datei, aus der Belichtungszeit und Telemetrie stammen
+        speichern(bild, f)  legt das entflackerte Vollbild ab (JPG-Ablauf)
+
+        Laden, Ablegen, Stabilisieren und Ausschnitt laufen in mehreren
+        Threads voraus (OpenCV gibt dabei Pythons Sperre frei); was die
+        Reihenfolge braucht - Astro-Clean, Bewegungsunschaerfe, Text,
+        Blende, Encoder -, bleibt im eigenen Thread.
+        """
+        p = self.p
+        mach_video = bool(p['make_video']) and ffmpeg_proc is not None
+        astro = bool(p.get('astro_clean', False))
+        max_blur, min_blur = max(1, int(p['max_blur'])), max(1, int(p['min_blur']))
+        blur = deque(maxlen=max_blur)
+        total = len(eintraege)
+        threads = max(1, min(VIDEO_THREADS_MAX, int(p.get('cores', 1) or 1)))
+        fenster = threads + 1
+        start_time = time.time()
+        reverse = bool(p.get('reverse_play'))
+
+        def geometrie(vollbild, idx, pfad):
+            if speichern is not None:
+                speichern(vollbild, pfad)
+            exif = exif_gemerkt(exif_von(pfad))
+            if not mach_video:
+                return None, exif
+            img = vollbild
+            if stab_diffs is not None and idx < len(stab_diffs):
+                idx_stab = (total - 1 - idx) if reverse else idx
+                dx, dy, da = stab_diffs[idx_stab]
+                m = np.zeros((2, 3), np.float32)
+                scale_stab = 1.03
+                m[0, 0] = np.cos(da) * scale_stab
+                m[0, 1] = -np.sin(da) * scale_stab
+                m[1, 0] = np.sin(da) * scale_stab
+                m[1, 1] = np.cos(da) * scale_stab
+                h, w = img.shape[:2]
+                m[0, 2] = dx + (1.0 - scale_stab) * w / 2.0
+                m[1, 2] = dy + (1.0 - scale_stab) * h / 2.0
+                img = cv2.warpAffine(img, m, (w, h), flags=cv2.INTER_LINEAR,
+                                     borderMode=cv2.BORDER_REPLICATE)
+            return self._apply_camera_move(img, idx, total, width, calc_height), exif
+
+        fertig = [0]
+
+        def ausgeben(klein, exif, idx, pfad):
+            if mach_video:
+                blur.append(klein)
+                ss = exif['shutter']
+                curr_blur = max_blur if ss < 1.0 else (
+                    min_blur if ss >= 3.0
+                    else int(round(max_blur - ((ss - 1.0) / 2.0) * (max_blur - min_blur))))
+                curr_blur = max(min_blur, min(max_blur, curr_blur))
+                frames = list(blur)[-curr_blur:]
+                hoechst = bild_hoechstwert(frames[0])
+                if len(frames) == 1:
+                    # Kopie: Text und Blende duerfen nicht in das Bild im
+                    # Puffer geraten - es geht noch in die naechsten
+                    # gemittelten Bilder ein (vorher: Geisterschrift).
+                    final = frames[0].copy()
+                else:
+                    summe = np.zeros(frames[0].shape, np.float32)
+                    for fr in frames:
+                        summe += fr
+                    final = np.clip(summe / len(frames) + 0.5, 0, hoechst).astype(frames[0].dtype)
+                if entrauschen and p['denoise'] and exif['iso'] >= 800 and final.dtype == np.uint8:
+                    d = min(15, max(3, int((exif['iso'] - 400) / 250)))
+                    final = cv2.bilateralFilter(final, d, d * 2, d / 2)
+                if p['telemetry']:
+                    zeit = exif.get('time', '')[11:19]
+                    text = (f"{zeit} | " if zeit else "") + (
+                        f"ISO {exif['iso']} | f/{exif['aperture']} | "
+                        f"{format_shutter(exif['shutter'])}")
+                    (tw, _th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    cv2.rectangle(final, (10, calc_height - 35), (20 + tw, calc_height - 10),
+                                  (0, 0, 0), -1)
+                    cv2.putText(final, text, (15, calc_height - 18), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5, (hoechst, hoechst, hoechst), 1, cv2.LINE_AA)
+                try:
+                    final = self._fade(final, idx, total)
+                    ffmpeg_proc.stdin.write(np.ascontiguousarray(final).tobytes())
+                except BrokenPipeError:
+                    err_out = self._encoder_error()
+                    raise RuntimeError(self._t(
+                        f"Der Video-Encoder (FFmpeg) ist abgestürzt!\nUrsache: {err_out.strip()}",
+                        f"The video encoder (FFmpeg) crashed!\nReason: {err_out.strip()}"))
+            fertig[0] += 1
+            self._fortschritt("Rendere Video", fertig[0], total, start_time,
+                              zusatz=os.path.basename(pfad))
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
+        try:
+            lade = deque()
+            geo = deque()
+            folge = iter(enumerate(eintraege))
+            puffer = []          # Astro-Clean: die letzten geladenen Bilder
+
+            def nachladen():
+                while len(lade) < fenster:
+                    try:
+                        idx, f = next(folge)
+                    except StopIteration:
+                        return
+                    lade.append((idx, f, pool.submit(laden, f)))
+
+            def weiter(fertigbild, idx, f):
+                while len(geo) >= fenster:
+                    gi, gf, gfut = geo.popleft()
+                    klein, exif = gfut.result()
+                    ausgeben(klein, exif, gi, gf)
+                geo.append((idx, f, pool.submit(geometrie, fertigbild, idx, f)))
+
+            nachladen()
+            while lade:
+                self._check_abort()
+                idx, f, fut = lade.popleft()
+                bild = fut.result()
+                nachladen()
+                if bild is None:
+                    continue
+                if not astro:
+                    weiter(bild, idx, f)
+                    continue
+                puffer.append((idx, f, bild))
+                if len(puffer) == 1:
+                    weiter(bild, idx, f)          # erstes Bild unveraendert
+                elif len(puffer) == 3:
+                    (_i0, _f0, b0), (i1, f1, b1), (_i2, _f2, b2) = puffer
+                    weiter(self._remove_satellites(b0, b1, b2), i1, f1)
+                    puffer.pop(0)
+            if astro and len(puffer) >= 2:
+                i_l, f_l, b_l = puffer[-1]
+                weiter(b_l, i_l, f_l)             # letztes Bild unveraendert
+            while geo:
+                self._check_abort()
+                gi, gf, fut = geo.popleft()
+                klein, exif = fut.result()
+                ausgeben(klein, exif, gi, gf)
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
+        return fertig[0]
 
     def _remove_satellites(self, prev_img, curr_img, next_img, threshold=30):
         diff_prev = cv2.subtract(curr_img, prev_img)
@@ -4713,12 +4564,16 @@ class Worker(QtCore.QThread):
         if p['format'] == 'raw':
             missing = [files[i] for i in picks if not os.path.exists(sidecar(files[i]))]
             if missing:
-                raise RuntimeError(
+                raise RuntimeError(self._t(
                     f"Fuer die Vorschau fehlen die {eng('ext')}-Profile.\n\n"
                     "Bitte zuerst Pass 1 laufen lassen - die Vorschau zeigt, was die "
-                    "Engine mit den dort berechneten Werten und deinen Keyframes macht.")
+                    "Engine mit den dort berechneten Werten und deinen Keyframes macht.",
+                    f"The preview needs the {eng('ext')} profiles.\n\n"
+                    "Please run pass 1 first - the preview shows what the engine "
+                    "makes of the values computed there and of your keyframes."))
             sel = [files[i] for i in picks]
-            self.log.emit(f"> Vorschau: entwickle {len(sel)} Bilder mit {eng('label')}...")
+            self.log.emit(self._t(f"> Vorschau: entwickle {len(sel)} Bilder mit {eng('label')}...",
+                f"> Preview: developing {len(sel)} images with {eng('label')}..."))
             self._render_with_engine(sel, out_dir, "Vorschau", quality=92)
             for idx, f in zip(picks, sel):
                 stem = os.path.splitext(os.path.basename(f))[0]
@@ -4734,7 +4589,8 @@ class Worker(QtCore.QThread):
                 lum = np.maximum(lum, 1e-3)
                 tgt = two_pass_smooth(lum, p['scene_int'], p['smooth_val']) * (2 ** p['ev_val'])
                 gains = np.clip(tgt / lum, 0.125, 8.0)
-            self.log.emit(f"> Vorschau: bereite {len(picks)} Bilder auf...")
+            self.log.emit(self._t(f"> Vorschau: bereite {len(picks)} Bilder auf...",
+                f"> Preview: preparing {len(picks)} images..."))
             for k, idx in enumerate(picks):
                 self._check_abort()
                 img = load_preview_image(files[idx])
@@ -4748,7 +4604,8 @@ class Worker(QtCore.QThread):
                 results.append((idx, q))
                 self.progress.emit(k + 1, len(picks))
         if not results:
-            raise RuntimeError("Es konnte kein Vorschaubild erzeugt werden.")
+            raise RuntimeError(self._t("Es konnte kein Vorschaubild erzeugt werden.",
+                                       "No preview image could be created."))
         final = []
         total = len(files)
         for idx, q in results:
@@ -4768,12 +4625,15 @@ class Worker(QtCore.QThread):
         files = p['files']
         width = p['width']
         calc_height = int(width * 9 / 16)
-        self.log.emit(f"> Rohfassung ohne Bearbeitung ({len(files)} Bilder).")
-        self.log.emit("> Deflicker, Keyframes, Motion Blur, Denoise und "
-                      "Stabilisierung sind ausgeschaltet.")
+        self.log.emit(self._t(f"> Rohfassung ohne Bearbeitung ({len(files)} Bilder).",
+                f"> Untouched version without processing ({len(files)} images)."))
+        self.log.emit(self._t("> Deflicker, Keyframes, Motion Blur, Denoise und "
+                      "Stabilisierung sind ausgeschaltet.",
+                "> Deflicker, keyframes, motion blur, denoise and stabilisation are switched off."))
         out_video = self._get_output_video_path()
         ffmpeg_cmd = self._build_ffmpeg_cmd(width, calc_height, out_video)
-        self.log.emit("\n> STARTE FFMPEG ENCODER:")
+        self.log.emit(self._t("\n> STARTE FFMPEG ENCODER:",
+                "\n> STARTING FFMPEG ENCODER:"))
         self.log.emit(" ".join(ffmpeg_cmd) + "\n")
         ffmpeg_proc = self._start_encoder(ffmpeg_cmd)
         total = len(files)
@@ -4799,13 +4659,16 @@ class Worker(QtCore.QThread):
                 written += 1
             except BrokenPipeError:
                 err = self._encoder_error()
-                raise RuntimeError(f"Der Video-Encoder (FFmpeg) ist abgestuerzt!\n"
-                                   f"Ursache: {err.strip()}")
+                raise RuntimeError(self._t("Der Video-Encoder (FFmpeg) ist abgestuerzt!\n"
+                                           f"Ursache: {err.strip()}",
+                                           "The video encoder (FFmpeg) crashed!\n"
+                                           f"Reason: {err.strip()}"))
             self._fortschritt("Rohfassung", step + 1, total, start_time,
                               zusatz=os.path.basename(f))
         self._finish_encoder(ffmpeg_proc)
         if written == 0:
-            raise RuntimeError("Kein einziges Bild konnte gelesen werden.")
+            raise RuntimeError(self._t("Kein einziges Bild konnte gelesen werden.",
+                                       "Not a single image could be read."))
         self.finished_ok.emit(f"Rohfassung fertig ({written} Bilder):\n{out_video}")
 
     def _run_schnell(self):
@@ -4824,8 +4687,9 @@ class Worker(QtCore.QThread):
         width -= width % 2
         calc_height = int(width * 9 / 16)
         calc_height -= calc_height % 2
-        self.log.emit(f"> Schnellvorschau: {len(files)} Bilder, {width}x{calc_height}. "
-                      "Nur zur Beurteilung - ohne Engine, Keyframes und Effekte.")
+        self.log.emit(self._t(f"> Schnellvorschau: {len(files)} Bilder, {width}x{calc_height}. "
+                      "Nur zur Beurteilung - ohne Engine, Keyframes und Effekte.",
+                f"> Quick preview: {len(files)} images, {width}x{calc_height}. For judging only - without engine, keyframes and effects."))
         start = time.time()
         threads = mess_threads(p.get('cores', 1))
         erg = parallel_messen(
@@ -4835,7 +4699,8 @@ class Worker(QtCore.QThread):
                 "Schnellvorschau lesen", fertig, anzahl, start))
         bilder = [(b, l) for b, l in erg if b is not None and l and l > 0]
         if len(bilder) < 3:
-            raise RuntimeError("Zu wenige Bilder fuer eine Schnellvorschau lesbar.")
+            raise RuntimeError(self._t("Zu wenige Bilder fuer eine Schnellvorschau lesbar.",
+                                       "Too few readable images for a quick preview."))
         self._schritt_fertig("Vorschaubilder gelesen", len(bilder), start)
         luma = np.asarray([l for _b, l in bilder], dtype=np.float64)
         ziel = two_pass_smooth(luma, p['scene_int'], p['smooth_val'])
@@ -4867,7 +4732,8 @@ class Worker(QtCore.QThread):
             try:
                 proc.stdin.write(np.ascontiguousarray(frame).tobytes())
             except BrokenPipeError:
-                raise RuntimeError("Der Video-Encoder (FFmpeg) ist abgestuerzt:\n"
+                raise RuntimeError(self._t("Der Video-Encoder (FFmpeg) ist abgestuerzt:\n",
+                                           "The video encoder (FFmpeg) crashed:\n")
                                    + self._encoder_error().strip())
             self._fortschritt("Schnellvorschau Video", i + 1, gesamt, start)
         self._finish_encoder(proc)
@@ -4891,14 +4757,16 @@ class Worker(QtCore.QThread):
                "-c:v", "libx264", "-preset", "fast", "-crf", "18",
                "-pix_fmt", "yuv420p", out_video]
         self.output_ready.emit(os.path.dirname(out_video))
-        self.log.emit("> Erzeuge Vergleichsvideo:")
+        self.log.emit(self._t("> Erzeuge Vergleichsvideo:",
+                "> Creating comparison video:"))
         self.log.emit(" ".join(cmd) + "\n")
         self.status.emit("Vergleichsvideo wird erstellt...")
         self.progress.emit(0, 1)
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         _, err = proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError("FFmpeg konnte die Videos nicht zusammenfuegen.\n"
+            raise RuntimeError(self._t("FFmpeg konnte die Videos nicht zusammenfuegen.\n",
+                                       "FFmpeg could not combine the videos.\n")
                                + err.decode('utf-8', errors='ignore').strip()[:600])
         self.progress.emit(1, 1)
         self.finished_ok.emit(f"Vergleichsvideo fertig:\n{out_video}")
@@ -4908,7 +4776,8 @@ class Worker(QtCore.QThread):
         abs_target_dir = p['target_dir']
         files = p['files']
         roi = p.get('roi_rel')
-        self.log.emit(f"> Starte JPG-Deflicker Workflow ({len(files)} Bilder).")
+        self.log.emit(self._t(f"> Starte JPG-Deflicker Workflow ({len(files)} Bilder).",
+                f"> Starting JPG deflicker workflow ({len(files)} images)."))
         luma_vals, b_vals, g_vals, r_vals, valid_files = [], [], [], [], []
         start_time = time.time()
         for i, f in enumerate(files):
@@ -4923,7 +4792,8 @@ class Worker(QtCore.QThread):
             self._fortschritt("Lese Daten", i + 1, len(files), start_time,
                               zusatz=os.path.basename(f))
         if len(valid_files) < 3:
-            raise RuntimeError("Zu wenige lesbare JPG-Dateien für die Analyse.")
+            raise RuntimeError(self._t("Zu wenige lesbare JPG-Dateien für die Analyse.",
+                                       "Too few readable JPG files for the analysis."))
         a_luma = np.maximum(np.asarray(luma_vals, dtype=np.float64), 1e-3)
         t_luma = two_pass_smooth(a_luma, p['scene_int'], p['smooth_val'])
         t_luma = t_luma * (2 ** p['ev_val'])
@@ -4938,106 +4808,62 @@ class Worker(QtCore.QThread):
         fac_r = _channel_gain(r_vals)
         hot_idx = None
         if p.get('hotpixel'):
-            self.log.emit("> Suche defekte Sensorpixel ueber die gesamte Sequenz...")
+            self.log.emit(self._t("> Suche defekte Sensorpixel ueber die gesamte Sequenz...",
+                "> Searching for defective sensor pixels across the whole sequence..."))
             hot_idx = build_hotpixel_map(valid_files, self.status, self._check_abort)
             if hot_idx is None:
-                self.log.emit("> Keine dauerhaft auffaelligen Pixel gefunden.")
+                self.log.emit(self._t("> Keine dauerhaft auffaelligen Pixel gefunden.",
+                "> No permanently conspicuous pixels found."))
             else:
-                self.log.emit(f"> {hot_idx[0].size} defekte Bildpunkte werden korrigiert.")
+                self.log.emit(self._t(f"> {hot_idx[0].size} defekte Bildpunkte werden korrigiert.",
+                f"> {hot_idx[0].size} defective pixels are corrected."))
         stab_diffs = None
         if p['make_video'] and p['stabilize']:
-            self.log.emit("> Führe Optische Stabilisierung durch...")
+            self.log.emit(self._t("> Führe Optische Stabilisierung durch...",
+                "> Running optical stabilisation..."))
             stab_diffs = calculate_stabilization(valid_files, self.status, self.progress, self._check_abort)
         out_dir = os.path.join(abs_target_dir, "Deflickered_JPG")
         os.makedirs(out_dir, exist_ok=True)
         ffmpeg_proc, out_video = None, None
-        max_blur, min_blur = p['max_blur'], p['min_blur']
-        blur_buffer = deque(maxlen=max_blur)
-        render_sequence = list(zip(valid_files, fac_b, fac_g, fac_r))
+        render_sequence = list(valid_files)
         if p['reverse_play']:
             render_sequence.reverse()
+        verstaerkung = {f: (fb, fg, fr) for f, fb, fg, fr
+                        in zip(valid_files, fac_b, fac_g, fac_r)}
         width = p['width']
         calc_height = int(width * 9 / 16)
         if p['make_video']:
             out_video = self._get_output_video_path()
             ffmpeg_cmd = self._build_ffmpeg_cmd(width, calc_height, out_video)
-            self.log.emit("\n> STARTE FFMPEG ENCODER:")
+            self.log.emit(self._t("\n> STARTE FFMPEG ENCODER:",
+                "\n> STARTING FFMPEG ENCODER:"))
             self.log.emit(" ".join(ffmpeg_cmd) + "\n")
             ffmpeg_proc = self._start_encoder(ffmpeg_cmd)
-        total_steps = len(render_sequence)
-        start_time = time.time()
 
-        def _encode_and_save(frame_img, step_idx, file_path):
-            cv2.imwrite(os.path.join(out_dir, os.path.basename(file_path)), frame_img)
-            if not p['make_video']:
-                return
-            img_corr = frame_img.copy()
-            if stab_diffs is not None and step_idx < len(stab_diffs):
-                idx_stab = (total_steps - 1 - step_idx) if p['reverse_play'] else step_idx
-                dx, dy, da = stab_diffs[idx_stab]
-                m = np.zeros((2, 3), np.float32)
-                scale_stab = 1.03
-                m[0, 0] = np.cos(da) * scale_stab
-                m[0, 1] = -np.sin(da) * scale_stab
-                m[1, 0] = np.sin(da) * scale_stab
-                m[1, 1] = np.cos(da) * scale_stab
-                h, w = img_corr.shape[:2]
-                m[0, 2] = dx + (1.0 - scale_stab) * w / 2.0
-                m[1, 2] = dy + (1.0 - scale_stab) * h / 2.0
-                img_corr = cv2.warpAffine(img_corr, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            img_res = self._apply_camera_move(img_corr, step_idx, total_steps, width, calc_height)
-            blur_buffer.append(img_res)
-            exif = get_exif_data(file_path)
-            ss = exif['shutter']
-            curr_blur = max_blur if ss < 1.0 else (min_blur if ss >= 3.0 else int(round(max_blur - ((ss - 1.0) / 2.0) * (max_blur - min_blur))))
-            curr_blur = max(min_blur, min(max_blur, curr_blur))
-            frames = list(blur_buffer)[-curr_blur:]
-            final_frame = frames[0] if len(frames) == 1 else np.mean(frames, axis=0).astype(np.uint8)
-            if p['denoise'] and exif['iso'] >= 800:
-                d_strength = min(15, max(3, int((exif['iso'] - 400) / 250)))
-                final_frame = cv2.bilateralFilter(final_frame, d_strength, d_strength * 2, d_strength / 2)
-            if p['telemetry']:
-                text = f"{exif['time'][11:19]} | ISO {exif['iso']} | f/{exif['aperture']} | {format_shutter(exif['shutter'])}"
-                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(final_frame, (10, calc_height - 35), (20 + tw, calc_height - 10), (0, 0, 0), -1)
-                cv2.putText(final_frame, text, (15, calc_height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-            try:
-                final_frame = self._fade(final_frame, step_idx, total_steps)
-                ffmpeg_proc.stdin.write(final_frame.tobytes())
-            except BrokenPipeError:
-                err_out = self._encoder_error()
-                raise RuntimeError(f"Der Video-Encoder (FFmpeg) ist abgestürzt!\nUrsache: {err_out.strip()}")
-
-        astro_buf = deque(maxlen=3)
-        meta_buf = deque(maxlen=3)
-        for step, (f, fb, fg, fr) in enumerate(render_sequence):
-            self._check_abort()
-            raw_img = cv2.imdecode(np.fromfile(f, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if raw_img is None:
-                continue
-            img = raw_img.astype(np.float32)
-            img[:, :, 0] *= fb
-            img[:, :, 1] *= fg
-            img[:, :, 2] *= fr
-            img_corrected = np.clip(img, 0, 255).astype(np.uint8)
+        def laden(f):
+            roh = cv2.imdecode(np.fromfile(f, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if roh is None:
+                return None
+            fb, fg, fr = verstaerkung[f]
+            gain = np.array([fb, fg, fr], dtype=np.float32)
+            img = np.clip(roh.astype(np.float32) * gain + 0.5, 0, 255).astype(np.uint8)
             if hot_idx is not None:
-                img_corrected = apply_hotpixel_fix(img_corrected, hot_idx)
-            if p.get('astro_clean', False):
-                astro_buf.append(img_corrected)
-                meta_buf.append((step, f))
-                if len(astro_buf) == 3:
-                    mid_img = self._remove_satellites(astro_buf[0], astro_buf[1], astro_buf[2])
-                    mid_step, mid_f = meta_buf[1]
-                    _encode_and_save(mid_img, mid_step, mid_f)
-                elif len(astro_buf) == 2 and step == 1:
-                    _encode_and_save(astro_buf[0], meta_buf[0][0], meta_buf[0][1])
-            else:
-                _encode_and_save(img_corrected, step, f)
-            self._fortschritt("Rendere Video", step + 1, total_steps,
-                              start_time, zusatz=os.path.basename(f))
-        if p.get('astro_clean', False) and len(astro_buf) > 0:
-            last_step, last_f = meta_buf[-1]
-            _encode_and_save(astro_buf[-1], last_step, last_f)
+                img = apply_hotpixel_fix(img, hot_idx)
+            return img
+
+        def speichern(bild, f):
+            ziel = os.path.join(out_dir, os.path.basename(f))
+            ok, daten = cv2.imencode(".jpg", bild, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            if not ok:
+                raise RuntimeError(self._t(f"{os.path.basename(f)} liess sich nicht kodieren.",
+                                           f"{os.path.basename(f)} could not be encoded."))
+            datei_atomar(ziel, daten.tobytes())
+
+        start_time = time.time()
+        anzahl = self._video_bauen(render_sequence, laden, lambda f: f, ffmpeg_proc,
+                                   stab_diffs, width, calc_height, speichern=speichern,
+                                   entrauschen=True)
+        self._schritt_fertig("Video", anzahl, start_time)
         if p['make_video'] and ffmpeg_proc:
             self._finish_encoder(ffmpeg_proc)
             self.finished_ok.emit(f"Video fertig:\n{out_video}")
@@ -5063,19 +4889,74 @@ class Worker(QtCore.QThread):
         hf = max(r_hf, b_hf)
         span = max(r_span, b_span)
         if hf < 0.004 and span < 0.02:
-            self.log.emit("> Weissabgleich: konstant ueber die ganze Sequenz.")
+            self.log.emit(self._t("> Weissabgleich: konstant ueber die ganze Sequenz.",
+                "> White balance: constant across the whole sequence."))
             return
-        self.log.emit(f"> Weissabgleich schwankt: Zappeln {hf:.3f} EV, "
-                      f"Gesamtspanne {span:.2f} EV (Rot/Gruen und Blau/Gruen).")
+        self.log.emit(self._t(f"> Weissabgleich schwankt: Zappeln {hf:.3f} EV, "
+                      f"Gesamtspanne {span:.2f} EV (Rot/Gruen und Blau/Gruen).",
+                f"> White balance varies: jitter {hf:.3f} EV, total span {span:.2f} EV (red/green and blue/green)."))
         if hf >= 0.004:
             self.log.emit(
-                "> WARNUNG: Die Kamera stand offenbar auf automatischem "
+                self._t("> WARNUNG: Die Kamera stand offenbar auf automatischem "
                 "Weissabgleich. Der Deflicker korrigiert nur die Helligkeit - "
-                "das Farbflackern bleibt im Video sichtbar.")
+                "das Farbflackern bleibt im Video sichtbar.",
+                "> WARNING: The camera apparently used automatic white balance. The deflicker only corrects brightness - the colour flicker stays visible in the video."))
             self.log.emit(
-                "> Abhilfe: im RAW-Programm das erste und das letzte Bild als "
+                self._t("> Abhilfe: im RAW-Programm das erste und das letzte Bild als "
                 "Keyframe markieren und beiden denselben festen Weissabgleich "
-                "geben. Purelapse schreibt ihn dann in alle Bilder dazwischen.")
+                "geben. Purelapse schreibt ihn dann in alle Bilder dazwischen.",
+                "> Remedy: mark the first and the last image as keyframes in the RAW program and give both the same fixed white balance. Purelapse then writes it into all images in between."))
+
+    def _pruefe_darktable_xmp(self, files):
+        """
+        Darktable: Purelapse traegt die Belichtung in die XMP-Dateien ein,
+        die Darktable beim Import anlegt - es erzeugt sie nicht selbst.
+        Fehlen sie, scheiterte Pass 1 bisher erst nach der ganzen Messung
+        an der ersten Datei. Jetzt wird vorher geprueft und erklaert.
+        """
+        fehlend = []
+        for f in files:
+            ok, grund = dt_sidecar_bereit(sidecar(f))
+            if not ok:
+                fehlend.append((os.path.basename(f), grund))
+        if not fehlend:
+            return
+        en = self.p.get('lang') == 'en'
+        gruende_en = {"fehlt": "missing", "nicht lesbar": "not readable",
+                      "ohne Darktable-Bearbeitungsliste": "no darktable history"}
+        beispiele = "\n".join(f"  {n}: {gruende_en.get(g, g) if en else g}"
+                               for n, g in fehlend[:5])
+        if len(fehlend) > 5:
+            beispiele += (f"\n  ... and {len(fehlend) - 5} more" if en
+                          else f"\n  ... und {len(fehlend) - 5} weitere")
+        if en:
+            raise RuntimeError(
+                f"{len(fehlend)} of {len(files)} images have no darktable "
+                "sidecar (.xmp) that Purelapse could write the correction into:\n"
+                f"{beispiele}\n\n"
+                "With darktable, Purelapse writes into the XMP files that "
+                "darktable itself creates on import.\n\n"
+                "Remedy - either of these:\n"
+                "A) Import the folder once in darktable (lighttable → import → "
+                "add to library). In darktable's preferences → storage, "
+                "\u201cwrite sidecar file for each image\u201d must be set to "
+                "\u201con import\u201d. Then start pass 1 again.\n"
+                "B) In Purelapse's settings choose ART or RawTherapee as the "
+                "engine - they create their profiles themselves.")
+        raise RuntimeError(
+            f"Fuer {len(fehlend)} von {len(files)} Bildern gibt es keine "
+            "Darktable-Begleitdatei (.xmp), in die Purelapse die Korrektur "
+            "eintragen koennte:\n"
+            f"{beispiele}\n\n"
+            "Purelapse schreibt bei Darktable in die XMP-Dateien, die Darktable "
+            "selbst beim Import anlegt.\n\n"
+            "Abhilfe - eines von beiden:\n"
+            "A) Den Ordner einmal in Darktable importieren (Leuchttisch → "
+            "Importieren → Ordner hinzufuegen). In Darktable unter Einstellungen "
+            "→ Speicherung muss \u201eXMP-Dateien schreiben\u201c auf "
+            "\u201ebeim Import\u201c stehen. Danach Pass 1 erneut starten.\n"
+            "B) In Purelapse unter Einstellungen als Engine ART oder RawTherapee "
+            "waehlen - die legen ihre Profile selbst an.")
 
     def _run_raw_pass1(self):
         p = self.p
@@ -5083,16 +4964,15 @@ class Worker(QtCore.QThread):
         files = p['files']
         roi = p.get('roi_rel')
         luma_vals, valid_files, meas = [], [], []
-        self.log.emit("> Starte RAW Pass 1 (Analyse)...")
-        if p.get('hotpixel') and eng('kind') == 'darktable':
-            self.log.emit("> HINWEIS: 'Tote/heisse Pixel entfernen' wirkt bei der "
-                          "Engine Darktable aktuell nicht (kein automatischer "
-                          "Zugriff auf das Hotpixel-Modul). Bitte das Modul bei "
-                          "Bedarf direkt in Darktable aktivieren.")
+        self.log.emit(self._t("> Starte RAW Pass 1 (Analyse)...",
+                "> Starting RAW pass 1 (analysis)..."))
+        if eng('kind') == 'darktable':
+            self._pruefe_darktable_xmp(files)
         start_time = time.time()
         threads = mess_threads(p.get('cores', 1))
         if threads > 1:
-            self.log.emit(f"> Vermesse {threads} Bilder gleichzeitig.")
+            self.log.emit(self._t(f"> Vermesse {threads} Bilder gleichzeitig.",
+                f"> Measuring {threads} images at once."))
         gemessen = parallel_messen(
             measure_nef, [(f, roi) for f in files], threads, self._check_abort,
             lambda fertig, gesamt: self._fortschritt(
@@ -5110,17 +4990,32 @@ class Worker(QtCore.QThread):
             [m['clip'] for m in meas], CLIP_SCHWELLE_RAW)
         self.clip_report.emit(c_anzahl, c_gesamt, list(c_schlimmste))
         if len(valid_files) < 3:
-            raise RuntimeError("Zu wenige lesbare RAW-Dateien für die Analyse.")
+            raise RuntimeError(self._t("Zu wenige lesbare RAW-Dateien für die Analyse.",
+                                       "Too few readable RAW files for the analysis."))
         template, tpl_src = find_arp_template(abs_target_dir, files)
         if template is None and p.get('art_cli_path'):
-            self.log.emit(f"> Kein {eng('label')}-Basisprofil vorhanden. "
-                          f"Lasse {eng('label')} einmalig eines erzeugen...")
+            self.log.emit(self._t(f"> Kein {eng('label')}-Basisprofil vorhanden. "
+                          f"Lasse {eng('label')} einmalig eines erzeugen...",
+                f"> No {eng('label')} base profile available. Letting {eng('label')} create one once..."))
             self.status.emit("Erzeuge einmalig ein Basisprofil...")
             template, tpl_src = bootstrap_arp_template(p['art_cli_path'], valid_files[0])
             if template is not None:
-                self.log.emit("> Basisprofil erzeugt und dauerhaft gespeichert. "
-                              "Dieser Schritt entfällt künftig.")
+                self.log.emit(self._t("> Basisprofil erzeugt und dauerhaft gespeichert. "
+                              "Dieser Schritt entfällt künftig.",
+                "> Base profile created and stored permanently. This step is not needed again."))
         if template is None:
+            if self.p.get('lang') == 'en':
+                raise RuntimeError(
+                    f"No valid {eng('label')} base profile found.\n\n"
+                    "Purelapse must not create a sidecar file from nothing: a "
+                    "profile consisting only of [Exposure] is discarded by some "
+                    "engines, and the deflicker correction would have no effect.\n\n"
+                    "Two ways, each needed only once:\n\n"
+                    f"A) Enter a valid path to {eng('bin')} in the settings. "
+                    "Purelapse then has the default profile created on the next "
+                    "pass 1.\n\n"
+                    f"B) Open an image in {eng('label')}, choose 'save profile' "
+                    "and select that file as the base profile in the settings.")
             raise RuntimeError(
                 f"Kein gueltiges {eng('label')}-Basisprofil gefunden.\n\n"
                 "Purelapse darf keine Sidecar-Datei aus dem Nichts erzeugen: ein Profil, "
@@ -5133,8 +5028,10 @@ class Worker(QtCore.QThread):
                 f"B) In {eng('label')} ein Bild oeffnen, 'Profil speichern' waehlen und "
                 "die Datei in den Einstellungen als Basisprofil auswaehlen."
             )
-        self.log.emit(f"> Basisprofil: {tpl_src}")
-        self.log.emit("> Berechne geglättete Luma-Zielkurve und schreibe Sidecar-Dateien.")
+        self.log.emit(self._t(f"> Basisprofil: {tpl_src}",
+                f"> Base profile: {tpl_src}"))
+        self.log.emit(self._t("> Berechne geglättete Luma-Zielkurve und schreibe Sidecar-Dateien.",
+                "> Computing the smoothed luma target curve and writing sidecar files."))
         a_luma = np.array(luma_vals)
         target_luma = two_pass_smooth(a_luma, p['scene_int'], p['smooth_val'])
         target_luma = target_luma * (2 ** p['ev_val'])
@@ -5142,28 +5039,34 @@ class Worker(QtCore.QThread):
         hf = np.array([mev[i] - np.median(mev[max(0, i - 4):min(len(mev), i + 5)])
                        for i in range(len(mev))])
         need = np.log2(np.maximum(target_luma, 1e-6)) - mev - p['ev_val']
-        self.log.emit(f"> Gemessenes Flackern: {hf.std():.3f} EV | "
+        self.log.emit(self._t(f"> Gemessenes Flackern: {hf.std():.3f} EV | "
                       f"verlangte Korrektur: {need.std():.3f} EV "
-                      f"({need.min():+.2f} bis {need.max():+.2f})")
+                      f"({need.min():+.2f} bis {need.max():+.2f})",
+                f"> Measured flicker: {hf.std():.3f} EV | required correction: {need.std():.3f} EV ({need.min():+.2f} to {need.max():+.2f})"))
         self._check_white_balance(meas)
         if need.std() > max(0.15, 3.0 * hf.std()):
             mild = np.log2(two_pass_smooth(a_luma, 0, 25)) - mev
-            grund = []
+            grund, grund_en = [], []
             if p['smooth_val'] >= 85:
                 grund.append(f"Deflicker-Staerke {p['smooth_val']}% (Richtung Gerade)")
+                grund_en.append(f"deflicker strength {p['smooth_val']}% (towards a straight line)")
             elif p['smooth_val'] >= 60:
                 grund.append(f"hohe Deflicker-Staerke {p['smooth_val']}%")
+                grund_en.append(f"high deflicker strength {p['smooth_val']}%")
             if p['scene_int'] in (1, 2):
                 grund.append("Szenario '" + ("Sunrise" if p['scene_int'] == 1 else "Sunset")
                              + "' (erzwingt monotonen Verlauf)")
+                grund_en.append("scenario '" + ("Sunrise" if p['scene_int'] == 1 else "Sunset")
+                                + "' (forces a monotonic course)")
             self.log.emit(
-                f"> HINWEIS: Die Korrektur ({need.std():.2f} EV) ist deutlich groesser "
+                self._t(f"> HINWEIS: Die Korrektur ({need.std():.2f} EV) ist deutlich groesser "
                 f"als das gemessene Flackern ({hf.std():.3f} EV). Der Deflicker formt "
                 "damit den Lichtverlauf um, nicht nur das Flackern."
                 + (" Ursache: " + " und ".join(grund) + "." if grund else "")
-                + f" Zum Vergleich: bei Staerke 25 und Szenario 'Constant' waeren es "
+                + " Zum Vergleich: bei Staerke 25 und Szenario 'Constant' waeren es "
                   f"{mild.std():.2f} EV. Ist die Umformung gewollt, kann der Hinweis "
-                  "ignoriert werden.")
+                  "ignoriert werden.",
+                f"> NOTE: The correction ({need.std():.2f} EV) is much larger than the measured flicker ({hf.std():.3f} EV). The deflicker therefore reshapes the course of the light, not just the flicker." + (" Cause: " + " and ".join(grund_en) + "." if grund_en else "") + f" For comparison: with strength 25 and scenario 'Constant' it would be {mild.std():.2f} EV. If the reshaping is intended, this note can be ignored."))
         old_base = load_base_ev(abs_target_dir)
         new_base = {}
         report = []
@@ -5208,9 +5111,10 @@ class Worker(QtCore.QThread):
         self._validate_profiles(valid_files, template, "nach Pass 1")
         clipped = sum(1 for r in report if r['clip_frac'] > 0.01)
         if clipped:
-            self.log.emit(f"> WARNUNG: {clipped} von {len(report)} Bildern haben ausgefressene "
+            self.log.emit(self._t(f"> WARNUNG: {clipped} von {len(report)} Bildern haben ausgefressene "
                           "Lichter. Dort misst die Analyse zu schwach und der Deflicker "
-                          "korrigiert zu wenig. Ein Messbereich (ROI) ohne Himmel hilft.")
+                          "korrigiert zu wenig. Ein Messbereich (ROI) ohne Himmel hilft.",
+                f"> WARNING: {clipped} of {len(report)} images have blown highlights. There the analysis measures too weakly and the deflicker corrects too little. A measuring area (ROI) without sky helps."))
         self.finished_ok.emit(
             "Pass 1 abgeschlossen - die Helligkeit ist vermessen, die "
             "Korrektur steht in den Profilen.\n\n"
@@ -5245,27 +5149,27 @@ class Worker(QtCore.QThread):
                     zaehler[art] = zaehler.get(art, 0) + 1
         if zaehler.get('tonkurve'):
             self.log.emit(
-                f"> Auto-angepasste Tonkurve in {zaehler['tonkurve']} Profilen "
+                self._t(f"> Auto-angepasste Tonkurve in {zaehler['tonkurve']} Profilen "
                 f"abgeschaltet. {eng('label')} haette sonst fuer jedes Bild eine "
                 "eigene Tonkurve berechnet - das flackert. Alle Bilder bekommen "
                 "jetzt dieselbe feste Kurve (Standard-Filmkurve, sofern das "
-                "Profil keine eigene hat).")
+                "Profil keine eigene hat).",
+                f"> Auto-matched tone curve switched off in {zaehler['tonkurve']} profiles. Otherwise {eng('label')} would have computed its own tone curve for every image - that flickers. All images now get the same fixed curve (standard film curve unless the profile has its own)."))
         if zaehler.get('tonkurve_fest'):
             self.log.emit(
-                f"> {zaehler['tonkurve_fest']} Profile: Tonkurve unveraendert "
+                self._t(f"> {zaehler['tonkurve_fest']} Profile: Tonkurve unveraendert "
                 "uebernommen, aber aus dem Auto-Modus geloest - in diesem Modus "
-                f"ignoriert {eng('label')} Helligkeit und Kontrast.")
+                f"ignoriert {eng('label')} Helligkeit und Kontrast.",
+                f"> {zaehler['tonkurve_fest']} profiles: tone curve kept, but released from auto mode - in that mode {eng('label')} ignores brightness and contrast."))
         if zaehler.get('log'):
             self.log.emit(
-                f"> Log-Tone-Mapping: Automatik in {zaehler['log']} Profilen "
+                self._t(f"> Log-Tone-Mapping: Automatik in {zaehler['log']} Profilen "
                 "abgeschaltet, die eingetragenen Werte gelten jetzt fuer alle "
-                "Bilder.")
+                "Bilder.",
+                f"> Log tone mapping: automatic switched off in {zaehler['log']} profiles, the entered values now apply to all images."))
 
     def _prepare_keyframe_profiles(self, files):
         """Verteilt die im RAW-Programm bearbeiteten Keyframe-Profile auf alle Bilder."""
-        if self.p.get('hotpixel') and eng('kind') == 'darktable':
-            self.log.emit("> HINWEIS: Hotpixel-Korrektur wird bei Darktable in dieser "
-                          "Version noch uebersprungen (siehe Pass 1).")
         arp_files = [sidecar(f) for f in files]
         base_map = load_base_ev(self.p['target_dir'])
         calib_map = load_calib(self.p['target_dir'])
@@ -5286,25 +5190,44 @@ class Worker(QtCore.QThread):
             return float(value)
 
         def _kf_delta(idx):
+            belichtung = read_arp_dict(arp_files[idx]).get('Exposure', {})
+            if 'Compensation' not in belichtung:
+                # Kein Belichtungswert im Keyframe (Darktable ohne
+                # Belichtungsmodul): dann hat der Nutzer daran auch nichts
+                # geaendert. 0 als Gesamtwert ergaebe sonst minus Pass 1.
+                return 0.0
             try:
-                total = float(read_arp_dict(arp_files[idx]).get('Exposure', {}).get('Compensation', 0.0))
+                total = float(belichtung.get('Compensation', 0.0))
             except (TypeError, ValueError):
                 total = 0.0
             return total - _base_ev(idx) - _calib(idx)
 
         kf_idx = [i for i in range(len(files)) if check_is_keyframe(arp_files[i])]
         if not kf_idx:
-            self.log.emit("> WARNUNG: Keine Keyframes gefunden. "
-                          f"{eng('label')} entwickelt mit den unveränderten Pass-1-Profilen.")
+            self.log.emit(self._t("> WARNUNG: Keine Keyframes gefunden. "
+                          f"{eng('label')} entwickelt mit den unveränderten Pass-1-Profilen.",
+                f"> WARNING: No keyframes found. {eng('label')} develops with the unchanged pass 1 profiles."))
             return
         if not base_map:
-            self.log.emit(f"> HINWEIS: Keine Pass-1-Basiswerte gefunden ({DEFLICKER_DB}). "
-                          "Für exakte Übergänge bitte Pass 1 erneut laufen lassen.")
-        self.log.emit(f"> {len(kf_idx)} Keyframes gefunden. Berechne weiche Übergänge...")
+            self.log.emit(self._t(f"> HINWEIS: Keine Pass-1-Basiswerte gefunden ({DEFLICKER_DB}). "
+                          "Für exakte Übergänge bitte Pass 1 erneut laufen lassen.",
+                f"> NOTE: No pass 1 base values found ({DEFLICKER_DB}). For exact transitions please run pass 1 again."))
+        self.log.emit(self._t(f"> {len(kf_idx)} Keyframes gefunden. Berechne weiche Übergänge...",
+                f"> {len(kf_idx)} keyframes found. Computing smooth transitions..."))
         first, last = kf_idx[0], kf_idx[-1]
         first_arp = strip_rank(read_arp_dict(arp_files[first]))
         last_arp = strip_rank(read_arp_dict(arp_files[last]))
         d_first, d_last = _kf_delta(first), _kf_delta(last)
+        if eng('kind') == 'darktable':
+            self._dt_stapel_melden([strip_rank(read_arp_dict(arp_files[i])) for i in kf_idx])
+            if self.p.get('hotpixel'):
+                for i in kf_idx:
+                    d = read_arp_dict(arp_files[i])
+                    if d and 'dt:hotpixels#0' not in d:
+                        set_raw_hotpixel(d, True)
+                        write_arp_dict(arp_files[i], d)
+                first_arp = strip_rank(read_arp_dict(arp_files[first]))
+                last_arp = strip_rank(read_arp_dict(arp_files[last]))
         for i in range(0, first):
             self._check_abort()
             new_arp = {sec: dict(params) for sec, params in first_arp.items()}
@@ -5319,7 +5242,7 @@ class Worker(QtCore.QThread):
             harte = nicht_ueberblendbar(s_arp, e_arp)
             if harte and e_i - s_i > 1:
                 self.log.emit(
-                    f"> ACHTUNG: Zwischen den Keyframes "
+                    self._t("> ACHTUNG: Zwischen den Keyframes "
                     f"{os.path.basename(files[s_i])} und "
                     f"{os.path.basename(files[e_i])} lassen sich "
                     f"{len(harte)} Einstellungen nicht weich ueberblenden, "
@@ -5327,7 +5250,8 @@ class Worker(QtCore.QThread):
                     + ", ".join(f"[{sec}] {k}" for sec, k in harte[:4])
                     + (" ..." if len(harte) > 4 else "")
                     + ". Fuer einen weichen Verlauf diese Einstellung in "
-                    "beiden Keyframes gleich waehlen.")
+                    "beiden Keyframes gleich waehlen.",
+                f"> WARNING: Between the keyframes {os.path.basename(files[s_i])} and {os.path.basename(files[e_i])} {len(harte)} settings cannot be blended smoothly, they switch over in the middle: " + ", ".join(f"[{sec}] {k}" for sec, k in harte[:4]) + (" ..." if len(harte) > 4 else "") + ". For a smooth transition choose the same setting in both keyframes."))
             for i in range(s_i + 1, e_i):
                 self._check_abort()
                 ratio = (i - s_i) / (e_i - s_i)
@@ -5358,6 +5282,29 @@ class Worker(QtCore.QThread):
         self._save_report("purelapse_profiles.csv", prof)
         self._validate_profiles(files, first_arp, "nach der Keyframe-Verteilung")
 
+    def _dt_stapel_melden(self, keyframes):
+        """Sagt vor dem Verteilen, was aus den Darktable-Keyframes in die
+        Bilder dazwischen geht - und was davon weich ueberblendet wird."""
+        alle, weich = dt_stapel_uebersicht(keyframes)
+        if not alle:
+            self.log.emit(self._t(
+                "> Darktable: In den Keyframes ist ausser der Belichtung nichts "
+                "eingestellt - es wird nur die Belichtung verteilt.",
+                "> darktable: apart from exposure nothing is set in the "
+                "keyframes - only exposure is distributed."))
+            return
+        self.log.emit(self._t(
+            f"> Darktable: {len(alle)} Module aus den Keyframes gehen in alle "
+            f"Bilder: {', '.join(alle)}.",
+            f"> darktable: {len(alle)} modules from the keyframes go into all "
+            f"frames: {', '.join(alle)}."))
+        if weich:
+            self.log.emit(self._t(
+                "> In den Keyframes verschieden eingestellt und weich "
+                f"ueberblendet: {', '.join(weich)}.",
+                "> Set differently in the keyframes and blended smoothly: "
+                f"{', '.join(weich)}."))
+
     def _diag(self):
         return bool(self.p.get('diag'))
 
@@ -5365,7 +5312,8 @@ class Worker(QtCore.QThread):
         """Protokolldateien nur im Diagnose-Modus anlegen."""
         if self._diag():
             save_report(self.p['target_dir'], filename, rows)
-            self.log.emit(f"> Diagnose: {filename} geschrieben")
+            self.log.emit(self._t(f"> Diagnose: {filename} geschrieben",
+                f"> Diagnostics: {filename} written"))
 
     def _validate_profiles(self, files, reference, label):
         """Prueft alle geschriebenen Sidecars gegen die Referenz."""
@@ -5384,15 +5332,17 @@ class Worker(QtCore.QThread):
                             f"Purelapse {VERSION} - Formatpruefung der Sidecars ({label})",
                             issues, checked)
         if issues:
-            self.log.emit(f"> ACHTUNG: {len(issues)} Formatabweichungen in den Profilen. "
+            self.log.emit(self._t(f"> ACHTUNG: {len(issues)} Formatabweichungen in den Profilen. "
                           f"{eng('label')} verwirft solche Profile stillschweigend."
                           + (" Details in purelapse_arp_check.log"
                              if self._diag() else
-                             " Fuer die vollstaendige Liste den Diagnose-Modus einschalten."))
+                             " Fuer die vollstaendige Liste den Diagnose-Modus einschalten."),
+                f"> WARNING: {len(issues)} format deviations in the profiles. {eng('label')} silently discards such profiles." + (" Details in purelapse_arp_check.log" if self._diag() else " Switch on diagnostic mode for the full list.")))
             for line in issues[:3]:
                 self.log.emit("    " + line)
         elif self._diag():
-            self.log.emit(f"> Profilpruefung: {checked} Sidecars formal in Ordnung.")
+            self.log.emit(self._t(f"> Profilpruefung: {checked} Sidecars formal in Ordnung.",
+                f"> Profile check: {checked} sidecars formally OK."))
 
     def _fortschritt(self, label, fertig, gesamt, start_zeit, zusatz=""):
         """Statuszeile und Fortschrittsbalken in einem Aufruf."""
@@ -5401,24 +5351,68 @@ class Worker(QtCore.QThread):
         if gesamt:
             self.progress.emit(fertig, gesamt)
 
+    def _l(self, label):
+        """Name eines Arbeitsschritts fuers Protokoll. Intern bleibt er
+        deutsch - daran erkennt die Ablaufanzeige die Phase (PHASEN)."""
+        if self.p.get('lang') != 'en':
+            return label
+        for praefix, _k, _de, en in PHASEN:
+            if str(label).startswith(praefix):
+                return en + str(label)[len(praefix):]
+        return label
+
     def _schritt_fertig(self, label, anzahl, start_zeit, einheit="Bilder"):
         """Meldet die tatsaechliche Dauer eines abgeschlossenen Schrittes."""
         dauer = max(0.0, time.time() - start_zeit)
-        text = f"> {label}: {anzahl} {einheit} in {dauer_text(dauer)}"
+        en = self.p.get('lang') == 'en'
+        if en and einheit == "Bilder":
+            einheit = "images"
+        text = f"> {self._l(label)}: {anzahl} {einheit} in {dauer_text(dauer)}"
         if anzahl > 0 and dauer > 0:
             je = dauer / anzahl
-            text += (f" ({je:.2f} s je Bild)" if je >= 0.05
-                     else f" ({anzahl / dauer:.0f} Bilder je Sekunde)")
+            if en:
+                text += (f" ({je:.2f} s per image)" if je >= 0.05
+                         else f" ({anzahl / dauer:.0f} images per second)")
+            else:
+                text += (f" ({je:.2f} s je Bild)" if je >= 0.05
+                         else f" ({anzahl / dauer:.0f} Bilder je Sekunde)")
         self.log.emit(text)
 
     def _count_rendered(self, out_dir, expected_stems):
-        """Wie viele der erwarteten JPGs liegen schon im Ausgabeordner?"""
+        """Wie viele der erwarteten Zwischenbilder liegen schon im Ausgabeordner?"""
+        tief = getattr(self, '_zw_render_tief', False)
         if expected_stems is None:
-            return len(glob.glob(os.path.join(out_dir, "*.jpg")) +
-                       glob.glob(os.path.join(out_dir, "*.JPG")))
-        return sum(1 for st in expected_stems
-                   if os.path.exists(os.path.join(out_dir, st + ".jpg"))
-                   or os.path.exists(os.path.join(out_dir, st + ".JPG")))
+            return len({p for ext in zw_endungen(tief)
+                        for p in glob.glob(os.path.join(out_dir, "*" + ext))})
+        return sum(1 for st in expected_stems if zw_datei(out_dir, st, tief) is not None)
+
+    def _platz_pruefen(self, todo, out_dir):
+        """16-Bit-TIFFs sind gross: vor dem Entwickeln pruefen, ob sie Platz haben."""
+        try:
+            with rawpy.imread(todo[0]) as raw:
+                breite, hoehe = raw.sizes.width, raw.sizes.height
+        except Exception:
+            breite, hoehe = 6000, 4000
+        je_bild = breite * hoehe * 6 * 0.85          # 16 Bit x 3 Kanaele, leicht gepackt
+        noetig = je_bild * len(todo) * 1.05
+        try:
+            frei = shutil.disk_usage(out_dir).free
+        except OSError:
+            return
+        gb = lambda b: f"{b / 1024 ** 3:.0f} GB"
+        self.log.emit(self._t(
+            f"> 16-Bit-Zwischenbilder: etwa {gb(je_bild * len(todo))} fuer {len(todo)} Bilder, "
+            f"frei {gb(frei)}.",
+            f"> 16-bit intermediate images: about {gb(je_bild * len(todo))} for {len(todo)} "
+            f"images, {gb(frei)} free."))
+        if frei < noetig:
+            raise RuntimeError(self._t(
+                "Fuer die 16-Bit-Zwischenbilder reicht der Platz nicht: noetig etwa "
+                f"{gb(noetig)}, frei {gb(frei)}.\n\nBitte Platz schaffen oder in den "
+                "Einstellungen die 16-Bit-Zwischenbilder ausschalten.",
+                "Not enough disk space for the 16-bit intermediate images: about "
+                f"{gb(noetig)} needed, {gb(frei)} free.\n\nPlease free some space or switch "
+                "off 16-bit intermediate images in the settings."))
 
     def _engine_warnungen_melden(self, logs, label):
         """
@@ -5454,7 +5448,8 @@ class Worker(QtCore.QThread):
         gezaehlt = {}
         for z in treffer:
             gezaehlt[z] = gezaehlt.get(z, 0) + 1
-        self.log.emit(f"> {eng('label')} meldet bei {label}:")
+        self.log.emit(self._t(f"> {eng('label')} meldet bei {label}:",
+                f"> {eng('label')} reports for {self._l(label)}:"))
         for z, n in sorted(gezaehlt.items(), key=lambda t: -t[1])[:6]:
             self.log.emit(f"    {z}" + (f"   ({n}x)" if n > 1 else ""))
         # Je Bild schreibt die Engine bis zu zwei Zeilen (eine Warnung und,
@@ -5467,9 +5462,10 @@ class Worker(QtCore.QThread):
         nicht_geladen = max(gewarnt, verweigert)
         if nicht_geladen:
             self.log.emit(
-                f"> ACHTUNG: {nicht_geladen} Profil(e) konnte "
+                self._t(f"> ACHTUNG: {nicht_geladen} Profil(e) konnte "
                 f"{eng('label')} nicht laden. Diese Bilder wurden nicht "
-                "entwickelt.")
+                "entwickelt.",
+                f"> WARNING: {eng('label')} could not load {nicht_geladen} profile(s). These images were not developed."))
 
     def _write_engine_log(self, cmds, procs, logs, label):
         """
@@ -5549,7 +5545,8 @@ class Worker(QtCore.QThread):
                             pr.wait(timeout=5)
                         except subprocess.TimeoutExpired:
                             pr.kill()
-                    raise RuntimeError("Vom Benutzer abgebrochen.")
+                    raise RuntimeError(self._t("Vom Benutzer abgebrochen.",
+                                               "Cancelled by user."))
                 done = self._count_rendered(out_dir, expected_stems)
                 self._fortschritt(label, done, total_dev, start_time)
                 time.sleep(1.0)
@@ -5566,55 +5563,177 @@ class Worker(QtCore.QThread):
             hinweis = (" - Details in purelapse_art.log" if self._diag()
                        else " - fuer Details den Diagnose-Modus einschalten")
             wo = ", ".join(f"Prozess {n}: {rc}" for n, rc in fehler)
-            self.log.emit(f"> ACHTUNG: {eng('label')} endete mit Fehlercode "
-                          f"({wo}){hinweis}")
+            self.log.emit(self._t(f"> ACHTUNG: {eng('label')} endete mit Fehlercode "
+                          f"({wo}){hinweis}",
+                f"> WARNING: {eng('label')} ended with an error code ({wo}){hinweis}"))
 
-    def _run_darktable_cli(self, files, out_dir, label, quality=100):
+    def _run_darktable_cli(self, files, out_dir, label, quality=100, tief=False):
         """
-        Rendert jede Datei einzeln mit darktable-cli, weil dieses (anders
-        als ART-cli/rawtherapee-cli) keinen Ordner-Batch mit automatischer
-        Sidecar-Zuordnung kennt.
-        HINWEIS: die darktable-cli Flags in dt_build_cli_cmd() koennen sich
-        zwischen Darktable-Versionen unterscheiden - bitte nach dem ersten
-        Testlauf mit deiner installierten Version pruefen.
+        Rendert mit darktable-cli, das je Aufruf nur ein Bild entwickelt.
+
+        Mehrere Prozesse laufen gleichzeitig, jeder mit eigenem
+        Konfigurationsordner (siehe dt_konfig_slots). Jeder Prozess hat ein
+        Zeitlimit, und ein Abbruch beendet die laufenden Prozesse sofort -
+        bisher wartete Purelapse auf das gerade laufende Bild, und ein
+        haengendes darktable-cli hielt den ganzen Lauf an.
         """
         dt_cli = self.p['art_cli_path']
         total = len(files)
+        if not total:
+            return
         start_time = time.time()
-        dt_log = None
+        kerne = max(1, int(self.p.get('cores', 1)))
+        jobs = prozess_anzahl(total, kerne, self.p.get('procs', 0))
+        frei = freier_speicher_gb()
+        if frei:
+            jobs = min(jobs, max(1, int(frei // DT_GB_PRO_PROZESS)))
+        jobs = max(1, min(jobs, DT_MAX_PROZESSE))
+        try:
+            slots, quelle = dt_konfig_slots(jobs, os.path.join(cache_ordner(), "darktable"))
+        except OSError as e:
+            raise RuntimeError(self._t(
+                f"Arbeitsordner fuer darktable-cli nicht anlegbar: {e}",
+                f"Could not create working folders for darktable-cli: {e}"))
+        if quelle is None:
+            self.log.emit(self._t(
+                "> HINWEIS: darktable-Einstellungen nicht gefunden - darktable-cli "
+                "arbeitet mit seinen Grundeinstellungen.",
+                "> NOTE: darktable settings not found - darktable-cli uses its "
+                "defaults."))
+        if jobs > 1:
+            self.log.emit(self._t(f"> darktable-cli: {jobs} Prozesse gleichzeitig.",
+                                  f"> darktable-cli: {jobs} processes at once."))
+        env = os.environ.copy()
+        env["OMP_NUM_THREADS"] = str(max(1, kerne // jobs))
         log_path = os.path.join(self.p['target_dir'], "purelapse_art.log")
+        dt_log = None
         if self._diag():
             try:
                 dt_log = open(log_path, "a", encoding="utf-8")
-                dt_log.write(f"\n===== {label} (darktable-cli) - "
+                dt_log.write(f"\n===== {label} (darktable-cli, {jobs} Prozesse) - "
                              f"{time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
             except OSError:
                 dt_log = None
-        fehler = 0
-        for i, f in enumerate(files):
-            self._check_abort()
-            stem = os.path.splitext(os.path.basename(f))[0]
-            out_jpg = os.path.join(out_dir, stem + ".jpg")
-            xmp_path = sidecar(f)
-            cmd = dt_build_cli_cmd(dt_cli, f, xmp_path, out_jpg, quality=quality)
-            if dt_log:
-                dt_log.write(" ".join(cmd) + "\n")
-                dt_log.flush()
-            proc = subprocess.run(cmd, stdout=(dt_log or subprocess.DEVNULL),
-                                  stderr=subprocess.STDOUT if dt_log else subprocess.DEVNULL)
-            if proc.returncode != 0 or not os.path.exists(out_jpg):
-                fehler += 1
-            self._fortschritt(label, i + 1, total, start_time)
-        if dt_log:
+        offen = list(files)
+        laufend = []           # [proc, bild, ziel, start, slot, ausgabe-datei]
+        frei_slots = list(slots)
+        fertig = fehler = zeitueber = 0
+        fehlerbilder = []
+
+        def beenden(eintrag):
+            proc, slot = eintrag[0], eintrag[4]
             try:
-                dt_log.close()
+                proc.kill()
             except OSError:
                 pass
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            # Ein hart beendetes darktable-cli raeumt seine Sperren nicht weg.
+            for sperre in ('data.db.lock', 'library.db.lock'):
+                try:
+                    os.remove(os.path.join(slot, sperre))
+                except OSError:
+                    pass
+
+        def abschliessen(eintrag):
+            proc, bild, ziel, _t0, slot, ausgabe = eintrag
+            if ausgabe is not None:
+                try:
+                    ausgabe.seek(0)
+                    text = ausgabe.read().decode("utf-8", errors="ignore")
+                    ausgabe.close()
+                    if dt_log and text.strip():
+                        dt_log.write(text if text.endswith("\n") else text + "\n")
+                except (OSError, ValueError):
+                    pass
+            frei_slots.append(slot)
+
+        try:
+            while offen or laufend:
+                if self._abort:
+                    for eintrag in laufend:
+                        beenden(eintrag)
+                        abschliessen(eintrag)
+                    laufend = []
+                    self._check_abort()
+                while offen and frei_slots:
+                    bild = offen.pop(0)
+                    slot = frei_slots.pop(0)
+                    stem = os.path.splitext(os.path.basename(bild))[0]
+                    ziel = os.path.join(out_dir, stem + (".tif" if tief else ".jpg"))
+                    cmd = dt_build_cli_cmd(dt_cli, bild, sidecar(bild), ziel,
+                                           quality=quality, configdir=slot, tief=tief)
+                    ausgabe = tempfile.TemporaryFile() if dt_log else None
+                    if dt_log:
+                        dt_log.write(" ".join(cmd) + "\n")
+                    try:
+                        proc = subprocess.Popen(
+                            cmd, env=env, stdin=subprocess.DEVNULL,
+                            stdout=(ausgabe or subprocess.DEVNULL),
+                            stderr=subprocess.STDOUT if ausgabe else subprocess.DEVNULL)
+                    except OSError as e:
+                        frei_slots.append(slot)
+                        raise RuntimeError(self._t(
+                            f"darktable-cli liess sich nicht starten: {e}",
+                            f"darktable-cli could not be started: {e}"))
+                    laufend.append([proc, bild, ziel, time.time(), slot, ausgabe])
+                time.sleep(0.1)
+                noch = []
+                for eintrag in laufend:
+                    proc, bild, ziel, t0 = eintrag[:4]
+                    rc = proc.poll()
+                    if rc is None:
+                        if time.time() - t0 > DT_ZEITLIMIT_S:
+                            beenden(eintrag)
+                            zeitueber += 1
+                            fehlerbilder.append(os.path.basename(bild))
+                            try:
+                                os.remove(ziel)
+                            except OSError:
+                                pass
+                            abschliessen(eintrag)
+                            fertig += 1
+                        else:
+                            noch.append(eintrag)
+                        continue
+                    if rc != 0 or not os.path.exists(ziel):
+                        fehler += 1
+                        fehlerbilder.append(os.path.basename(bild))
+                    abschliessen(eintrag)
+                    fertig += 1
+                    self._fortschritt(label, fertig, total, start_time,
+                                      zusatz=os.path.basename(bild))
+                laufend = noch
+        finally:
+            for eintrag in laufend:
+                beenden(eintrag)
+                abschliessen(eintrag)
+            if dt_log:
+                try:
+                    dt_log.close()
+                except OSError:
+                    pass
+        self._schritt_fertig(label, fertig - fehler - zeitueber, start_time)
+        hinweis = self._t(" - Details in purelapse_art.log" if self._diag()
+                          else " - fuer Details den Diagnose-Modus einschalten",
+                          " - details in purelapse_art.log" if self._diag()
+                          else " - switch on diagnostic mode for details")
+        if zeitueber:
+            self.log.emit(self._t(
+                f"> ACHTUNG: darktable-cli brauchte bei {zeitueber} Bildern laenger "
+                f"als {DT_ZEITLIMIT_S // 60} Minuten und wurde beendet: "
+                f"{', '.join(fehlerbilder[:5])}{hinweis}",
+                f"> WARNING: darktable-cli took longer than {DT_ZEITLIMIT_S // 60} "
+                f"minutes for {zeitueber} images and was stopped: "
+                f"{', '.join(fehlerbilder[:5])}{hinweis}"))
         if fehler:
-            hinweis = (" - Details in purelapse_art.log" if self._diag()
-                       else " - fuer Details den Diagnose-Modus einschalten")
-            self.log.emit(f"> ACHTUNG: darktable-cli meldete bei {fehler} von {total} "
-                          f"Bildern einen Fehler{hinweis}")
+            self.log.emit(self._t(
+                f"> ACHTUNG: darktable-cli meldete bei {fehler} von {total} "
+                f"Bildern einen Fehler{hinweis}",
+                f"> WARNING: darktable-cli reported an error for {fehler} of "
+                f"{total} images{hinweis}"))
 
     def _sichere_teilstand(self, todo, out_dir):
         """
@@ -5632,14 +5751,12 @@ class Worker(QtCore.QThread):
         vorhanden = []
         for f in todo:
             stamm = os.path.splitext(os.path.basename(f))[0]
-            for ext in (".jpg", ".JPG"):
-                pfad = os.path.join(out_dir, stamm + ext)
-                if os.path.exists(pfad):
-                    try:
-                        vorhanden.append((os.path.getmtime(pfad), pfad, f))
-                    except OSError:
-                        pass
-                    break
+            pfad = zw_datei(out_dir, stamm, getattr(self, '_zw_tief', False))
+            if pfad is not None:
+                try:
+                    vorhanden.append((os.path.getmtime(pfad), pfad, f))
+                except OSError:
+                    pass
         vorhanden.sort()
         unsicher = max(1, int(getattr(self, '_prozesse_zuletzt', 1)))
         for _zeit, pfad, _f in vorhanden[-unsicher:]:
@@ -5649,9 +5766,10 @@ class Worker(QtCore.QThread):
                 pass
         sicher = [f for _zeit, _pfad, f in vorhanden[:-unsicher]]
         if sicher:
-            mark_developed(sicher, out_dir)
-            self.log.emit(f"> Abbruch: {len(sicher)} fertig entwickelte Bilder "
-                          "bleiben erhalten, der naechste Lauf setzt dort auf.")
+            mark_developed(sicher, out_dir, getattr(self, '_zw_tief', False))
+            self.log.emit(self._t(f"> Abbruch: {len(sicher)} fertig entwickelte Bilder "
+                          "bleiben erhalten, der naechste Lauf setzt dort auf.",
+                f"> Cancelled: {len(sicher)} fully developed images are kept, the next run continues from there."))
 
     def _entwickelte(self, files, out_dir):
         """
@@ -5664,13 +5782,12 @@ class Worker(QtCore.QThread):
         Rueckgabe: (Liste der JPG-Pfade, Namen der fehlenden Bilder)
         """
         gefunden, fehlend = [], []
+        tief = getattr(self, '_zw_tief', False)
         for f in files:
             stamm = os.path.splitext(os.path.basename(f))[0]
-            for ext in (".jpg", ".JPG"):
-                pfad = os.path.join(out_dir, stamm + ext)
-                if os.path.exists(pfad):
-                    gefunden.append(pfad)
-                    break
+            pfad = zw_datei(out_dir, stamm, tief)
+            if pfad is not None:
+                gefunden.append(pfad)
             else:
                 fehlend.append(os.path.basename(f))
         return gefunden, fehlend
@@ -5679,9 +5796,20 @@ class Worker(QtCore.QThread):
         """Wie _entwickelte, bricht aber ab, wenn etwas fehlt."""
         gefunden, fehlend = self._entwickelte(files, out_dir)
         if not gefunden:
-            raise RuntimeError("Keine entwickelten JPGs gefunden.")
+            raise RuntimeError(self._t("Keine entwickelten JPGs gefunden.",
+                                       "No developed JPGs found."))
         if fehlend:
             namen = ", ".join(fehlend[:6]) + (" ..." if len(fehlend) > 6 else "")
+            if self.p.get('lang') == 'en':
+                raise RuntimeError(
+                    f"{len(fehlend)} of {len(files)} images were not "
+                    f"developed: {namen}\n\n"
+                    f"{eng('label')} did not load the profile of these images "
+                    "or could not read the file - the reason is in the log "
+                    "above.\n\n"
+                    "A video with missing frames would jump at these points, "
+                    "so it stops here. The frames already developed are kept; "
+                    "after the fix, pass 2 resumes from there.")
             raise RuntimeError(
                 f"{len(fehlend)} von {len(files)} Bildern wurden nicht "
                 f"entwickelt: {namen}\n\n"
@@ -5725,23 +5853,44 @@ class Worker(QtCore.QThread):
                     fremd.append(cfg['label'])
             hinweis = ""
             if fremd:
-                hinweis = (f"\n\nIm Ordner liegen aber Profile von "
+                hinweis = ("\n\nIm Ordner liegen aber Profile von "
                            f"{' und '.join(fremd)}. Dieser Ordner wurde "
-                           f"offenbar damit vorbereitet, eingestellt ist "
+                           "offenbar damit vorbereitet, eingestellt ist "
                            f"aber {eng('label')}.\n"
-                           f"Entweder die Engine zurueckstellen oder Pass 1 "
+                           "Entweder die Engine zurueckstellen oder Pass 1 "
                            f"mit {eng('label')} erneut laufen lassen.")
             if not hinweis:
                 hinweis = ("\n\nBitte zuerst Pass 1 laufen lassen - der "
                            "misst die Bilder und legt die Profile an.")
+            if self.p.get('lang') == 'en':
+                hinweis_en = (
+                    "\n\nThe folder does contain profiles from "
+                    f"{' and '.join(fremd)}. It was evidently prepared with "
+                    f"that, but {eng('label')} is selected.\n"
+                    "Either switch the engine back or run pass 1 again "
+                    f"with {eng('label')}." if fremd else
+                    "\n\nPlease run pass 1 first - it measures the images "
+                    "and creates the profiles.")
+                raise RuntimeError(
+                    f"No {eng('ext')} profiles found in the folder.\n\n"
+                    f"{eng('label')} would develop every image with its "
+                    "default values - the result would be a timelapse "
+                    "without any deflicker." + hinweis_en)
             raise RuntimeError(
                 f"Keine {eng('ext')}-Profile im Ordner gefunden.\n\n"
                 f"{eng('label')} wuerde jedes Bild mit seinen "
-                f"Standardwerten entwickeln - das Ergebnis waere ein "
-                f"Zeitraffer ganz ohne Entflackerung." + hinweis)
+                "Standardwerten entwickeln - das Ergebnis waere ein "
+                "Zeitraffer ganz ohne Entflackerung." + hinweis)
 
         if fehlend:
             namen = ", ".join(os.path.basename(f) for f in fehlend[:5])
+            if self.p.get('lang') == 'en':
+                raise RuntimeError(
+                    f"{len(fehlend)} of {len(files)} images have no "
+                    f"{eng('ext')} profile, for example {namen}.\n\n"
+                    "These images would be developed without correction and "
+                    "stand out as a jump in the video.\n"
+                    "Please run pass 1 again.")
             raise RuntimeError(
                 f"{len(fehlend)} von {len(files)} Bildern haben kein "
                 f"{eng('ext')}-Profil, zum Beispiel {namen}.\n\n"
@@ -5761,28 +5910,30 @@ class Worker(QtCore.QThread):
             spanne = max(werte) - min(werte)
             if spanne < 0.002:
                 self.log.emit(
-                    "> WARNUNG: Die Belichtungskorrektur ist in allen "
+                    self._t("> WARNUNG: Die Belichtungskorrektur ist in allen "
                     f"{len(werte)} Profilen gleich ({werte[0]:+.3f} EV). "
-                    "Das Video wird genauso flackern wie das Rohmaterial.")
+                    "Das Video wird genauso flackern wie das Rohmaterial.",
+                f"> WARNING: The exposure correction is the same in all {len(werte)} profiles ({werte[0]:+.3f} EV). The video will flicker just like the raw material."))
                 self.log.emit(
-                    "> Ursache ist fast immer: Pass 1 lief nicht, lief mit "
+                    self._t("> Ursache ist fast immer: Pass 1 lief nicht, lief mit "
                     "einer anderen Engine, oder die Profile wurden "
-                    "zwischendurch zurueckgesetzt.")
+                    "zwischendurch zurueckgesetzt.",
+                "> The cause is almost always: pass 1 did not run, ran with a different engine, or the profiles were reset in between."))
             elif not getattr(self, '_profile_berichtet', False):
-                self.log.emit(f"> Profile geprueft: {len(werte)} Bilder, "
-                              f"Korrektur spannt {spanne:.2f} EV.")
+                self.log.emit(self._t(f"> Profile geprueft: {len(werte)} Bilder, "
+                              f"Korrektur spannt {spanne:.2f} EV.",
+                f"> Profiles checked: {len(werte)} images, correction spans {spanne:.2f} EV."))
             self._profile_berichtet = True
 
-    def _render_with_engine(self, files, out_dir, label, quality=100):
+    def _render_with_engine(self, files, out_dir, label, quality=100, tief=False):
         """
         Gemeinsamer Verteiler fuer Pass 2 und Vorschau.
         ART/RT rendern eine Liste von Dateien in einem CLI-Lauf,
         Darktable rendert Datei fuer Datei (siehe _run_darktable_cli).
         """
+        self._zw_render_tief = tief
         if eng('kind') == 'darktable':
-            # darktable-cli bleibt einsträngig: mehrere Instanzen streiten
-            # sich um dieselbe Konfiguration und Bibliothek.
-            self._run_darktable_cli(files, out_dir, label, quality=quality)
+            self._run_darktable_cli(files, out_dir, label, quality=quality, tief=tief)
             return
         self._pruefe_sidecars(files)
         kerne = max(1, int(self.p.get('cores', 1)))
@@ -5795,13 +5946,17 @@ class Worker(QtCore.QThread):
         # "-S" statt "-s": ohne Sidecar bricht die Engine ab. Mit "-s"
         # wuerde sie mit ihrem Standardprofil weiterentwickeln, und das
         # Ergebnis waere ein unentflackertes Video ohne jede Fehlermeldung.
-        grund = [self.p['art_cli_path'], "-S", "-Y", "-o", out_dir, f"-j{quality}"]
+        grund = [self.p['art_cli_path'], "-S", "-Y", "-o", out_dir]
+        # 16 Bit: gepacktes TIFF; sonst JPG in der gewuenschten Qualitaet
+        grund += ["-tz", "-b16"] if tief else [f"-j{quality}"]
         cmds = [grund + eng('extra') + ["-c"] + teil for teil in teile]
         stems = [os.path.splitext(os.path.basename(f))[0] for f in files]
-        self.log.emit(f"\n> {eng('label').upper()}-CLI ENGINE - {label}: {len(files)} Bilder")
+        self.log.emit(self._t(f"\n> {eng('label').upper()}-CLI ENGINE - {label}: {len(files)} Bilder",
+                f"\n> {eng('label').upper()}-CLI ENGINE - {self._l(label)}: {len(files)} images"))
         if len(cmds) > 1:
-            self.log.emit(f"> {len(cmds)} Prozesse parallel, je {threads} Threads "
-                          f"({', '.join(str(len(t)) + ' Bilder' for t in teile)})")
+            self.log.emit(self._t(f"> {len(cmds)} Prozesse parallel, je {threads} Threads "
+                          f"({', '.join(str(len(t)) + ' Bilder' for t in teile)})",
+                f"> {len(cmds)} processes in parallel, {threads} threads each ({', '.join(str(len(t)) + ' images' for t in teile)})"))
             self.log.emit(" ".join(grund + eng('extra') + ["-c"]) + " <Bilderliste>\n")
         else:
             self.log.emit(" ".join(cmds[0]) + "\n")
@@ -5835,18 +5990,21 @@ class Worker(QtCore.QThread):
         start_mess = time.time()
         threads = mess_threads(p.get('cores', 1))
         neu = parallel_messen(
-            measure_jpg_linear, [(jf, roi) for jf in offen], threads,
+            jpg_bloecke, [(jf, roi) for jf in offen], threads,
             self._check_abort,
             lambda fertig, gesamt: self._fortschritt(
                 "Messe Ergebnis", fertig, gesamt, start_mess))
         frisch = dict(zip(offen, neu))
+        bloecke = []
         for jf, k in zip(jpgs, schluessel):
             if jf in frisch:
-                v = frisch[jf]
+                b = frisch[jf]
                 if k is not None:
-                    merker[k] = v
+                    merker[k] = b
             else:
-                v = merker[k]
+                b = merker[k]
+            bloecke.append(b)
+        for jf, v in zip(jpgs, sequenz_helligkeit(bloecke)):
             if v is not None and v > 0:
                 lin.append(v)
                 valid.append(jf)
@@ -5854,10 +6012,11 @@ class Worker(QtCore.QThread):
         if offen:
             dauer = max(0.0, time.time() - start_mess)
             self.log.emit(
-                f"> Messung: {len(offen)} Bilder in {dauer_text(dauer)}"
+                self._t(f"> Messung: {len(offen)} Bilder in {dauer_text(dauer)}"
                 + (f", {threads} gleichzeitig" if threads > 1 else "")
                 + (f"; {uebernommen} unveraenderte uebernommen"
-                   if uebernommen else ""))
+                   if uebernommen else ""),
+                f"> Measurement: {len(offen)} images in {dauer_text(dauer)}" + (f", {threads} at once" if threads > 1 else "") + (f"; {uebernommen} unchanged reused" if uebernommen else "")))
         if len(lin) < 3:
             return None, [], []
         a = np.asarray(lin, dtype=np.float64)
@@ -5913,13 +6072,15 @@ class Worker(QtCore.QThread):
                        {r['file']: r['residual_ev'] for r in rows})
         if apply_correction:
             save_calib(p['target_dir'], calib_map)
-            self.log.emit(f"> Nachkalibrierung geschrieben, groesste Anpassung "
-                          f"{np.abs(resid).max():.3f} EV")
+            self.log.emit(self._t("> Nachkalibrierung geschrieben, groesste Anpassung "
+                          f"{np.abs(resid).max():.3f} EV",
+                f"> Recalibration written, largest adjustment {np.abs(resid).max():.3f} EV"))
             if clipped:
-                self.log.emit(f"> WARNUNG: Bei {clipped} Bildern wurde die Kalibrierung "
+                self.log.emit(self._t(f"> WARNUNG: Bei {clipped} Bildern wurde die Kalibrierung "
                               f"auf {CALIB_LIMIT} EV begrenzt. Die Zielkurve aus Pass 1 "
                               "ist so nicht erreichbar - bitte Szenario und "
-                              "Deflicker-Staerke pruefen.")
+                              "Deflicker-Staerke pruefen.",
+                f"> WARNING: For {clipped} images the calibration was limited to {CALIB_LIMIT} EV. The target curve from pass 1 cannot be reached this way - please check the scenario and the deflicker strength."))
         return sigma, rows, changed
 
     def _run_raw_pass2(self):
@@ -5927,7 +6088,8 @@ class Worker(QtCore.QThread):
         abs_target_dir = p['target_dir']
         files = p['files']
         max_blur, min_blur = p['max_blur'], p['min_blur']
-        self.log.emit("> Starte RAW Pass 2 (Rendern)...")
+        self.log.emit(self._t("> Starte RAW Pass 2 (Rendern)...",
+                "> Starting RAW pass 2 (rendering)..."))
         # Zuerst: sind die Profile ueberhaupt da, und gehoeren sie zur
         # eingestellten Engine? Die Pruefung auf Vollstaendigkeit darunter
         # hielt fehlende Profile bisher fuer "unvollstaendig" und riet zu
@@ -5936,10 +6098,20 @@ class Worker(QtCore.QThread):
         self._pruefe_sidecars(files)
         thin = sum(1 for f in files if not profile_is_complete(read_arp_dict(sidecar(f))))
         if thin:
-            self.log.emit(f"> ACHTUNG: {thin} von {len(files)} Sidecar-Dateien enthalten kein "
+            self.log.emit(self._t(f"> ACHTUNG: {thin} von {len(files)} Sidecar-Dateien enthalten kein "
                           f"vollständiges {eng('label')}-Profil. {eng('label')} verwirft solche "
-                          "Sidecars, die Deflicker-Korrektur bliebe wirkungslos.")
+                          "Sidecars, die Deflicker-Korrektur bliebe wirkungslos.",
+                f"> WARNING: {thin} of {len(files)} sidecar files contain no complete {eng('label')} profile. {eng('label')} discards such sidecars, the deflicker correction would have no effect."))
             if thin == len(files) and eng('kind') != 'darktable':
+                if p.get('lang') == 'en':
+                    raise RuntimeError(
+                        f"All {len(files)} sidecar files are incomplete (only "
+                        "[Exposure], no [Version] block).\n\n"
+                        f"{eng('label')} would ignore them and develop the RAWs "
+                        "with the default profile - the video would keep "
+                        "flickering.\n\n"
+                        f"Please set a {eng('label')} base profile in the "
+                        "settings and run pass 1 again.")
                 raise RuntimeError(
                     f"Alle {len(files)} Sidecar-Dateien sind unvollständig (nur [Exposure], "
                     "kein [Version]-Block).\n\n"
@@ -5952,21 +6124,27 @@ class Worker(QtCore.QThread):
         self._prepare_keyframe_profiles(files)
         out_dir = os.path.join(abs_target_dir, "Deflickered_JPG")
         os.makedirs(out_dir, exist_ok=True)
+        tief = bool(p.get('tiff16'))
+        self._zw_tief = tief
         max_rounds = 1 + max(0, int(p.get('calib_rounds', 2)))
         processed_jpgs = []
         report_rows = []
-        todo = pending_development(files, out_dir)
+        todo = pending_development(files, out_dir, tief)
+        if tief and todo:
+            self._platz_pruefen(todo, out_dir)
         uebersprungen = len(files) - len(todo)
         if uebersprungen:
-            self.log.emit(f"> Fortsetzung: {uebersprungen} von {len(files)} Bildern "
-                          "liegen bereits passend entwickelt vor.")
+            self.log.emit(self._t(f"> Fortsetzung: {uebersprungen} von {len(files)} Bildern "
+                          "liegen bereits passend entwickelt vor.",
+                f"> Resuming: {uebersprungen} of {len(files)} images are already developed and up to date."))
         if not todo:
-            self.log.emit(f"> Alle Bilder sind aktuell, {eng('label')} wird uebersprungen.")
+            self.log.emit(self._t(f"> Alle Bilder sind aktuell, {eng('label')} wird uebersprungen.",
+                f"> All images are up to date, {eng('label')} is skipped."))
         for rnd in range(max_rounds):
             self._check_abort()
             stems = [os.path.splitext(os.path.basename(f))[0] for f in todo]
             for s in stems:
-                for ext in (".jpg", ".JPG"):
+                for ext in ZW_JPG + ZW_TIF:
                     try:
                         os.remove(os.path.join(out_dir, s + ext))
                     except OSError:
@@ -5978,109 +6156,64 @@ class Worker(QtCore.QThread):
                 break
             label = "Entwicklung" if rnd == 0 else f"Nachkalibrierung {rnd}"
             try:
-                self._render_with_engine(todo, out_dir, label, quality=100)
+                self._render_with_engine(todo, out_dir, label, quality=100, tief=tief)
             except BaseException:
                 self._sichere_teilstand(todo, out_dir)
                 raise
-            mark_developed(todo, out_dir)
+            mark_developed(todo, out_dir, tief)
             processed_jpgs = self._alle_entwickelt(files, out_dir)
             residual, rows, changed = self._measure_and_correct(
                 processed_jpgs, files, apply_correction=(rnd < max_rounds - 1))
             report_rows = rows
             if residual is None:
                 break
-            self.log.emit(f"> Restflackern nach {label}: {residual:.4f} EV (Sigma)")
+            self.log.emit(self._t(f"> Restflackern nach {label}: {residual:.4f} EV (Sigma)",
+                f"> Residual flicker after {self._l(label)}: {residual:.4f} EV (sigma)"))
             if residual < RESTFLACKERN_ZIEL:
-                self.log.emit("> Ziel erreicht, keine weitere Nachkalibrierung noetig.")
+                self.log.emit(self._t("> Ziel erreicht, keine weitere Nachkalibrierung noetig.",
+                "> Target reached, no further recalibration needed."))
                 break
             if rnd < max_rounds - 1:
                 if not changed:
-                    self.log.emit("> Keine nennenswerte Anpassung mehr noetig.")
+                    self.log.emit(self._t("> Keine nennenswerte Anpassung mehr noetig.",
+                "> No significant adjustment needed any more."))
                     break
                 todo = changed
         self._save_report("purelapse_pass2.csv", report_rows)
         file_list_for_video = processed_jpgs
         stab_diffs = None
         if p['make_video'] and p['stabilize']:
-            self.log.emit("\n> Führe Optische Stabilisierung durch...")
+            self.log.emit(self._t("\n> Führe Optische Stabilisierung durch...",
+                "\n> Running optical stabilisation..."))
             stab_diffs = calculate_stabilization(file_list_for_video, self.status, self.progress, self._check_abort)
         width = p['width']
         calc_height = int(width * 9 / 16)
-        render_sequence = file_list_for_video
+        render_sequence = list(file_list_for_video)
         if p['reverse_play']:
             render_sequence = render_sequence[::-1]
-        out_video = self._get_output_video_path()
-        ffmpeg_cmd = self._build_ffmpeg_cmd(width, calc_height, out_video)
-        self.log.emit("\n> STARTE FFMPEG ENCODER:")
-        self.log.emit(" ".join(ffmpeg_cmd) + "\n")
-        ffmpeg_proc = self._start_encoder(ffmpeg_cmd)
-        blur_buffer = deque(maxlen=max_blur)
-        total_steps = len(render_sequence)
+        ffmpeg_proc = None
+        out_video = None
+        if p['make_video']:
+            out_video = self._get_output_video_path()
+            ffmpeg_cmd = self._build_ffmpeg_cmd(width, calc_height, out_video, tief=tief)
+            self.log.emit(self._t("\n> STARTE FFMPEG ENCODER:",
+                "\n> STARTING FFMPEG ENCODER:"))
+            self.log.emit(" ".join(ffmpeg_cmd) + "\n")
+            ffmpeg_proc = self._start_encoder(ffmpeg_cmd)
         start_time = time.time()
 
-        def _encode_and_save_raw(frame_img, step_idx, file_path):
-            if not p['make_video']:
-                return
-            img_corr = frame_img.copy()
-            if stab_diffs is not None and step_idx < len(stab_diffs):
-                idx_stab = (total_steps - 1 - step_idx) if p['reverse_play'] else step_idx
-                dx, dy, da = stab_diffs[idx_stab]
-                m = np.zeros((2, 3), np.float32)
-                scale_stab = 1.03
-                m[0, 0] = np.cos(da) * scale_stab
-                m[0, 1] = -np.sin(da) * scale_stab
-                m[1, 0] = np.sin(da) * scale_stab
-                m[1, 1] = np.cos(da) * scale_stab
-                h, w = img_corr.shape[:2]
-                m[0, 2] = dx + (1.0 - scale_stab) * w / 2.0
-                m[1, 2] = dy + (1.0 - scale_stab) * h / 2.0
-                img_corr = cv2.warpAffine(img_corr, m, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            img_res = self._apply_camera_move(img_corr, step_idx, total_steps, width, calc_height)
-            blur_buffer.append(img_res)
-            orig_nef = find_original_raw(abs_target_dir,
-                                         os.path.splitext(os.path.basename(file_path))[0])
-            exif = get_exif_data(orig_nef)
-            ss = exif['shutter']
-            curr_blur = max_blur if ss < 1.0 else (min_blur if ss >= 3.0 else int(round(max_blur - ((ss - 1.0) / 2.0) * (max_blur - min_blur))))
-            curr_blur = max(min_blur, min(max_blur, curr_blur))
-            frames = list(blur_buffer)[-curr_blur:]
-            final_frame = frames[0] if len(frames) == 1 else np.mean(frames, axis=0).astype(np.uint8)
-            if p['telemetry']:
-                text = f"ISO {exif['iso']} | f/{exif['aperture']} | {format_shutter(exif['shutter'])}"
-                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(final_frame, (10, calc_height - 35), (20 + tw, calc_height - 10), (0, 0, 0), -1)
-                cv2.putText(final_frame, text, (15, calc_height - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-            try:
-                final_frame = self._fade(final_frame, step_idx, total_steps)
-                ffmpeg_proc.stdin.write(final_frame.tobytes())
-            except BrokenPipeError:
-                err_out = self._encoder_error()
-                raise RuntimeError(f"Der Video-Encoder (FFmpeg) ist abgestürzt!\nUrsache: {err_out.strip()}")
+        def laden(f):
+            img = bild_lesen(f)
+            if img is not None and tief and img.dtype != np.uint16:
+                img = img.astype(np.uint16) * 257
+            return img
 
-        astro_buf = deque(maxlen=3)
-        meta_buf = deque(maxlen=3)
-        for step, f in enumerate(render_sequence):
-            self._check_abort()
-            img = cv2.imdecode(np.fromfile(f, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if img is None:
-                continue
-            if p.get('astro_clean', False):
-                astro_buf.append(img)
-                meta_buf.append((step, f))
-                if len(astro_buf) == 3:
-                    mid_img = self._remove_satellites(astro_buf[0], astro_buf[1], astro_buf[2])
-                    mid_step, mid_f = meta_buf[1]
-                    _encode_and_save_raw(mid_img, mid_step, mid_f)
-                elif len(astro_buf) == 2 and step == 1:
-                    _encode_and_save_raw(astro_buf[0], meta_buf[0][0], meta_buf[0][1])
-            else:
-                _encode_and_save_raw(img, step, f)
-            self._fortschritt("Rendere Video", step + 1, total_steps,
-                              start_time, zusatz=os.path.basename(f))
-        self._schritt_fertig("Video", total_steps, start_time)
-        if p.get('astro_clean', False) and len(astro_buf) > 0:
-            last_step, last_f = meta_buf[-1]
-            _encode_and_save_raw(astro_buf[-1], last_step, last_f)
+        def exif_von(f):
+            return find_original_raw(abs_target_dir, os.path.splitext(os.path.basename(f))[0])
+
+        anzahl = self._video_bauen(render_sequence, laden, exif_von, ffmpeg_proc,
+                                   stab_diffs, width, calc_height)
+        self._schritt_fertig("Video", anzahl, start_time)
         if p['make_video'] and ffmpeg_proc:
             self._finish_encoder(ffmpeg_proc)
             self.finished_ok.emit(f"Fertiges Video:\n{out_video}")
@@ -6187,33 +6320,20 @@ class AblaufLeiste(QtWidgets.QFrame):
 #  Bibliothek). Bot-Token und Chat-ID liegen in einer eigenen Datei, die
 #  nur der Benutzer lesen darf.
 # ==========================================================================
-TELEGRAM_FILE = os.path.expanduser("~/.purelapse_telegram.json")
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{methode}"
 
 
 def telegram_laden():
-    try:
-        with open(TELEGRAM_FILE, "r", encoding="utf-8") as f:
-            d = json.load(f)
-        if isinstance(d, dict):
-            return {'an': bool(d.get('an')), 'token': str(d.get('token', "")).strip(),
-                    'chat': str(d.get('chat', "")).strip()}
-    except (OSError, ValueError):
-        pass
+    d = konfig_lesen('telegram', standard={})
+    if isinstance(d, dict):
+        return {'an': bool(d.get('an')), 'token': str(d.get('token', "")).strip(),
+                'chat': str(d.get('chat', "")).strip()}
     return {'an': False, 'token': "", 'chat': ""}
 
 
 def telegram_speichern(an, token, chat):
-    try:
-        fd = os.open(TELEGRAM_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({'an': bool(an), 'token': token.strip(), 'chat': chat.strip()}, f)
-        try:
-            os.chmod(TELEGRAM_FILE, 0o600)
-        except OSError:
-            pass
-    except OSError:
-        pass
+    # Die Konfigurationsdatei ist nur fuer den Benutzer lesbar (0600).
+    konfig_setzen('telegram', {'an': bool(an), 'token': token.strip(), 'chat': chat.strip()})
 
 
 def telegram_anfrage(token, methode, daten=None, timeout=15):
@@ -6552,18 +6672,20 @@ class MainWindow(QtWidgets.QWidget):
         self.lbl_path.setReadOnly(True)
         self.lbl_path.setPlaceholderText("Bitte Zeitraffer-Ordner wählen…")
         row_folder.addWidget(self.lbl_path, stretch=5)
-        btn_browse = QtWidgets.QPushButton(" Durchsuchen…")
-        btn_browse.clicked.connect(self._browse)
-        row_folder.addWidget(btn_browse, stretch=1)
-        btn_refresh = QtWidgets.QPushButton(" Aktualisieren")
-        btn_refresh.clicked.connect(self._refresh_preview)
-        row_folder.addWidget(btn_refresh, stretch=1)
-        self.btn_reset = QtWidgets.QPushButton(" Zurücksetzen…")
-        self.btn_reset.clicked.connect(self._open_reset_dialog)
-        row_folder.addWidget(self.btn_reset, stretch=1)
-        self.btn_settings = QtWidgets.QPushButton(" Einstellungen…")
-        self.btn_settings.clicked.connect(self._open_settings)
-        row_folder.addWidget(self.btn_settings, stretch=1)
+        # Symbolknoepfe: das Bild kommt aus dem Stylesheet (_ikon_regeln),
+        # der Name steht im Hinweis beim Darueberfahren.
+        def ikon_knopf(name, aktion):
+            k = QtWidgets.QPushButton()
+            k.setObjectName(name)
+            k.setProperty("ikon", True)
+            k.setCursor(QtCore.Qt.PointingHandCursor)
+            k.clicked.connect(aktion)
+            row_folder.addWidget(k)
+            return k
+        btn_browse = ikon_knopf("ikon_ordner", self._browse)
+        btn_refresh = ikon_knopf("ikon_neu", self._refresh_preview)
+        self.btn_reset = ikon_knopf("ikon_reset", self._open_reset_dialog)
+        self.btn_settings = ikon_knopf("ikon_einst", self._open_settings)
         vf.addLayout(row_folder)
         self.btn_browse = btn_browse
         self.btn_refresh = btn_refresh
@@ -7123,9 +7245,9 @@ class MainWindow(QtWidgets.QWidget):
         gperf.addWidget(self.btn_arp_browse, 2, 2)
         # Hinweiszeile, die nur bei Darktable sichtbar ist.
         self.lbl_dt_note = QtWidgets.QLabel(
-            "Darktable braucht kein Basisprofil: Purelapse ändert nur die "
-            "Belichtung in der vorhandenen .xmp und lässt alle anderen "
-            "Module unangetastet.")
+            "Darktable braucht kein Basisprofil: Purelapse arbeitet mit den "
+            "vorhandenen .xmp-Dateien. Es schreibt die Belichtung und überträgt "
+            "die Module der Keyframes in die Bilder dazwischen.")
         self.lbl_dt_note.setWordWrap(True)
         self.lbl_dt_note.setVisible(False)
         gperf.addWidget(self.lbl_dt_note, 2, 0, 1, 3)
@@ -7160,6 +7282,17 @@ class MainWindow(QtWidgets.QWidget):
             "Nur fuer die Fehlersuche gedacht. Im Normalbetrieb aus lassen -\n"
             "Warnungen erscheinen ohnehin im Log-Fenster.")
         gperf.addWidget(self.chk_diag, 6, 0, 1, 3)
+        self.chk_tiff16 = QtWidgets.QCheckBox(
+            "16-Bit-Zwischenbilder (TIFF) für höchste Qualität")
+        self.chk_tiff16.setToolTip(
+            "Die Engine entwickelt in Pass 2 nach 16-Bit-TIFF statt nach JPG, und\n"
+            "das Video wird durchgehend in 16 Bit gerechnet. Feine Verlaeufe im\n"
+            "Himmel bleiben dadurch frei von Stufen - vor allem zusammen mit\n"
+            "HEVC 10 Bit oder ProRes.\n\n"
+            "Braucht ein Vielfaches an Platz: bei 24 Megapixeln etwa 120 MB je\n"
+            "Bild, bei 1000 Bildern also rund 120 GB. Purelapse prueft vorher,\n"
+            "ob der Platz reicht.")
+        gperf.addWidget(self.chk_tiff16, 7, 0, 1, 3)
         vset.addWidget(self.box_perf)
         self.box_telegram = QtWidgets.QGroupBox("Benachrichtigung (Telegram)")
         gtg = QtWidgets.QGridLayout(self.box_telegram)
@@ -7540,6 +7673,9 @@ class MainWindow(QtWidgets.QWidget):
                 "Lege Format, Effekte und Speicherort des Videos fest.",
                 "Set the format, effects and location of the video.")),
         }
+        if eng('kind') == 'darktable':
+            hints['keys'] += ("\n\n" + DT_KEYFRAME_HINWEIS['en' if self.lang == 'en' else 'de']
+                              + "\n\n" + DT_STERNE_HINWEIS['en' if self.lang == 'en' else 'de'])
         for key, lbl in self.step_hints.items():
             lbl.setText(hints[key])
         if self._kf_count > 0:
@@ -7764,17 +7900,14 @@ class MainWindow(QtWidgets.QWidget):
     def _update_kf_buttons(self):
         """Gibt den Einstellknopf frei, sobald es ein Keyframe gibt."""
         ziel = self._ziel_keyframe() if self.tiles else None
-        passende_engine = (eng('kind') == 'ini')
+        passende_engine = (eng('kind') in ('ini', 'darktable'))
         moeglich = (ziel is not None and passende_engine
                     and not getattr(self, '_busy', False))
         self.btn_kf_edit.setEnabled(moeglich)
         if not passende_engine:
             self.btn_kf_edit.setToolTip(self._t(
-                "Schnelleinstellungen gibt es nur fuer ART und "
-                "RawTherapee. Darktable arbeitet mit XML-Modulen statt "
-                "mit Profilschluesseln.",
-                "Quick settings exist for ART and RawTherapee only. "
-                "Darktable uses XML modules instead of profile keys."))
+                "Schnelleinstellungen gibt es fuer ART, RawTherapee und Darktable.",
+                "Quick settings exist for ART, RawTherapee and darktable."))
         elif ziel is None:
             self.btn_kf_edit.setToolTip(self._t(
                 "Noch kein Keyframe markiert. Dafuer in der Bildleiste "
@@ -7835,7 +7968,7 @@ class MainWindow(QtWidgets.QWidget):
                 self, self._t("Profil anlegen", "Create profile"),
                 self._t(
                     f"Fuer dieses Bild gibt es noch kein {eng('ext')}-Profil.\n\n"
-                    f"Soll eines aus dem Basisprofil angelegt werden?\n"
+                    "Soll eines aus dem Basisprofil angelegt werden?\n"
                     f"Quelle: {quelle}\n\n"
                     "Pass 1 ergaenzt darin spaeter nur die Belichtung und "
                     "laesst die uebrigen Werte unangetastet.",
@@ -7958,7 +8091,7 @@ class MainWindow(QtWidgets.QWidget):
         self.txt_log.setStyleSheet(
             f"QPlainTextEdit {{ background: {t['log_bg']}; color: {t['log_fg']};"
             f" border: 1px solid {t['border']}; border-radius: 8px;"
-            f" font-family: 'DejaVu Sans Mono', 'Ubuntu Mono', monospace;"
+            " font-family: 'DejaVu Sans Mono', 'Ubuntu Mono', monospace;"
             f" font-size: 11px; padding: 6px; }}")
         # Die Farben stecken in den Zeilen des Protokolls - nach einem
         # Wechsel des Farbschemas werden sie neu geschrieben.
@@ -8014,9 +8147,9 @@ class MainWindow(QtWidgets.QWidget):
 
     def _apply_tooltips(self):
         mapping = {
-            'lbl_path': 'TT_FOLDER', 'btn_browse': 'TT_FOLDER', 'btn_refresh': 'TT_REFRESH',
+            'lbl_path': 'TT_FOLDER', 'btn_browse': 'TT_BROWSE', 'btn_refresh': 'TT_IREFRESH',
             'rb_jpg': 'TT_FORMAT', 'rb_raw': 'TT_FORMAT',
-            'btn_settings': 'TT_SETTINGS', 'btn_queue_open': 'TT_QOPEN',
+            'btn_settings': 'TT_ISETTINGS', 'btn_queue_open': 'TT_QOPEN',
             'btn_log': 'TT_LOG', 'btn_more': 'TT_MORE',
             'btn_keys_refresh': 'TT_REFRESH', 'btn_gps_from_exif': 'TT_SUN',
             'cmb_scene': 'TT_SCENE', 'slider_smooth': 'TT_SMOOTH', 'slider_ev': 'TT_EV',
@@ -8026,7 +8159,7 @@ class MainWindow(QtWidgets.QWidget):
             'cmb_engine': 'TT_ENGINE', 'cmb_calib': 'TT_CALIB', 'btn_cam_path': 'TT_CAMPATH', 'cmb_blur': 'TT_BLUR',
             'cmb_fade': 'TT_FADE',
             'chk_stab': 'TT_STAB', 'chk_denoise': 'TT_DENOISE', 'chk_reverse': 'TT_REVERSE',
-            'chk_tel': 'TT_TEL', 'chk_astro': 'TT_ASTRO', 'btn_reset': 'TT_RESET',
+            'chk_tel': 'TT_TEL', 'chk_astro': 'TT_ASTRO', 'btn_reset': 'TT_IRESET',
             'chk_hotpix': 'TT_HOTPIX',
             'cmb_lang': 'TT_LANG', 'btn_start': 'TT_START',
             'btn_plain': 'TT_PLAIN', 'btn_compare': 'TT_COMPARE',
@@ -8039,6 +8172,14 @@ class MainWindow(QtWidgets.QWidget):
             w = getattr(self, attr, None)
             if w is not None and key in table:
                 w.setToolTip(table[key])
+        # Symbolknoepfe haben keinen Text: Name fuer Bildschirmleser
+        for attr, de, en in (('btn_browse', "Ordner wählen", "Choose folder"),
+                             ('btn_refresh', "Aktualisieren", "Refresh"),
+                             ('btn_reset', "Zurücksetzen", "Reset"),
+                             ('btn_settings', "Einstellungen", "Settings")):
+            w = getattr(self, attr, None)
+            if w is not None:
+                w.setAccessibleName(de if self.lang != 'en' else en)
 
     def _apply_language(self, lang):
         fwd = {k: v for k, v in TRANSLATIONS.items() if not k.startswith("TT_")}
@@ -8151,11 +8292,11 @@ class MainWindow(QtWidgets.QWidget):
             self.cmb_engine.setCurrentIndex(idx)
             self._on_log(self._t(
                 f"purelapse@engine:~$ Nur {ENGINES[erkannt]['label']}-"
-                f"Begleitdateien gefunden, Engine von "
+                "Begleitdateien gefunden, Engine von "
                 f"{ENGINES[aktuell]['label']} auf "
                 f"{ENGINES[erkannt]['label']} umgestellt.",
                 f"purelapse@engine:~$ Only {ENGINES[erkannt]['label']} "
-                f"sidecars found, engine switched from "
+                "sidecars found, engine switched from "
                 f"{ENGINES[aktuell]['label']} to "
                 f"{ENGINES[erkannt]['label']}."))
         jpg = glob.glob(os.path.join(self.target_dir, "*.jpg")) + glob.glob(os.path.join(self.target_dir, "*.JPG"))
@@ -8342,8 +8483,16 @@ class MainWindow(QtWidgets.QWidget):
         self.plot_raw.setData([], [])
         self.plot_smooth.setData([], [])
         if self.gallery_worker and self.gallery_worker.isRunning():
+            # Nicht unbegrenzt warten: ein gerade dekodiertes RAW kann eine
+            # Sekunde dauern, und so lange stand die Oberflaeche. Laeuft der
+            # alte Lader noch, wird er stummgeschaltet und darf im
+            # Hintergrund zu Ende laufen - seine Bilder gehoeren zum alten
+            # Ordner und duerfen nicht mehr ankommen.
             self.gallery_worker._abort = True
-            self.gallery_worker.wait()
+            if not self.gallery_worker.wait(300):
+                self.gallery_worker.blockSignals(True)
+                rest = [w for w in getattr(self, '_alte_lader', []) if w.isRunning()]
+                self._alte_lader = rest + [self.gallery_worker]
         self.lbl_gaps.setVisible(False)
         self.lbl_clip.setVisible(False)
         self.lbl_farbstich.setVisible(False)
@@ -8832,45 +8981,28 @@ class MainWindow(QtWidgets.QWidget):
         else:
             lbl_txt.setStyleSheet("color: #cccccc; font-size: 10px;")
             chk_kf.setStyleSheet("color: #888888; font-size: 10px;")
-        if os.path.exists(arp_path):
+        # Rank im INI-Profil nur bei ART/RawTherapee. Bei Darktable wuerde
+        # write_arp_dict ein Belichtungsmodul in den Verlauf schreiben.
+        if eng('kind') == 'ini' and os.path.exists(arp_path):
             arp_data = read_arp_dict(arp_path)
             for sec in arp_data:
                 arp_data[sec].pop('Rank', None)
                 arp_data[sec].pop('Rating', None)
             arp_data.setdefault('General', {})['Rank'] = '5' if checked else '0'
-            write_arp_dict(arp_path, arp_data)
-        xmp_path = f"{full_path}.xmp"
-        rating_val = "5" if checked else "0"
-        xmp_content = f'''<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
-<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-  <rdf:Description rdf:about=""
-    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-    xmp:Rating="{rating_val}">
-  </rdf:Description>
-</rdf:RDF>
-</x:xmpmeta>
-<?xpacket end="w"?>'''
-        if eng('kind') != 'darktable':
-            # Bei Darktable IST die .xmp bereits das eigentliche Sidecar
-            # (siehe purelapse_engines.py) - hier wuerde das Ueberschreiben
-            # mit diesem Minimal-Inhalt den kompletten History-Stack
-            # zerstoeren! Deshalb nur fuer ART/RawTherapee ausfuehren, wo
-            # die .xmp eine reine Zusatzdatei fuer das Rating ist.
             try:
-                with open(xmp_path, "w", encoding="utf-8") as f:
-                    f.write(xmp_content)
-            except OSError:
-                pass
-        else:
-            # Bei Darktable das Rating direkt im vorhandenen Sidecar setzen,
-            # ohne den History-Stack anzufassen.
-            try:
-                tree, desc = _dt_load(arp_path)
-                desc.set(_qn('http://ns.adobe.com/xap/1.0/', 'Rating'), rating_val)
-                tree.write(arp_path, encoding='UTF-8', xml_declaration=True)
-            except Exception:
-                pass
+                write_arp_dict(arp_path, arp_data)
+            except OSError as fehler:
+                self._on_log("> " + self._t(f"FEHLER: {fehler}", f"ERROR: {fehler}"))
+        # Die Bewertung in die .xmp des Bildes - bei Darktable ist das die
+        # Begleitdatei selbst, sonst eine Zusatzdatei. bewertung_schreiben
+        # aendert in einer vorhandenen Datei nur die Bewertung.
+        bewertung_schreiben(f"{full_path}.xmp", 5 if checked else 0)
+        if eng('kind') == 'darktable' and not getattr(self, '_dt_stern_gemeldet', False):
+            # Einmal je Programmlauf: sonst wundert man sich, warum die
+            # Sterne in Darktable nicht auftauchen.
+            self._dt_stern_gemeldet = True
+            self._on_log("> " + self._t("HINWEIS: ", "NOTE: ")
+                         + DT_STERNE_HINWEIS['en' if self.lang == 'en' else 'de'])
         self._recount_keyframes()
 
     def _kf_linien_neu(self):
@@ -9287,16 +9419,16 @@ class MainWindow(QtWidgets.QWidget):
         wer = art.get(c['hw'], self._t("die Grafikkarte", "the graphics card"))
         return (self._t(f"Der Codec \u201e{c['label']}\u201c laeuft auf diesem Rechner nicht.\n\n"
                         f"FFmpeg kann {wer} nicht ansprechen. Haeufigste Ursache ist ein "
-                        f"Grafiktreiber, der nicht zur FFmpeg-Fassung passt.\n\n"
+                        "Grafiktreiber, der nicht zur FFmpeg-Fassung passt.\n\n"
                         f"Meldung von FFmpeg:\n{grund}\n\n"
                         f"Soll stattdessen \u201e{fb['label']}\u201c verwendet werden? "
-                        f"Das Ergebnis ist gleichwertig, das Rendern dauert laenger.",
+                        "Das Ergebnis ist gleichwertig, das Rendern dauert laenger.",
                         f"The codec \u201c{c['label']}\u201d does not work on this machine.\n\n"
                         f"FFmpeg cannot reach {wer}. The usual cause is a graphics driver "
-                        f"that does not match this FFmpeg build.\n\n"
+                        "that does not match this FFmpeg build.\n\n"
                         f"FFmpeg says:\n{grund}\n\n"
                         f"Use \u201c{fb['label']}\u201d instead? The result is equivalent, "
-                        f"encoding just takes longer."))
+                        "encoding just takes longer."))
 
     def _on_codec_changed(self, idx):
         """Prueft einen Hardware-Codec sofort bei der Auswahl."""
@@ -9444,6 +9576,7 @@ class MainWindow(QtWidgets.QWidget):
             'qual_idx': self.cmb_quality.currentIndex(),
             'calib_rounds': self.cmb_calib.currentIndex(),
             'diag': self.chk_diag.isChecked(),
+            'tiff16': self.chk_tiff16.isChecked(),
             'out_dir_mode': self.cmb_export_dir.currentIndex(),
             'custom_out_dir': self.custom_out_dir,
             'versioning': self.cmb_versioning.currentIndex() == 0
@@ -9520,6 +9653,7 @@ class MainWindow(QtWidgets.QWidget):
         self._apply_action_state()
         self.btn_cancel.setEnabled(True)
         self._on_log(f"purelapse@engine:~$ {banner} (v{VERSION})")
+        params['lang'] = self.lang
         try:
             self.worker = Worker(params)
             self.worker.log.connect(self._on_log)
@@ -9830,7 +9964,7 @@ class MainWindow(QtWidgets.QWidget):
             return
         rest = None
         for _wann, zeile in reversed(getattr(self, '_log_eintraege', [])):
-            if "Restflackern" in zeile:
+            if "Restflackern" in zeile or "Residual flicker" in zeile:
                 m = re.search(r"([0-9]+[.,][0-9]+)\s*EV", zeile)
                 if m:
                     rest = m.group(1) + " EV"
@@ -9983,7 +10117,7 @@ class MainWindow(QtWidgets.QWidget):
                 and getattr(self, '_lauf_modus', 'normal') in ('normal', 'plain')):
             self._telegram_melden(False, msg)
         self.lbl_status.setText(self._t("Fehler / Abbruch", "Error / cancelled"))
-        self._on_log("\n[FEHLER] " + msg)
+        self._on_log("\n" + self._t("[FEHLER] ", "[ERROR] ") + msg)
         self.btn_log.setChecked(True)     # bei Fehlern das Protokoll zeigen
         self._enable_buttons()
         self.btn_cancel.setEnabled(False)
@@ -10150,7 +10284,7 @@ class MainWindow(QtWidgets.QWidget):
             'video': self.chk_video, 'stab': self.chk_stab,
             'denoise': self.chk_denoise, 'reverse': self.chk_reverse,
             'telemetry': self.chk_tel, 'astro': self.chk_astro,
-            'hotpix': self.chk_hotpix, 'diag': self.chk_diag,
+            'hotpix': self.chk_hotpix, 'diag': self.chk_diag, 'tiff16': self.chk_tiff16,
             'curve_wb': self.curve_toggles['wb'],
             'curve_ev': self.curve_toggles['ev'],
             'curve_interval': self.curve_toggles['interval'],
@@ -10174,17 +10308,11 @@ class MainWindow(QtWidgets.QWidget):
                 data[key] = w.isChecked()
         data['raw_mode_selected'] = self.rb_raw.isChecked()
         data['custom_out_dir'] = self.custom_out_dir
-        try:
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=1)
-        except OSError:
-            pass
+        konfig_setzen('einstellungen', data)
 
     def _load_settings(self):
-        try:
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError):
+        data = konfig_lesen('einstellungen', standard=None)
+        if not isinstance(data, dict):
             return
         for key, w in self._settings_widgets().items():
             if key not in data:

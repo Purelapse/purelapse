@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+# Nachbau der Engine fuer die Pruefungen - siehe fake_engine.py
+import os, sys, runpy
+os.environ['FAKE_ENGINE_NAME'] = os.path.basename(__file__)
+runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fake_engine.py'), run_name='__main__')

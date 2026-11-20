@@ -55,11 +55,11 @@ JPG-Serien laufen in einem einzigen Durchgang, ohne externe Engine.
 
 | Bereich | Funktionen |
 |---|---|
-| **Deflicker** | Messung in linearem Licht (16 Bit), zweistufige Glättung, Nachkalibrierung bis unter 0,008 EV Restflackern, Messbereich (ROI), Lichtverlauf Sonnenaufgang/-untergang/gleichbleibend |
+| **Deflicker** | Messung in linearem Licht (16 Bit) ohne ausgebrannte Flächen, zweistufige Glättung, Nachkalibrierung bis unter 0,008 EV Restflackern, Messbereich (ROI), Lichtverlauf Sonnenaufgang/-untergang/gleichbleibend |
 | **Holy Grail** | Belichtungs- und ISO-Sprünge werden ausgeglichen, wechselndes Intervall wird erkannt, EXIF-Belichtung und Sonnenstand als Kurven |
 | **RAW-Entwicklung** | ART, RawTherapee, Darktable; Formate NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
-| **Keyframes** | Weiche Überblendung zwischen Keyframes, Schnelleinstellungen mit echter Engine-Vorschau, automatisch optimieren, Lichter-Rekonstruktion |
-| **Video** | 720p bis 8K, 23,976 bis 120 fps, H.264, H.265, ProRes 422 HQ, CPU oder NVIDIA, Intel QuickSync, VAAPI, vier Qualitätsstufen |
+| **Keyframes** | Weiche Überblendung zwischen Keyframes (bei Darktable der komplette Modulstapel), Schnelleinstellungen mit echter Engine-Vorschau, automatisch optimieren, Lichter-Rekonstruktion |
+| **Video** | 720p bis 8K, 23,976 bis 120 fps, H.264, H.265 (auch 10 Bit), ProRes 422 HQ, Farbraum BT.709, optional 16-Bit-Zwischenbilder, CPU oder NVIDIA, Intel QuickSync, VAAPI, vier Qualitätsstufen |
 | **Effekte** | Motion Blur (3–25 Bilder), 16:9-Kamerafahrt, Stabilisierung, Entrauschen, Hotpixel, Astro-Clean, Telemetrie-Overlay, Ein-/Ausblenden, rückwärts |
 | **Kontrolle** | Schnellvorschau, 5-Bilder-Vorschau, Rohfassung, Vergleichsvideo, Lücken- und Lichter-Warnungen |
 | **Ablauf** | Warteschlange, Telegram-Benachrichtigung, Fortsetzen nach Abbruch, parallele Verarbeitung |
@@ -79,15 +79,21 @@ JPG-Serien laufen in einem einzigen Durchgang, ohne externe Engine.
   bzw. nur dunkler wird.
 - **Belichtung (EV).** Verschiebt die Zielhelligkeit der ganzen Sequenz um bis
   zu ±3 EV.
+- **Ausgebranntes zählt nicht mit.** Sonne und Lampen bleiben gleich hell,
+  egal wie die Kamera belichtet, und würden die Messung verfälschen. Purelapse
+  lässt Bildpunkte weg, die auf dem Sensor ausgebrannt sind; die
+  Nachkalibrierung nimmt nur Bereiche, die in keinem Bild der Sequenz
+  ausbrennen.
 - **Messbereich (ROI).** Beschränkt die Messung auf einen Bildausschnitt –
-  sinnvoll, wenn Sonne, Lampen oder bewegte Objekte die Messung stören.
+  sinnvoll, wenn bewegte Objekte die Messung stören.
 - **Nachkalibrierung.** Nach dem Entwickeln misst Purelapse das Ergebnis der
   Engine, schreibt die verbleibende Abweichung in die Begleitdateien zurück und
   lässt neu entwickeln – nur die Bilder, die sich geändert haben. Bis zu drei
   Runden; Abbruch, sobald das Restflackern unter 0,008 EV liegt.
 - **Bestehende Bearbeitungen bleiben erhalten.** Purelapse setzt nur die
-  Belichtung im Profil. Bei Darktable kommt ein eigenes Belichtungsmodul hinzu,
-  der bestehende Verlauf der Bearbeitung bleibt unangetastet.
+  Belichtung im Profil. Bei Darktable schreibt es sie in die wirksame
+  Belichtungsinstanz; die eigene Belichtungsänderung bleibt als Abstand
+  erhalten, der übrige Verlauf unangetastet.
 - **JPG-Workflow.** JPG-Serien werden direkt und ohne Engine entflackert, auf
   Wunsch auch nur als Einzelbilder ohne Video.
 
@@ -113,7 +119,14 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 - **Keyframes.** Einzelne Bilder werden als Keyframe markiert (5 Sterne) und in
   der Engine oder in Purelapse gestaltet. Beim Rendern überträgt Purelapse die
   Einstellungen weich auf alle Bilder dazwischen.
-- **Schnelleinstellungen** (ART und RawTherapee) direkt in Purelapse über
+- **Darktable: ganzer Modulstapel.** Aus Darktable-Keyframes gehen alle Module
+  in die Bilder dazwischen. Zahlenwerte – Weißabgleich, Farbkalibrierung,
+  Schärfe, Farbbalance RGB, Filmic, Sigmoid, Tonwert-Equalizer und rund 60
+  weitere – werden weich überblendet, Farbtöne auf dem kürzeren Weg um den
+  Farbkreis. Schalter, Masken und Module, die nur in einem Keyframe vorkommen,
+  kommen vom näheren Keyframe; Purelapse meldet sie vorher.
+- **Schnelleinstellungen** (ART und RawTherapee; bei Darktable Helligkeit,
+  Kontrast, Sättigung und Schärfe) direkt in Purelapse über
   *Keyframe einstellen…*, ohne die Engine zu öffnen:
 
   | Regler | Bereich |
@@ -162,12 +175,19 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 | H.265 / HEVC | NVIDIA GPU (NVENC) | `.mp4` |
 | H.265 / HEVC | Intel QuickSync | `.mp4` |
 | H.265 / HEVC | VAAPI (AMD/Intel) | `.mp4` |
+| H.265 / HEVC 10 Bit | CPU (libx265) | `.mp4` |
+| H.265 / HEVC 10 Bit | NVIDIA GPU (NVENC) | `.mp4` |
 | Apple ProRes 422 HQ | CPU | `.mov` |
 
 - **Codec-Selbsttest.** Vor jedem Lauf prüft Purelapse, ob der gewählte
   Hardware-Codec auf dem Rechner funktioniert, und bietet sonst den passenden
   CPU-Codec an.
 - **Geschätzte Dateigröße** wird schon vor dem Start angezeigt.
+- **Farbraum BT.709**, im Video gekennzeichnet – Farben wie im Bild.
+- **16-Bit-Zwischenbilder (TIFF)** auf Wunsch: Die Engine entwickelt nach
+  16 Bit, das Video wird durchgehend in 16 Bit gerechnet – keine Stufen in
+  Himmelsverläufen, vor allem mit HEVC 10 Bit oder ProRes. Braucht ein
+  Vielfaches an Platz; Purelapse prüft vorher, ob er reicht.
 
 ## Bild und Effekte
 
@@ -175,12 +195,14 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
   Bilder zu einem Videobild – für weiche, filmische Bewegung von Wolken,
   Wasser und Sternen.
 - **16:9-Kamerafahrt / Crop.** Bildausschnitt für das erste und das letzte
-  Bild festlegen; dazwischen fährt die Kamera weich von A nach B. Ohne Angabe
-  wird mittig auf 16:9 zugeschnitten.
+  Bild festlegen; dazwischen fährt die Kamera weich von A nach B – mit
+  Bruchteilen von Bildpunkten (kein Ruckeln) und sanftem An- und Abfahren.
+  Ohne Angabe wird mittig auf 16:9 zugeschnitten.
 - **Optische Stabilisierung.** Gleicht Verwacklungen zwischen den Bildern aus
   (kostet etwas Bildrand).
 - **Entrauschen.** Rauschminderung, stärker bei hohen ISO-Werten.
-- **Tote / heiße Pixel entfernen.** Bei RAW über die Engine; bei JPG sucht
+- **Tote / heiße Pixel entfernen.** Bei RAW über die Engine (Darktable: Modul
+  „Hotpixel“); bei JPG sucht
   Purelapse Punkte, die in der ganzen Sequenz an derselben Stelle auffallen –
   Sterne und Motivdetails bleiben unangetastet.
 - **Astro-Clean.** Entfernt Satellitenspuren durch Vergleich jedes Bildes mit
@@ -233,7 +255,10 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
   statt eines Prozesses mit allen Kernen – auf vielkernigen Rechnern deutlich
   schneller. *Automatisch* richtet sich nach Kernzahl und freiem
   Arbeitsspeicher.
-- **Parallele Messung** auf mehreren Kernen.
+- **darktable-cli parallel**, bis zu vier Prozesse, jeder mit eigenem
+  Konfigurationsordner – läuft auch bei geöffnetem darktable.
+- **Parallele Messung** auf mehreren Kernen; die Videophase lädt die Bilder in
+  mehreren Threads voraus.
 - **Fortsetzen nach Abbruch.** Bereits entwickelte, unveränderte Bilder werden
   nicht noch einmal entwickelt.
 
@@ -251,7 +276,8 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 
 ## Installation (Linux)
 
-1. **RawTherapee** und/oder **ART** installieren (für die RAW-Entwicklung).
+1. **RawTherapee**, **ART** und/oder **darktable** installieren (für die
+   RAW-Entwicklung).
 2. Unter [Releases](https://github.com/slvobng/purelapse/releases) die Datei `Purelapse-…-x86_64.AppImage`
    herunterladen.
 3. Ausführbar machen und starten:
@@ -259,8 +285,8 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
    chmod +x Purelapse-*-x86_64.AppImage
    ./Purelapse-*-x86_64.AppImage
    ```
-4. In Purelapse unter **Einstellungen…** den Pfad zu `rawtherapee-cli` bzw.
-   `ART-cli` eintragen.
+4. In Purelapse unter **Einstellungen** (Zahnrad oben rechts) den Pfad zu
+   `rawtherapee-cli`, `ART-cli` bzw. `darktable-cli` eintragen.
 
 Die AppImage enthält Python, Qt, OpenCV, rawpy und FFmpeg. Sie läuft auf
 Linux Mint 21 / Ubuntu 22.04 und neuer. Ist ein System-FFmpeg vorhanden,
@@ -284,8 +310,25 @@ Die AppImage baust du mit `bash build_appimage.sh` (benötigt Docker und Interne
 
 ## Bekannte Einschränkungen
 
-- Darktable: Schnelleinstellungen, echte Vorschau und Hotpixel-Entfernung gibt
-  es nur für ART und RawTherapee.
+- Darktable: Weißabgleich und Entrauschen gibt es in den Schnelleinstellungen
+  nur für ART und RawTherapee – Darktable speichert dort kameraabhängige Werte.
+
+## Prüfungen
+
+Rund 3000 automatische Prüfungen durchlaufen das ganze Programm – mit echter
+Messung, echtem FFmpeg und fertigen Videos. Sie laufen bei jedem Push auf
+GitHub und lassen sich lokal starten:
+
+```bash
+pip install numpy scipy opencv-python-headless
+python tests/alle.py
+```
+
+## Einstellungen
+
+Purelapse legt genau eine Konfigurationsdatei an:
+`~/.config/purelapse/purelapse.json`. Einstellungen älterer Versionen
+(`~/.purelapse_*`) werden beim ersten Start übernommen und entfernt.
 
 ## Lizenz
 
