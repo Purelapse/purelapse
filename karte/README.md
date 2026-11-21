@@ -15,4 +15,4 @@ Die Webseite selbst: `docs/assets/karte.js`, Abschnitt `#karte` in
 
 Pin löschen (die Nummer steht im Hinweis des Pins auf der Karte):
 
-    curl -X DELETE -H "Authorization: Bearer <ADMIN_TOKEN>" https://purelapse-karte.silvio-boenig.workers.dev/pins/<nummer>
+    curl -X DELETE -H "Authorization: Bearer <ADMIN_TOKEN>" https://<worker-adresse>/pins/<nummer>
