@@ -13,6 +13,13 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
   Turnstile, der erst beim Setzen eines Pins lädt. Keine IP-Adressen, keine
   fremden Kartenkacheln – die Karte ist eine eigene Punktgrafik. Quelltext
   und Prüfung in `karte/`.
+- **Auffindbarkeit in Suchmaschinen:** `robots.txt` und `sitemap.xml`
+  (mit Sprachzuordnung Deutsch/Englisch), strukturierte Daten
+  (`SoftwareApplication`) auf der Startseite. Die automatische
+  Sprachweiterleitung der deutschen Seiten gilt nicht mehr für
+  Suchmaschinen – bisher landete der Google-Crawler mit englischer
+  Browsersprache immer auf der englischen Seite, die deutschen Seiten
+  wurden dadurch womöglich nicht erfasst.
 
 ## [2.42.1-beta] – 2026-11-20
 
