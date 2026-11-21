@@ -3,7 +3,45 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
-## [Unveröffentlicht]
+## [2.42.2-beta] – 2026-11-21
+
+Englische Oberfläche ohne deutsche Reste und ein abgedunkelter Hintergrund,
+solange ein Dialog im Vordergrund steht.
+
+### Neu
+- **Hintergrund abgedunkelt bei Dialogen:** Solange ein Fenster im
+  Vordergrund auf eine Eingabe wartet – Startdialog, Einstellungen,
+  Keyframe-Dialog, Rückfragen, Meldungen, Dateiauswahl –, liegt über dem
+  Hauptfenster ein Schleier, der sanft einblendet. Der Blick geht zum
+  Dialog, und man sieht sofort, dass das Fenster dahinter gerade gesperrt
+  ist. Im hellen Farbschema ist der Schleier leichter. Nicht modale
+  Fenster wie die Warteschlange dunkeln nicht ab.
+
+### Behoben
+- **Englische Oberfläche ohne deutsche Reste:** Bei Sprache Englisch kamen
+  noch etliche Texte auf Deutsch:
+  - die Statuszeile während der Arbeit („Analysiere RAWs“, „Entwicklung“,
+    „Nachkalibrierung“, „Schreibe Sidecar …“, „Suche defekte Pixel“) und
+    der Zähler im Ladeschirm („5 von 56“),
+  - alle Fertig-Meldungen („Fertiges Video“, „Pass 1 abgeschlossen …“,
+    „Rohfassung fertig“, „Entflackerte JPGs liegen in“) – und damit auch
+    der Text der **Telegram-Nachricht**,
+  - die Fehlertexte der Telegram-Anbindung, Dialogtitel der Dateiauswahl,
+    einige Warnungen und Protokollzeilen,
+  - die Begründungen der automatischen Schnelleinstellungen und die
+    Befunde der Profilprüfung,
+  - die Tooltips von Erstes/Letztes Bild, Startbild/Endbild, Basisprofil,
+    Diagnose-Modus, 16-Bit-Zwischenbildern und Schnellvorschau, die
+    Auswahlliste Motion Blur sowie Hilfetext und Platzhalter für Telegram.
+- **Tooltips zeigten „\n“:** Bei acht Tooltips (u. a. Engine, Hotpixel,
+  Vorschau, Warteschlange) stand statt eines Zeilenumbruchs ein sichtbares
+  „\n“ – in beiden Sprachen.
+
+### Intern
+- Neue Prüfreihen `test_englisch_oberflaeche.py` (Statuszeile,
+  Fertig-Meldungen, Telegram, Tooltips und Listen in Englisch) und
+  `test_abdunkeln.py` (Schleier bei modalen Fenstern, verschachtelte
+  Dialoge, Ladeschirm, Dateidialoge, Farbschema).
 
 ### Webseite
 - **Weltkarte „Purelapse in aller Welt“:** Besucher setzen einen Pin mit
@@ -23,6 +61,11 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 - **Neue Projektadresse:** Purelapse liegt jetzt in der GitHub-Organisation
   `purelapse` (github.com/purelapse/purelapse). Alle Links auf der Webseite
   und in den READMEs zeigen dorthin; alte Links leitet GitHub weiter.
+- **Neues Vergleichsvideo in 4K:** Die zweite Serie (Sonnenuntergang am
+  Meer) ersetzt das bisherige Video. Links mit den Standardeinstellungen
+  von darktable entwickelt, rechts nach Purelapse; die Trennlinie liegt auf
+  dem Stromboli, wo die Sonne untergeht. 3840 × 2160, 50 fps, für das Netz
+  neu kodiert (H.264, zwei Durchgänge).
 
 ## [2.42.1-beta] – 2026-11-20
 

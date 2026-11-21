@@ -60,6 +60,21 @@ TRANSLATIONS = {
     "Video-Codec:": "Video codec:",
     "Parallele Prozesse:": "Parallel processes:",
     "★ nur Keyframes": "★ keyframes only",
+    # Motion Blur (MainWindow.blur_options)
+    "Aus (1 Bild)": "Off (1 frame)",
+    "3 Bilder": "3 frames",
+    "4 Bilder": "4 frames",
+    "5 Bilder": "5 frames",
+    "6 Bilder": "6 frames",
+    "7 Bilder": "7 frames",
+    "8 Bilder": "8 frames",
+    "9 Bilder": "9 frames",
+    "10 Bilder": "10 frames",
+    "12 Bilder": "12 frames",
+    "15 Bilder": "15 frames",
+    "18 Bilder": "18 frames",
+    "20 Bilder": "20 frames",
+    "25 Bilder": "25 frames",
     "Keyframe einstellen…": "Edit keyframe…",
     "Automatisch": "Automatic",
     "1 (seriell)": "1 (serial)",
@@ -80,6 +95,16 @@ TRANSLATIONS = {
     "Nach jedem Lauf eine Nachricht schicken (fertig oder Fehler)":
         "Send a message after every run (done or error)",
     " Chat-ID ermitteln": " Find chat ID",
+    "Chat-ID:": "Chat ID:",
+    "123456789:ABC\u2026  (von @BotFather)": "123456789:ABC\u2026  (from @BotFather)",
+    "wird mit \u201eChat-ID ermitteln\u201c eingetragen": "filled in by \u201cFind chat ID\u201d",
+    ("So geht es: in Telegram @BotFather anschreiben, /newbot senden und "
+     "einen Namen vergeben - er antwortet mit dem Bot-Token. Dann dem "
+     "neuen Bot eine beliebige Nachricht schicken und hier "
+     "\u201eChat-ID ermitteln\u201c druecken."):
+        ("How it works: in Telegram, message @BotFather, send /newbot and "
+         "choose a name - it replies with the bot token. Then send any "
+         "message to your new bot and press \u201cFind chat ID\u201d here."),
     " Testnachricht senden": " Send test message",
     " \u26a1 Schnellvorschau": " \u26a1 Quick preview",
     "\u21e4 Startbild": "\u21e4 Start frame",
@@ -191,32 +216,64 @@ TRANSLATIONS = {
                  "mehr Speicher (rund 3 GB je Prozess), und mehr bringt auf\n"
                  "einer Grafikkarte nichts."),
     "TT_ARTCLI": "Ausfuehrbare Datei der Entwicklungs-Engine. Wird fuer Pass 2 benoetigt.",
-    "TT_ENGINE": "ART, RawTherapee oder Darktable. ART und RawTherapee teilen sich\\n"
-                 "Kommandozeile und Profilformat (.arp bzw. .pp3). Darktable nutzt\\n"
-                 "die .xmp, die es selbst beim Import schreibt - Purelapse traegt die\\n"
-                 "Korrektur in die wirksame Belichtung ein und uebertraegt in Pass 2\\n"
-                 "den Modulstapel der Keyframes; eigene Bearbeitungen bleiben erhalten.\\n"
-                 "Pro Ordner muss man sich festlegen; liegen bereits Begleitdateien\\n"
+    "TT_ENGINE": "ART, RawTherapee oder Darktable. ART und RawTherapee teilen sich\n"
+                 "Kommandozeile und Profilformat (.arp bzw. .pp3). Darktable nutzt\n"
+                 "die .xmp, die es selbst beim Import schreibt - Purelapse traegt die\n"
+                 "Korrektur in die wirksame Belichtung ein und uebertraegt in Pass 2\n"
+                 "den Modulstapel der Keyframes; eigene Bearbeitungen bleiben erhalten.\n"
+                 "Pro Ordner muss man sich festlegen; liegen bereits Begleitdateien\n"
                  "vor, stellt Purelapse beim Einlesen selbst um.",
     "TT_CALIB": "Purelapse misst das Ergebnis der Engine und schreibt die verbleibende\nAbweichung in die Sidecars zurueck, dann entwickelt die Engine erneut.\nAb Runde 2 nur noch die tatsaechlich geaenderten Bilder.\nEin Durchgang genuegt in aller Regel.",
     "TT_CAMPATH": "Legt den 16:9 Ausschnitt fuer das erste und das letzte Bild fest.\nDazwischen faehrt die Kamera weich von A nach B.",
     "TT_STAB": "Gleicht Verwacklungen zwischen den Bildern aus. Kostet etwas Bildrand.",
+    "TT_ERSTES": "Zum ersten Bild",
+    "TT_LETZTES": "Zum letzten Bild",
+    "TT_STARTBILD": "Das gewaehlte Bild wird das erste des Arbeitsgangs. Alle Bilder\n"
+                    "davor bleiben in Pass 1, Pass 2 und im Video aussen vor.\n"
+                    "Zuruecknehmen: das allererste Bild waehlen und noch einmal klicken.\n"
+                    "Danach Pass 1 neu laufen lassen.",
+    "TT_ENDBILD": "Das gewaehlte Bild wird das letzte des Arbeitsgangs. Alle Bilder\n"
+                  "danach bleiben aussen vor.\n"
+                  "Zuruecknehmen: das allerletzte Bild waehlen und noch einmal klicken.\n"
+                  "Danach Pass 1 neu laufen lassen.",
+    "TT_ARPTPL": "Vollständiges, in der Engine gespeichertes Profil.\n"
+                 "Purelapse setzt darin nur die Belichtung und lässt alles andere unangetastet.\n"
+                 "Liegt bereits ein von der Engine geschriebenes Profil im Bilderordner,\n"
+                 "wird das automatisch benutzt.",
+    "TT_DIAG": "Legt im Bilderordner Messprotokolle und Pruefberichte an:\n"
+               "purelapse_pass1.csv, purelapse_pass2.csv, purelapse_profiles.csv,\n"
+               "purelapse_arp_check.log und purelapse_art.log.\n\n"
+               "Nur fuer die Fehlersuche gedacht. Im Normalbetrieb aus lassen -\n"
+               "Warnungen erscheinen ohnehin im Log-Fenster.",
+    "TT_TIFF16": "Die Engine entwickelt in Pass 2 nach 16-Bit-TIFF statt nach JPG, und\n"
+                 "das Video wird durchgehend in 16 Bit gerechnet. Feine Verlaeufe im\n"
+                 "Himmel bleiben dadurch frei von Stufen - vor allem zusammen mit\n"
+                 "HEVC 10 Bit oder ProRes.\n\n"
+                 "Braucht ein Vielfaches an Platz: bei 24 Megapixeln etwa 120 MB je\n"
+                 "Bild, bei 1000 Bildern also rund 120 GB. Purelapse prueft vorher,\n"
+                 "ob der Platz reicht.",
+    "TT_SCHNELL": "Ein grobes Video in kurzer Zeit, aus den eingebetteten Vorschaubildern\n"
+                  "der Kamera, mit der Glaettung aus dem Diagramm und dem eingestellten\n"
+                  "Bildausschnitt.\n\n"
+                  "Nur zur ersten Beurteilung: keine Engine, keine Keyframes, keine\n"
+                  "Schnelleinstellungen, keine Effekte, hoechstens 1280 Pixel breit.\n"
+                  "Das Video oeffnet sich nach dem Erstellen von selbst.",
     "TT_DENOISE": "Rauschminderung, staerker bei hohen ISO-Werten.",
     "TT_REVERSE": "Spielt die Sequenz rueckwaerts ab.",
     "TT_TEL": "Blendet Uhrzeit, ISO, Blende und Belichtungszeit ins Bild ein.",
     "TT_ASTRO": "Entfernt Satellitenspuren, indem jedes Bild mit seinen beiden Nachbarn verglichen wird.",
-    "TT_HOTPIX": "Beseitigt defekte Sensorpixel.\\nBei RAW uebernimmt das die Engine (bei Darktable das Modul \u201eHotpixel\u201c).\\nBei JPG sucht Purelapse zuerst die Punkte, die in der ganzen Sequenz\\nan derselben Stelle auffallen - Sterne und Motivdetails bleiben\\ndadurch unangetastet.",
+    "TT_HOTPIX": "Beseitigt defekte Sensorpixel.\nBei RAW uebernimmt das die Engine (bei Darktable das Modul \u201eHotpixel\u201c).\nBei JPG sucht Purelapse zuerst die Punkte, die in der ganzen Sequenz\nan derselben Stelle auffallen - Sterne und Motivdetails bleiben\ndadurch unangetastet.",
     "TT_RESET": "Loescht Arbeitsdateien im Bilderordner, um sauber neu zu beginnen.\nWas geloescht wird, waehlst du im naechsten Fenster.",
     "TT_LANG": "Sprache der Oberflaeche.",
     "TT_FADE": "Blendet den Videoanfang aus Schwarz auf und das Ende nach Schwarz ab.",
     "TT_BLUR": "Mittelt mehrere Bilder zu einem Videoframe. Erzeugt weiche Bewegung,\nkostet aber zeitliche Schaerfe.",
     "TT_START": "Startet den gewaehlten Arbeitsschritt.",
-    "TT_PLAIN": "Erzeugt den Zeitraffer ohne jede Bildbearbeitung.\\nNur Ordner, Bildrate, Aufloesung, Codec und Qualitaet werden beachtet.\\nDeflicker, Keyframes, Motion Blur, Denoise und Stabilisierung bleiben aus.\\nDient als Referenz zum Vergleich.",
-    "TT_QADD": "Legt den aktuellen Ordner mit allen Einstellungen als Auftrag ab.\\nDanach kannst du den naechsten Ordner einlesen und ebenfalls einreihen.",
-    "TT_QRUN": "Arbeitet alle offenen Auftraege nacheinander ab.\\nAbbrechen haelt den Stapel an; beim naechsten Start geht es an\\nderselben Stelle weiter, bereits entwickelte Bilder bleiben erhalten.",
-    "TT_PREVIEW": "Entwickelt fuenf ueber die Sequenz verteilte Bilder mit den\\naktuellen Einstellungen und zeigt sie an. Bei RAW laeuft dafuer\\ndie Engine, deshalb muss Pass 1 vorher gelaufen sein.\\nSpart einen kompletten Fehldurchlauf.",
-    "TT_OPENDIR": "Oeffnet den Ordner, in dem das fertige Video liegt,\\nim Dateimanager des Systems.",
-    "TT_COMPARE": "Stellt zwei fertige Videos gegenueber - nebeneinander oder\\nals geteiltes Bild mit Schnitt durch die Mitte.",
+    "TT_PLAIN": "Erzeugt den Zeitraffer ohne jede Bildbearbeitung.\nNur Ordner, Bildrate, Aufloesung, Codec und Qualitaet werden beachtet.\nDeflicker, Keyframes, Motion Blur, Denoise und Stabilisierung bleiben aus.\nDient als Referenz zum Vergleich.",
+    "TT_QADD": "Legt den aktuellen Ordner mit allen Einstellungen als Auftrag ab.\nDanach kannst du den naechsten Ordner einlesen und ebenfalls einreihen.",
+    "TT_QRUN": "Arbeitet alle offenen Auftraege nacheinander ab.\nAbbrechen haelt den Stapel an; beim naechsten Start geht es an\nderselben Stelle weiter, bereits entwickelte Bilder bleiben erhalten.",
+    "TT_PREVIEW": "Entwickelt fuenf ueber die Sequenz verteilte Bilder mit den\naktuellen Einstellungen und zeigt sie an. Bei RAW laeuft dafuer\ndie Engine, deshalb muss Pass 1 vorher gelaufen sein.\nSpart einen kompletten Fehldurchlauf.",
+    "TT_OPENDIR": "Oeffnet den Ordner, in dem das fertige Video liegt,\nim Dateimanager des Systems.",
+    "TT_COMPARE": "Stellt zwei fertige Videos gegenueber - nebeneinander oder\nals geteiltes Bild mit Schnitt durch die Mitte.",
     "TT_SUN": "Breiten- und Laengengrad des Aufnahmeortes plus Zeitzonen-Offset\n"
               "zur Aufnahmezeit (z.B. 2 fuer MESZ). Zeigt den Sonnenstand als\n"
               "Zusatzkurve - hilfreich, um Keyframes an den Daemmerungsgrenzen\n"
@@ -259,32 +316,63 @@ TRANSLATIONS_TT_EN = {
                  "more memory (about 3 GB per process), and more brings\n"
                  "nothing on a single graphics card."),
     "TT_ARTCLI": "Executable of the development engine. Required for pass 2.",
-    "TT_ENGINE": "ART, RawTherapee or Darktable. ART and RawTherapee share the\\n"
-                 "command line and profile format (.arp resp. .pp3). Darktable uses\\n"
-                 "the .xmp it writes itself on import - Purelapse writes the\\n"
-                 "correction into the effective exposure and, in pass 2, carries the\\n"
-                 "keyframes' module stack across; your own edits are kept.\\n"
-                 "You have to commit per folder; if sidecars are present already,\\n"
+    "TT_ENGINE": "ART, RawTherapee or Darktable. ART and RawTherapee share the\n"
+                 "command line and profile format (.arp resp. .pp3). Darktable uses\n"
+                 "the .xmp it writes itself on import - Purelapse writes the\n"
+                 "correction into the effective exposure and, in pass 2, carries the\n"
+                 "keyframes' module stack across; your own edits are kept.\n"
+                 "You have to commit per folder; if sidecars are present already,\n"
                  "Purelapse switches automatically when reading the folder.",
     "TT_CALIB": "Purelapse measures the engine's result and writes the remaining deviation\nback into the sidecars, then the engine develops again.\nFrom round 2 on, only the frames that actually changed.\nOne round is usually enough.",
     "TT_CAMPATH": "Defines the 16:9 crop for the first and the last frame.\nIn between the camera moves smoothly from A to B.",
     "TT_STAB": "Compensates camera shake between frames. Costs a little image border.",
+    "TT_ERSTES": "Go to the first frame",
+    "TT_LETZTES": "Go to the last frame",
+    "TT_STARTBILD": "The selected frame becomes the first of the workflow. All frames\n"
+                    "before it are left out of pass 1, pass 2 and the video.\n"
+                    "To undo: select the very first frame and click again.\n"
+                    "Then run pass 1 again.",
+    "TT_ENDBILD": "The selected frame becomes the last of the workflow. All frames\n"
+                  "after it are left out.\n"
+                  "To undo: select the very last frame and click again.\n"
+                  "Then run pass 1 again.",
+    "TT_ARPTPL": "A complete profile saved by the engine.\n"
+                 "Purelapse only sets the exposure in it and leaves everything else untouched.\n"
+                 "If the image folder already holds a profile written by the engine,\n"
+                 "that one is used automatically.",
+    "TT_DIAG": "Writes measurement logs and check reports into the image folder:\n"
+               "purelapse_pass1.csv, purelapse_pass2.csv, purelapse_profiles.csv,\n"
+               "purelapse_arp_check.log and purelapse_art.log.\n\n"
+               "Meant for troubleshooting only. Leave it off in normal use -\n"
+               "warnings appear in the log window anyway.",
+    "TT_TIFF16": "In pass 2 the engine develops to 16-bit TIFF instead of JPG, and the\n"
+                 "video is computed in 16 bit throughout. Fine gradients in the sky\n"
+                 "stay free of banding - especially together with HEVC 10 bit or ProRes.\n\n"
+                 "Needs many times the space: with 24 megapixels about 120 MB per\n"
+                 "frame, so roughly 120 GB for 1000 frames. Purelapse checks\n"
+                 "beforehand whether there is enough space.",
+    "TT_SCHNELL": "A rough video in little time, made from the camera's embedded\n"
+                  "preview images, with the smoothing from the graph and the chosen\n"
+                  "crop.\n\n"
+                  "For a first impression only: no engine, no keyframes, no quick\n"
+                  "settings, no effects, at most 1280 pixels wide.\n"
+                  "The video opens by itself once it is ready.",
     "TT_DENOISE": "Noise reduction, stronger at high ISO values.",
     "TT_REVERSE": "Plays the sequence backwards.",
     "TT_TEL": "Overlays time, ISO, aperture and shutter speed onto the frame.",
     "TT_ASTRO": "Removes satellite trails by comparing each frame with its two neighbours.",
-    "TT_HOTPIX": "Fixes defective sensor pixels.\\nFor RAW this is handled by the engine (for darktable the \u201chot pixels\u201d module).\\nFor JPG, Purelapse first locates the points that stand out at the same\\nposition throughout the whole sequence - stars and image detail are\\nleft untouched.",
+    "TT_HOTPIX": "Fixes defective sensor pixels.\nFor RAW this is handled by the engine (for darktable the \u201chot pixels\u201d module).\nFor JPG, Purelapse first locates the points that stand out at the same\nposition throughout the whole sequence - stars and image detail are\nleft untouched.",
     "TT_RESET": "Deletes working files in the image folder to start over cleanly.\nYou choose what to delete in the next window.",
     "TT_LANG": "Language of the user interface.",
     "TT_FADE": "Fades the start of the video in from black and the end out to black.",
     "TT_BLUR": "Averages several frames into one video frame. Creates smooth motion\nat the cost of temporal sharpness.",
     "TT_START": "Starts the selected step.",
-    "TT_PLAIN": "Builds the timelapse without any image processing.\\nOnly folder, frame rate, resolution, codec and quality apply.\\nDeflicker, keyframes, motion blur, denoise and stabilisation stay off.\\nUseful as a reference for comparison.",
-    "TT_QADD": "Stores the current folder together with all settings as a job.\\nYou can then load the next folder and queue it as well.",
-    "TT_QRUN": "Works through all pending jobs one after another.\\nCancel pauses the batch; the next start resumes at the same point,\\nkeeping images that were already developed.",
-    "TT_PREVIEW": "Develops five frames spread across the sequence using the current\\nsettings and shows them. For RAW this runs the engine, so pass 1 must\\nhave completed first.\\nSaves a whole wasted run.",
-    "TT_OPENDIR": "Opens the folder containing the finished video\\nin the system file manager.",
-    "TT_COMPARE": "Places two finished videos side by side, or as a split screen\\ndivided down the middle.",
+    "TT_PLAIN": "Builds the timelapse without any image processing.\nOnly folder, frame rate, resolution, codec and quality apply.\nDeflicker, keyframes, motion blur, denoise and stabilisation stay off.\nUseful as a reference for comparison.",
+    "TT_QADD": "Stores the current folder together with all settings as a job.\nYou can then load the next folder and queue it as well.",
+    "TT_QRUN": "Works through all pending jobs one after another.\nCancel pauses the batch; the next start resumes at the same point,\nkeeping images that were already developed.",
+    "TT_PREVIEW": "Develops five frames spread across the sequence using the current\nsettings and shows them. For RAW this runs the engine, so pass 1 must\nhave completed first.\nSaves a whole wasted run.",
+    "TT_OPENDIR": "Opens the folder containing the finished video\nin the system file manager.",
+    "TT_COMPARE": "Places two finished videos side by side, or as a split screen\ndivided down the middle.",
     "TT_SUN": "Latitude and longitude of the shooting location plus the UTC\n"
               "offset at capture time (e.g. 2 for CEST). Shows sun elevation as\n"
               "an extra curve - useful for placing keyframes at twilight\n"

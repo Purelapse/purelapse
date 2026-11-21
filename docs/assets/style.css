@@ -421,3 +421,10 @@ video:fullscreen { object-fit: contain !important; aspect-ratio: auto !important
   .map-set { width: 100%; justify-content: center; }
 }
 .map-card button.btn { font-family: inherit; cursor: pointer; }
+
+/* Vergleichsvideo Stromboli: 16:9, Trennlinie nicht in der Mitte, sondern
+   auf dem Stromboli (1390 von 3840 Pixeln) - dort geht die Sonne unter */
+.compare-split { --teil: 36.2%; }
+.compare.compare-split video { aspect-ratio: 16 / 9; }
+.compare.compare-split .tag.r { left: calc(var(--teil) + 12px); }
+@media (max-width: 720px) { .compare.compare-split .tag.r { left: calc(var(--teil) + 8px); } }

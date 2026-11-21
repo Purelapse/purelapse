@@ -1079,29 +1079,38 @@ def set_raw_hotpixel(arp_data, enabled):
     raw.setdefault('HotDeadPixelThresh', "100")
 
 
-def validate_arp(profile, reference, name):
+def validate_arp(profile, reference, name, lang='de'):
     """Prueft ein geschriebenes Profil gegen ein von ART/RT stammendes Vorbild.
-    Fuer Darktable nicht sinnvoll - liefert dann einfach eine leere Liste."""
+    Fuer Darktable nicht sinnvoll - liefert dann einfach eine leere Liste.
+    Die Befunde stehen in der Sprache der Oberflaeche (lang)."""
     if ENGINE == 'dt':
         return []
+    en = (lang == 'en')
     issues = []
     if not profile:
-        return [f"{name}: Profil ist leer oder nicht lesbar"]
+        return [f"{name}: profile is empty or unreadable" if en
+                else f"{name}: Profil ist leer oder nicht lesbar"]
     secs = list(profile.keys())
     if 'Version' not in secs:
-        issues.append(f"{name}: [Version] fehlt - {eng('label')} verwirft das Profil")
+        issues.append(f"{name}: [Version] missing - {eng('label')} discards the profile" if en
+                      else f"{name}: [Version] fehlt - {eng('label')} verwirft das Profil")
     elif secs[0] != 'Version':
-        issues.append(f"{name}: [Version] steht an Position {secs.index('Version')+1} statt an erster Stelle")
+        pos = secs.index('Version') + 1
+        issues.append(f"{name}: [Version] is at position {pos} instead of first" if en
+                      else f"{name}: [Version] steht an Position {pos} statt an erster Stelle")
     for sec in reference:
         if sec not in profile:
-            issues.append(f"{name}: Sektion [{sec}] fehlt")
+            issues.append(f"{name}: section [{sec}] missing" if en
+                          else f"{name}: Sektion [{sec}] fehlt")
     for sec in profile:
         if sec not in reference:
-            issues.append(f"{name}: Sektion [{sec}] ist zusaetzlich vorhanden")
+            issues.append(f"{name}: section [{sec}] is extra" if en
+                          else f"{name}: Sektion [{sec}] ist zusaetzlich vorhanden")
     ref_order = [s for s in reference if s in profile]
     own_order = [s for s in profile if s in reference]
     if ref_order != own_order:
-        issues.append(f"{name}: Sektionsreihenfolge weicht von der Vorlage ab")
+        issues.append(f"{name}: section order differs from the template" if en
+                      else f"{name}: Sektionsreihenfolge weicht von der Vorlage ab")
     eigene = {('Exposure', 'Compensation'), ('Exposure', 'Auto'),
               ('Exposure', 'Enabled'),
               ('RAW', 'HotDeadPixelEnabled'), ('RAW', 'HotPixelFilter'),
@@ -1113,12 +1122,15 @@ def validate_arp(profile, reference, name):
             if k in ('Rank', 'Rating') or (sec, k) in eigene:
                 continue
             if k not in own:
-                issues.append(f"{name}: [{sec}] {k} fehlt")
+                issues.append(f"{name}: [{sec}] {k} missing" if en
+                              else f"{name}: [{sec}] {k} fehlt")
                 continue
             want, got = _value_kind(ref_v), _value_kind(own[k])
             if want != got:
-                issues.append(f"{name}: [{sec}] {k} ist '{got}' statt '{want}' "
-                              f"(Wert '{str(own[k])[:40]}')")
+                wert = str(own[k])[:40]
+                issues.append(f"{name}: [{sec}] {k} is '{got}' instead of '{want}' (value '{wert}')"
+                              if en else
+                              f"{name}: [{sec}] {k} ist '{got}' statt '{want}' (Wert '{wert}')")
     return issues
 
 

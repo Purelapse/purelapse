@@ -34,6 +34,9 @@ THEMES = {
                   'keys': "#e2b340", 'render': "#a48cf7"},
         'log_bg': "#111317", 'log_fg': "#cdd2da",
         'graph_bg': "#171a1f", 'gallery': "#181b20", 'sel': "#2b4f78",
+        # Schleier ueber dem Hauptfenster, solange ein Dialog davor steht
+        # (Rot, Gruen, Blau, Deckkraft 0..255)
+        'schleier': (0, 0, 0, 140),
         'curves': {'raw': "#a8b0bb", 'target': "#ff9800", 'wb': "#4fc3f7",
                    'ev': "#f06fd0", 'interval': "#66d97e", 'clip': "#ff5252",
                    'residual': "#ffffff", 'kf': "#ffee58", 'sun': "#ba68c8"},
@@ -50,6 +53,7 @@ THEMES = {
                   'keys': "#8a6400", 'render': "#6a3fc4"},
         'log_bg': "#f7f9fc", 'log_fg': "#27303b",
         'graph_bg': "#ffffff", 'gallery': "#f4f6fa", 'sel': "#cfe2f7",
+        'schleier': (16, 22, 32, 100),
         'curves': {'raw': "#6b7480", 'target': "#e65100", 'wb': "#0277bd",
                    'ev': "#9c27b0", 'interval': "#2e7d32", 'clip': "#c62828",
                    'residual': "#37474f", 'kf': "#b28704", 'sun': "#7b1fa2"},

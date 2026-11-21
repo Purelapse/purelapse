@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=5">
+<link rel="stylesheet" href="assets/style.css?v=6">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});var bot=/bot|crawl|spider|slurp|lighthouse|preview/i.test(navigator.userAgent||"");if(!bot&&(l==="en"||(!l&&!de))){location.replace("en.html"+location.hash)}}catch(e){}</script>
 <script type="application/ld+json">
 {
@@ -65,11 +65,11 @@
 <main id="main">
   <section class="hero">
     <div class="wrap">
-      <span class="pill"><b>Beta 2.42.1-beta</b> · Open Source · Linux</span>
+      <span class="pill"><b>Beta 2.42.2-beta</b> · Open Source · Linux</span>
       <h1>Zeitraffer<br><span class="grad-text">ohne Flackern.</span></h1>
       <p class="lead">Purelapse glättet die Helligkeit deiner RAW- oder JPG-Serien, steuert ART, RawTherapee oder darktable und rendert ein sauberes Video – vom Sonnenuntergang bis zum Holy Grail.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.1-beta/Purelapse-2.42.1-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.1-beta</small></span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.2-beta</small></span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span>Quelltext auf GitHub</span></a>
       </div>
       <p class="meta"><span>Kostenlos</span><span>GPL-3.0</span><span>Deutsch &amp; Englisch</span></p>
@@ -85,18 +85,18 @@
       <div class="section-head center">
         <div class="eyebrow">Vorher – nachher</div>
         <h2>Sieh selbst.</h2>
-        <p>Jeweils dieselbe Serie: links so, wie sie aus der Kamera kommt, rechts nach Purelapse. Beide Videos sind komplett in Purelapse entstanden – Entflickern, Entwicklung mit der RawTherapee-Engine und Videoausgabe, ohne weiteres Programm.</p>
+        <p>Jeweils dieselbe Serie: links unbearbeitet, rechts nach Purelapse. Das obere Video ist komplett in Purelapse entstanden – Entflickern, Entwicklung mit der RawTherapee-Engine und Videoausgabe, ohne weiteres Programm.</p>
       </div>
       <div class="compare">
         <video id="cmp" src="assets/compare.mp4" poster="assets/compare-poster.jpg" muted loop playsinline preload="metadata" width="1280" height="360">Dein Browser kann dieses Video nicht abspielen.</video>
         <span class="tag l">Unbearbeitet</span><span class="tag r">Purelapse</span>
       </div>
       <p class="caption">Video ohne Ton · 18 Sekunden</p>
-      <div class="compare compare-2">
-        <video src="assets/compare2.mp4" poster="assets/compare2-poster.jpg" controls playsinline preload="none" width="2560" height="720">Dein Browser kann dieses Video nicht abspielen.</video>
+      <div class="compare compare-2 compare-split">
+        <video src="assets/compare3.mp4" poster="assets/compare3-poster.jpg" controls playsinline preload="none" width="3840" height="2160">Dein Browser kann dieses Video nicht abspielen.</video>
         <span class="tag l">Unbearbeitet</span><span class="tag r">Purelapse</span>
       </div>
-      <p class="caption">Zweite Serie in Originalqualität · 2560 × 720 · 50 fps · 29 Sekunden · 34 MB – zum Abspielen klicken, Vollbild empfohlen</p>
+      <p class="caption">Zweite Serie in 4K · 50 fps · 29 Sekunden · 44 MB. Links mit den Standardeinstellungen von darktable entwickelt, rechts nach Purelapse. Die Trennlinie liegt auf dem Stromboli – genau dort geht die Sonne unter. Zum Abspielen klicken, Vollbild empfohlen.</p>
     </div>
   </section>
 
@@ -181,12 +181,12 @@
       </div>
       <div>
         <div class="cta" style="justify-content:flex-start;margin-top:0;margin-bottom:22px">
-          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.1-beta/Purelapse-2.42.1-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.1-beta</small></span></a>
+          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.2-beta</small></span></a>
         </div>
         <div class="term">
-          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.42.1-beta-x86_64.AppImage\n./Purelapse-2.42.1-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
-          <pre><span class="p">$</span> chmod +x Purelapse-2.42.1-beta-x86_64.AppImage
-<span class="p">$</span> ./Purelapse-2.42.1-beta-x86_64.AppImage</pre>
+          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.42.2-beta-x86_64.AppImage\n./Purelapse-2.42.2-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
+          <pre><span class="p">$</span> chmod +x Purelapse-2.42.2-beta-x86_64.AppImage
+<span class="p">$</span> ./Purelapse-2.42.2-beta-x86_64.AppImage</pre>
         </div>
         <p class="req">Läuft auf Linux Mint 21 / Ubuntu 22.04 und neuer (x86_64). <a href="versionen.html">Was ist neu? Alle Versionen →</a></p>
       </div>
@@ -229,7 +229,7 @@
       <h2>Gern geteilt.</h2>
       <p>Purelapse ist eine Beta. Rückmeldungen, Fehlerberichte und Ideen sind sehr willkommen.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.1-beta/Purelapse-2.42.1-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse/issues">Fehler melden</a>
       </div>
     </div>

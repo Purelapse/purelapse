@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=5">
+<link rel="stylesheet" href="assets/style.css?v=6">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});var bot=/bot|crawl|spider|slurp|lighthouse|preview/i.test(navigator.userAgent||"");if(!bot&&(l==="en"||(!l&&!de))){location.replace("versions.html"+location.hash)}}catch(e){}</script>
 </head>
 <body>
@@ -44,8 +44,12 @@
   <section class="vers-list">
     <div class="wrap">
       <div class="vers">
-        <article class="ver now" id="v2-42-1">
-          <div class="ver-side"><span class="ver-badge">Aktuell</span><h2 class="ver-nr">2.42.1-beta</h2><time class="ver-date" datetime="2026-11-20">20. November 2026</time><div class="ver-links"><a href="https://github.com/purelapse/purelapse/releases/download/v2.42.1-beta/Purelapse-2.42.1-beta-x86_64.AppImage">AppImage herunterladen</a><a href="https://github.com/purelapse/purelapse/releases/tag/v2.42.1-beta">Release auf GitHub</a></div></div>
+        <article class="ver now" id="v2-42-2">
+          <div class="ver-side"><span class="ver-badge">Aktuell</span><h2 class="ver-nr">2.42.2-beta</h2><time class="ver-date" datetime="2026-11-21">21. November 2026</time><div class="ver-links"><a href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage">AppImage herunterladen</a><a href="https://github.com/purelapse/purelapse/releases/tag/v2.42.2-beta">Release auf GitHub</a></div></div>
+          <div class="ver-main"><p class="ver-intro">Englische Oberfläche ohne deutsche Reste und ein abgedunkelter Hintergrund, solange ein Dialog im Vordergrund steht.</p><div class="ver-groups"><div><h3>Neu</h3><ul><li>Solange ein Dialog auf eine Eingabe wartet – Startdialog, Einstellungen, Keyframe-Dialog, Rückfragen, Dateiauswahl –, wird das Hauptfenster dahinter sanft abgedunkelt.</li></ul></div><div><h3>Behoben</h3><ul><li>Bei Sprache Englisch kamen Statuszeile, Fertig-Meldungen, die Telegram-Nachricht, einige Tooltips und Listen noch auf Deutsch.</li><li>Acht Tooltips zeigten ein sichtbares „\n“ statt eines Zeilenumbruchs.</li></ul></div><div><h3>Webseite</h3><ul><li>Weltkarte: Wer Purelapse nutzt, kann seinen Ort mit einem Pin markieren – grob gerundet, ohne IP-Adresse.</li><li>Neues Vergleichsvideo in 4K; das Projekt liegt jetzt unter github.com/purelapse.</li></ul></div></div></div>
+        </article>
+        <article class="ver" id="v2-42-1">
+          <div class="ver-side"><h2 class="ver-nr">2.42.1-beta</h2><time class="ver-date" datetime="2026-11-20">20. November 2026</time><div class="ver-links"><a href="https://github.com/purelapse/purelapse/releases/tag/v2.42.1-beta">Release auf GitHub</a></div></div>
           <div class="ver-main"><p class="ver-intro">Fehlerbehebung für 2.42.0. Wer mit 16-Bit-Zwischenbildern arbeitet, sollte umsteigen.</p><div class="ver-groups"><div><h3>Neu</h3><ul><li>Die eingestellte Engine steht jetzt immer sichtbar unter dem Ordnerpfad – mit Warnung, wenn ihr Programm fehlt. Ein Klick öffnet die Einstellungen.</li></ul></div><div><h3>Behoben</h3><ul><li>16-Bit-Zwischenbilder zusammen mit dem Telemetrie-Overlay brachen beim Rendern des Videos ab. Bereits entwickelte Bilder bleiben erhalten – ein neuer Start von Pass 2 rendert nur noch das Video.</li><li>Astro-Clean mit 16-Bit-Zwischenbildern ersetzt nicht mehr fast jeden Bildpunkt.</li><li>Hinweistexte zu ausgefressenen Lichtern, zur darktable-Engine und zu parallelen Prozessen an 2.42 angepasst.</li></ul></div><div><h3>Webseite</h3><ul><li>Neuer Bereich „Technik“ mit allen Funktionen im Detail.</li><li>Diese Versionsseite.</li></ul></div></div></div>
         </article>
         <article class="ver" id="v2-42-0">

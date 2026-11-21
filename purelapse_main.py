@@ -39,6 +39,7 @@ from collections import deque
 import json
 import hashlib
 import threading
+import contextlib
 import re
 import html
 import datetime
@@ -64,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.42.1-beta"
+VERSION = "2.42.2-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -634,7 +635,7 @@ def _entrauschen_aus_iso(iso):
     return 45.0, 40.0
 
 
-def auto_optimieren(basis_linear, iso=100, erlaubt=None):
+def auto_optimieren(basis_linear, iso=100, erlaubt=None, lang='de'):
     """
     Schlaegt Werte fuer die Schnelleinstellungen vor.
 
@@ -642,6 +643,7 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
     iso           ISO-Wert der Aufnahme, fuer das Entrauschen
     erlaubt       Menge der Regler-Kennungen, die das Profil kennt;
                   None heisst alle
+    lang          Sprache der Begruendungen ('de' oder 'en')
 
     Rueckgabe: ({id: Wert}, [Begruendung je Entscheidung])
 
@@ -658,6 +660,10 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
 
     luma, anzeige = _luma_anzeige(basis_linear)
     werte, grund = {}, []
+    en = (lang == 'en')
+
+    def sag(de, en_text):
+        grund.append(en_text if en else de)
 
     # ---- Helligkeit: Mittelwert auf einen brauchbaren Mittelton -------
     mittel = float(np.median(luma))
@@ -667,20 +673,21 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
                    min(AUTO_HELLIGKEIT_MAX, stufen * 66.0))
         if abs(hell) >= 2.0:
             werte['brightness'] = round(hell)
-            grund.append(f"Helligkeit {werte['brightness']:+.0f}: Mittelton "
-                         f"liegt bei {mittel:.2f}, angestrebt "
-                         f"{AUTO_HELLIGKEIT_ZIEL:.2f}")
+            sag(f"Helligkeit {werte['brightness']:+.0f}: Mittelton "
+                f"liegt bei {mittel:.2f}, angestrebt {AUTO_HELLIGKEIT_ZIEL:.2f}",
+                f"Brightness {werte['brightness']:+.0f}: midtone is "
+                f"{mittel:.2f}, target {AUTO_HELLIGKEIT_ZIEL:.2f}")
         else:
-            grund.append(f"Helligkeit unveraendert: Mittelton {mittel:.2f} "
-                         "passt bereits")
+            sag(f"Helligkeit unveraendert: Mittelton {mittel:.2f} passt bereits",
+                f"Brightness unchanged: midtone {mittel:.2f} already fits")
 
     # ---- Kontrast: nur so viel, wie Luft im Histogramm ist ------------
     p2, p98 = (float(x) for x in np.percentile(luma, (2.0, 98.0)))
     spanne = max(1e-3, p98 - p2)
     if darf('contrast'):
         if spanne >= AUTO_SPANNE_GENUG:
-            grund.append("Kontrast unveraendert: Histogramm nutzt schon "
-                         f"{spanne:.2f} der Skala")
+            sag(f"Kontrast unveraendert: Histogramm nutzt schon {spanne:.2f} der Skala",
+                f"Contrast unchanged: histogram already uses {spanne:.2f} of the range")
         else:
             k = min(1.45, AUTO_SPANNE_ZIEL / spanne)
             kontrast = max(0.0, min(AUTO_KONTRAST_MAX, 100.0 * math.log2(k)))
@@ -688,15 +695,17 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
             # Vorschlag setzt nur ein Haekchen ohne Wirkung.
             if kontrast >= 5.0:
                 werte['contrast'] = round(kontrast)
-                grund.append(f"Kontrast {werte['contrast']:+.0f}: Histogramm "
-                             f"nutzt nur {spanne:.2f} der Skala")
+                sag(f"Kontrast {werte['contrast']:+.0f}: Histogramm "
+                    f"nutzt nur {spanne:.2f} der Skala",
+                    f"Contrast {werte['contrast']:+.0f}: histogram "
+                    f"uses only {spanne:.2f} of the range")
 
     # ---- Saettigung: was fehlt, nicht was moeglich ist ----------------
     if darf('saturation'):
         bunt = float(np.mean(anzeige.max(axis=2) - anzeige.min(axis=2)))
         if bunt >= 0.28:
-            grund.append(f"Saettigung unveraendert: Bild ist mit {bunt:.2f} "
-                         "schon farbkraeftig")
+            sag(f"Saettigung unveraendert: Bild ist mit {bunt:.2f} schon farbkraeftig",
+                f"Saturation unchanged: at {bunt:.2f} the image is already colourful")
         else:
             anteil = (0.28 - bunt) / 0.28
             sat = AUTO_SAETTIGUNG_MAX * min(1.0, max(0.0, anteil))
@@ -705,10 +714,13 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
             sat *= max(0.4, 1.0 - werte.get('contrast', 0) / 50.0)
             if sat >= 2.0:
                 werte['saturation'] = round(sat)
-                grund.append(f"Saettigung {werte['saturation']:+.0f}: "
-                             f"Farbabstand liegt bei {bunt:.2f}"
-                             + (" (wegen des Kontrasts gedaempft)"
-                                if werte.get('contrast', 0) > 10 else ""))
+                gedaempft = werte.get('contrast', 0) > 10
+                sag(f"Saettigung {werte['saturation']:+.0f}: "
+                    f"Farbabstand liegt bei {bunt:.2f}"
+                    + (" (wegen des Kontrasts gedaempft)" if gedaempft else ""),
+                    f"Saturation {werte['saturation']:+.0f}: "
+                    f"colour spread is {bunt:.2f}"
+                    + (" (damped because of the contrast)" if gedaempft else ""))
 
     # ---- Schaerfe: wie viel Struktur traegt das Motiv? ----------------
     if darf('sharpen'):
@@ -718,19 +730,24 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
         scharf = (AUTO_SCHAERFE_GLATT
                   + (AUTO_SCHAERFE_DETAIL - AUTO_SCHAERFE_GLATT) * anteil)
         werte['sharpen'] = int(round(scharf))
-        grund.append(f"Schaerfe {werte['sharpen']}: Strukturmass "
-                     f"{struktur:.3f}"
-                     + (" (ruhiges Motiv, zurueckhaltend)" if anteil < 0.34
-                        else " (viel Struktur, traegt mehr)"))
+        ruhig = anteil < 0.34
+        sag(f"Schaerfe {werte['sharpen']}: Strukturmass {struktur:.3f}"
+            + (" (ruhiges Motiv, zurueckhaltend)" if ruhig
+               else " (viel Struktur, traegt mehr)"),
+            f"Sharpening {werte['sharpen']}: structure measure {struktur:.3f}"
+            + (" (calm subject, restrained)" if ruhig
+               else " (lots of structure, takes more)"))
 
     # ---- Entrauschen: nach ISO, nicht nach der Vorschau ---------------
     lum_n, chrom_n = _entrauschen_aus_iso(iso)
     if darf('denoise_l'):
         werte['denoise_l'] = lum_n
         if lum_n <= 0:
-            grund.append(f"Entrauschen aus: ISO {iso} braucht keines")
+            sag(f"Entrauschen aus: ISO {iso} braucht keines",
+                f"Noise reduction off: ISO {iso} needs none")
         else:
-            grund.append(f"Entrauschen {lum_n:.0f}: ISO {iso}")
+            sag(f"Entrauschen {lum_n:.0f}: ISO {iso}",
+                f"Noise reduction {lum_n:.0f}: ISO {iso}")
     if darf('denoise_c') and lum_n > 0:
         werte['denoise_c'] = chrom_n
 
@@ -738,14 +755,20 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None):
     anteil, am_bild, richtung = lichter_farbstich(basis_linear)
     if anteil > 0.15 and am_bild > 0.0002:
         werte['_hl'] = True
-        grund.append(f"Lichter rekonstruieren: {100 * anteil:.0f} % der "
-                     "hellsten Stellen sind rosa verfaerbt")
+        sag(f"Lichter rekonstruieren: {100 * anteil:.0f} % der "
+            "hellsten Stellen sind rosa verfaerbt",
+            f"Reconstruct highlights: {100 * anteil:.0f} % of the "
+            "brightest areas are tinted pink")
     elif anteil > 0:
-        grund.append(f"Lichter in Ordnung: nur {100 * anteil:.0f} % der "
-                     "hellsten Stellen zeigen einen Farbstich")
+        sag(f"Lichter in Ordnung: nur {100 * anteil:.0f} % der "
+            "hellsten Stellen zeigen einen Farbstich",
+            f"Highlights fine: only {100 * anteil:.0f} % of the "
+            "brightest areas show a colour cast")
 
-    grund.append("Weissabgleich unveraendert - aus einem Bild laesst sich "
-                 "nicht entscheiden, ob die Farbstimmung gewollt ist")
+    sag("Weissabgleich unveraendert - aus einem Bild laesst sich "
+        "nicht entscheiden, ob die Farbstimmung gewollt ist",
+        "White balance unchanged - a single image cannot tell whether "
+        "the colour mood is intended")
     return werte, grund
 
 
@@ -864,15 +887,44 @@ def status_kurz(text, lang='de'):
     """
     teile = [t.strip() for t in str(text or "").split(" | ")]
     if len(teile) < 3:
-        return str(text or "")
+        return status_sprache(text, lang)
     label, fertig, gesamt, zusatz = status_zerlegen(text)
-    kurz = label
+    kurz = status_sprache(label, lang)
     if gesamt:
         kurz += (f"  ·  {fertig} of {gesamt}" if lang == 'en'
                  else f"  ·  {fertig} von {gesamt}")
     if zusatz:
         kurz += f"  ·  {zusatz}"
     return kurz
+
+
+# Statusmeldungen ohne Zaehler, die der Worker auf Deutsch schickt. Der
+# Worker meldet intern immer deutsch, weil die Ablaufanzeige die Phase am
+# deutschen Anfang erkennt (PHASEN); uebersetzt wird erst fuer die Anzeige.
+STATUS_EN = (
+    ("Vergleichsvideo wird erstellt", "Creating comparison video"),
+    ("Erzeuge einmalig ein Basisprofil", "Creating a base profile (only once)"),
+    ("Schreibe Sidecar", "Writing sidecar"),
+    ("Suche defekte Pixel", "Finding defective pixels"),
+)
+
+
+def status_sprache(text, lang='de'):
+    """
+    Der Anfang einer Statuszeile in der Sprache der Oberflaeche.
+    "Analysiere RAWs: 12/56" -> "Measure RAWs: 12/56" (englisch),
+    "Nachkalibrierung 2" -> "Recalibration 2". Unbekanntes bleibt, wie es ist.
+    """
+    text = str(text or "")
+    if lang != 'en':
+        return text
+    for de, en in STATUS_EN:
+        if text.startswith(de):
+            return en + text[len(de):]
+    for praefix, _k, _de, en in PHASEN:
+        if text.startswith(praefix):
+            return en + text[len(praefix):]
+    return text
 
 
 # Anfang der Bezeichnung -> (Schluessel, Titel deutsch, Titel englisch)
@@ -1553,6 +1605,23 @@ def _probe_mit(programm, idx, crf="23", timeout=30):
               if any(k in z.lower() for k in schluessel)]
     grund = "\n".join(zeilen[:4]) if zeilen else txt[:400]
     return False, grund or f"FFmpeg endete mit Fehlercode {proc.returncode}."
+
+
+def probe_grund_text(grund, lang='de'):
+    """Die eigenen Meldungen des Encoder-Selbsttests in der Sprache der
+    Oberflaeche. Was FFmpeg selbst schreibt, bleibt unveraendert."""
+    grund = str(grund or "")
+    if lang != 'en':
+        return grund
+    feste = {"FFmpeg wurde nicht gefunden.": "FFmpeg was not found.",
+             "Der Testlauf von FFmpeg hat nicht geantwortet.":
+                 "The FFmpeg test run did not respond."}
+    if grund in feste:
+        return feste[grund]
+    m = re.match(r"^FFmpeg endete mit Fehlercode (-?\d+)\.$", grund)
+    if m:
+        return f"FFmpeg exited with error code {m.group(1)}."
+    return grund
 
 
 def get_theme():
@@ -2679,7 +2748,8 @@ class CameraPathDialog(QtWidgets.QDialog):
         self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowContextHelpButtonHint)
         img = load_preview_image(img_path, max_width=1800)
         if img is None:
-            raise ValueError(f"Bild konnte nicht gelesen werden: {img_path}")
+            raise ValueError(f"Bild konnte nicht gelesen werden: {img_path}" if de
+                             else f"Could not read image: {img_path}")
         self.img_h, self.img_w = img.shape[:2]
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         layout = QtWidgets.QHBoxLayout(self)
@@ -3081,7 +3151,7 @@ class ZoomBild(QtWidgets.QScrollArea):
     (setPixmap, setText).
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, lang='de'):
         super().__init__(parent)
         self._pixmap = None
         self._zoom = 1.0
@@ -3093,8 +3163,12 @@ class ZoomBild(QtWidgets.QScrollArea):
         self._lbl.setAlignment(QtCore.Qt.AlignCenter)
         self.setWidget(self._lbl)
         self.viewport().installEventFilter(self)
-        self.setToolTip("Mausrad: zoomen  \u00b7  Ziehen: verschieben  "
-                        "\u00b7  Doppelklick: ganzes Bild")
+        if lang == 'en':
+            self.setToolTip("Mouse wheel: zoom  \u00b7  Drag: pan  "
+                            "\u00b7  Double-click: whole image")
+        else:
+            self.setToolTip("Mausrad: zoomen  \u00b7  Ziehen: verschieben  "
+                            "\u00b7  Doppelklick: ganzes Bild")
 
     def setText(self, text):
         self._pixmap = None
@@ -3340,7 +3414,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         aussen.addWidget(kopf)
 
         # ---- Vorschau -------------------------------------------------
-        self.lbl_vorschau = ZoomBild()
+        self.lbl_vorschau = ZoomBild(lang=self.lang)
         self.lbl_vorschau.setAlignment(QtCore.Qt.AlignCenter)
         self.lbl_vorschau.setMinimumHeight(260)
         self.lbl_vorschau.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
@@ -3842,7 +3916,8 @@ class QuickLookDialog(QtWidgets.QDialog):
         if self._basis is None:
             return
         vorschlag, begruendung = auto_optimieren(
-            self._basis, iso=self._iso, erlaubt=set(self.regler.keys()))
+            self._basis, iso=self._iso, erlaubt=set(self.regler.keys()),
+            lang=self.lang)
         if not vorschlag:
             self.lbl_vorschau_hinweis.setText(self._t(
                 "Nichts zu verbessern gefunden.", "Nothing found to improve."))
@@ -4061,7 +4136,11 @@ class QuickLookDialog(QtWidgets.QDialog):
                 self.lbl_echt.setText(self._t(
                     "\u26a0 echte Vorschau nicht möglich - Näherung",
                     "\u26a0 true preview failed - approximation"))
-                self.lbl_echt.setToolTip(erg.get('fehler', ""))
+                fehler = erg.get('fehler', "")
+                if self.lang == 'en':
+                    fehler = {"Zeitueberschreitung": "Timeout",
+                              "kein Bild erhalten": "no image received"}.get(fehler, fehler)
+                self.lbl_echt.setToolTip(fehler)
             return
         while len(self._echt_merker) >= ECHT_MERKER_MAX:
             self._echt_merker.pop(next(iter(self._echt_merker)))
@@ -4697,7 +4776,8 @@ class Worker(QtCore.QThread):
         if written == 0:
             raise RuntimeError(self._t("Kein einziges Bild konnte gelesen werden.",
                                        "Not a single image could be read."))
-        self.finished_ok.emit(f"Rohfassung fertig ({written} Bilder):\n{out_video}")
+        self.finished_ok.emit(self._t(f"Rohfassung fertig ({written} Bilder):\n{out_video}",
+                                      f"Plain version done ({written} frames):\n{out_video}"))
 
     def _run_schnell(self):
         """
@@ -4797,7 +4877,8 @@ class Worker(QtCore.QThread):
                                        "FFmpeg could not combine the videos.\n")
                                + err.decode('utf-8', errors='ignore').strip()[:600])
         self.progress.emit(1, 1)
-        self.finished_ok.emit(f"Vergleichsvideo fertig:\n{out_video}")
+        self.finished_ok.emit(self._t(f"Vergleichsvideo fertig:\n{out_video}",
+                                      f"Comparison video done:\n{out_video}"))
 
     def _run_jpg(self):
         p = self.p
@@ -4894,9 +4975,11 @@ class Worker(QtCore.QThread):
         self._schritt_fertig("Video", anzahl, start_time)
         if p['make_video'] and ffmpeg_proc:
             self._finish_encoder(ffmpeg_proc)
-            self.finished_ok.emit(f"Video fertig:\n{out_video}")
+            self.finished_ok.emit(self._t(f"Video fertig:\n{out_video}",
+                                          f"Video done:\n{out_video}"))
         else:
-            self.finished_ok.emit(f"Entflackerte JPGs liegen in:\n{out_dir}")
+            self.finished_ok.emit(self._t(f"Entflackerte JPGs liegen in:\n{out_dir}",
+                                          f"Deflickered JPGs are in:\n{out_dir}"))
 
     def _check_white_balance(self, meas):
         """Warnt, wenn der Kamera-Weissabgleich innerhalb der Sequenz schwankt."""
@@ -5144,14 +5227,20 @@ class Worker(QtCore.QThread):
                           "bleibt davon unberuehrt. Die Lichter selbst sind verloren - "
                           "wird die Sonne rosa, hilft 'Lichter rekonstruieren' in einem Keyframe.",
                 f"> NOTE: {clipped} of {len(report)} images have blown highlights. The measurement leaves these areas out, the deflicker is not affected. The highlights themselves are lost - if the sun turns pink, 'reconstruct highlights' in a keyframe helps."))
-        self.finished_ok.emit(
+        self.finished_ok.emit(self._t(
             "Pass 1 abgeschlossen - die Helligkeit ist vermessen, die "
             "Korrektur steht in den Profilen.\n\n"
             "Weiter mit Pass 2 (Video rendern).\n\n"
             "Wer den Bildern vorher einen Look geben will: ein Bild als "
             "Keyframe markieren und ueber \"Keyframe einstellen\" oder in "
-            + eng('label') + " bearbeiten. Das ist freiwillig."
-        )
+            + eng('label') + " bearbeiten. Das ist freiwillig.",
+            "Pass 1 complete - the brightness has been measured and the "
+            "correction is in the profiles.\n\n"
+            "Next: pass 2 (render video).\n\n"
+            "To give the frames a look first: mark a frame as a keyframe "
+            "and edit it with \"Edit keyframe\" or in "
+            + eng('label') + ". This is optional."
+        ))
 
     def _automatik_einfrieren(self, files):
         """
@@ -5352,10 +5441,12 @@ class Worker(QtCore.QThread):
         for f in files:
             arp = sidecar(f)
             if not os.path.exists(arp):
-                issues.append(f"{os.path.basename(f)}: Sidecar fehlt")
+                issues.append(self._t(f"{os.path.basename(f)}: Sidecar fehlt",
+                                      f"{os.path.basename(f)}: sidecar missing"))
                 continue
             checked += 1
-            issues.extend(validate_arp(read_arp_dict(arp), reference, os.path.basename(f)))
+            issues.extend(validate_arp(read_arp_dict(arp), reference, os.path.basename(f),
+                                       lang=self.p.get('lang', 'de')))
         if self._diag():
             write_check_log(self.p['target_dir'], "purelapse_arp_check.log",
                             f"Purelapse {VERSION} - Formatpruefung der Sidecars ({label})",
@@ -5376,7 +5467,7 @@ class Worker(QtCore.QThread):
     def _fortschritt(self, label, fertig, gesamt, start_zeit, zusatz=""):
         """Statuszeile und Fortschrittsbalken in einem Aufruf."""
         self.status.emit(fortschritt_text(label, fertig, gesamt, start_zeit,
-                                          zusatz))
+                                          zusatz, lang=self.p.get('lang', 'de')))
         if gesamt:
             self.progress.emit(fertig, gesamt)
 
@@ -6245,9 +6336,11 @@ class Worker(QtCore.QThread):
         self._schritt_fertig("Video", anzahl, start_time)
         if p['make_video'] and ffmpeg_proc:
             self._finish_encoder(ffmpeg_proc)
-            self.finished_ok.emit(f"Fertiges Video:\n{out_video}")
+            self.finished_ok.emit(self._t(f"Fertiges Video:\n{out_video}",
+                                          f"Finished video:\n{out_video}"))
         else:
-            self.finished_ok.emit(f"Entflackerte JPGs liegen in:\n{out_dir}")
+            self.finished_ok.emit(self._t(f"Entflackerte JPGs liegen in:\n{out_dir}",
+                                          f"Deflickered JPGs are in:\n{out_dir}"))
 
 # ==========================================================================
 #  HAUPTFENSTER
@@ -6365,16 +6458,19 @@ def telegram_speichern(an, token, chat):
     konfig_setzen('telegram', {'an': bool(an), 'token': token.strip(), 'chat': chat.strip()})
 
 
-def telegram_anfrage(token, methode, daten=None, timeout=15):
+def telegram_anfrage(token, methode, daten=None, timeout=15, lang='de'):
     """
     Eine Anfrage an die Bot-API. Rueckgabe: (True, Antwort-Dict) oder
     (False, Fehlertext). Der Token erscheint nie in einer Fehlermeldung.
+    Die eigenen Fehlertexte folgen der Sprache der Oberflaeche; was die
+    Bot-API selbst meldet ('description'), kommt von Telegram auf Englisch.
     """
+    en = (lang == 'en')
     import urllib.request
     import urllib.parse
     import urllib.error
     if not token:
-        return False, "Kein Bot-Token eingetragen."
+        return False, ("No bot token entered." if en else "Kein Bot-Token eingetragen.")
     url = TELEGRAM_API.format(token=token, methode=methode)
     rumpf = urllib.parse.urlencode(daten or {}).encode("utf-8")
     try:
@@ -6389,27 +6485,29 @@ def telegram_anfrage(token, methode, daten=None, timeout=15):
             return False, f"HTTP {e.code}"
     except Exception as e:
         text = str(getattr(e, 'reason', e)).replace(token, "***")
-        return False, f"Keine Verbindung zu Telegram ({text})"
+        return False, (f"No connection to Telegram ({text})" if en
+                       else f"Keine Verbindung zu Telegram ({text})")
     if not d.get('ok'):
-        return False, str(d.get('description') or "Telegram hat die Nachricht abgelehnt.")
+        return False, str(d.get('description') or ("Telegram rejected the message." if en
+                                                   else "Telegram hat die Nachricht abgelehnt."))
     return True, d
 
 
-def telegram_senden(token, chat, text, timeout=15):
+def telegram_senden(token, chat, text, timeout=15, lang='de'):
     """Schickt eine Textnachricht. Rueckgabe wie telegram_anfrage()."""
     if not chat:
-        return False, "Keine Chat-ID eingetragen."
+        return False, ("No chat ID entered." if lang == 'en' else "Keine Chat-ID eingetragen.")
     return telegram_anfrage(token, "sendMessage",
                             {'chat_id': chat, 'text': text[:4000],
-                             'disable_web_page_preview': 'true'}, timeout)
+                             'disable_web_page_preview': 'true'}, timeout, lang)
 
 
-def telegram_chat_finden(token):
+def telegram_chat_finden(token, lang='de'):
     """
     Liest die Chat-ID aus der letzten Nachricht, die an den Bot ging.
     Rueckgabe: (Chat-ID, Name) oder (None, Fehlertext).
     """
-    ok, d = telegram_anfrage(token, "getUpdates")
+    ok, d = telegram_anfrage(token, "getUpdates", lang=lang)
     if not ok:
         return None, d
     for eintrag in reversed(d.get('result', [])):
@@ -6418,6 +6516,9 @@ def telegram_chat_finden(token):
         if 'id' in chat:
             name = chat.get('first_name') or chat.get('title') or chat.get('username') or ""
             return str(chat['id']), name
+    if lang == 'en':
+        return None, ("No message to the bot found yet. Please send the bot any "
+                      "message in Telegram first.")
     return None, ("Noch keine Nachricht an den Bot gefunden. Bitte dem Bot in "
                   "Telegram zuerst eine beliebige Nachricht schicken.")
 
@@ -6586,6 +6687,7 @@ class LadeSchirm(QtWidgets.QWidget):
         self.hide()
 
     def zeige(self, ordner, lang='de'):
+        self._lang = lang
         en = (lang == 'en')
         self.lbl_titel.setText("Loading images \u2026" if en else "Bilder werden geladen \u2026")
         self.lbl_ordner.setText(ordner)
@@ -6601,7 +6703,121 @@ class LadeSchirm(QtWidgets.QWidget):
             self.balken.setRange(0, gesamt)
             self.balken.setValue(fertig)
         if text:
-            self.lbl_stand.setText(status_kurz(text) if " | " in text else text)
+            lang = getattr(self, '_lang', 'de')
+            self.lbl_stand.setText(status_kurz(text, lang) if " | " in text
+                                   else status_sprache(text, lang))
+
+
+class Schleier(QtWidgets.QWidget):
+    """Halbdurchsichtige Flaeche ueber dem Hauptfenster. Zeichnet sich
+    selbst, damit sich die Deckkraft weich einblenden laesst."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.farbe = (0, 0, 0, 140)
+        self.anteil = 1.0
+        self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+        self.setFocusPolicy(QtCore.Qt.NoFocus)
+
+    def paintEvent(self, event):
+        r, g, b, a = self.farbe
+        p = QtGui.QPainter(self)
+        p.fillRect(self.rect(), QtGui.QColor(r, g, b, int(round(a * self.anteil))))
+        p.end()
+
+
+class Abdunkler(QtCore.QObject):
+    """
+    Dunkelt das Hauptfenster ab, solange ein modales Fenster davor steht:
+    Startdialog, Rueckfragen, Einstellungen, Keyframe-Dialog, Meldungen.
+    Der Blick geht so zum Dialog, und man sieht sofort, dass das Fenster
+    dahinter gerade nicht bedienbar ist.
+
+    Ein Ereignisfilter der Anwendung zaehlt die sichtbaren modalen
+    Fenster. Verschwindet das letzte, geht der Schleier wieder weg.
+    Native Dateidialoge erscheinen nicht als Qt-Fenster - um sie herum
+    haelt halten() den Schleier von Hand.
+    """
+
+    def __init__(self, fenster, schon_dunkel=None):
+        super().__init__(fenster)
+        self.fenster = fenster
+        self._schon_dunkel = schon_dunkel or (lambda: False)
+        self._offen = []
+        self._halten = 0
+        self.schleier = Schleier(fenster)
+        self.schleier.setObjectName("abdunkler")
+        self._einblenden = QtCore.QVariantAnimation(self)
+        self._einblenden.setDuration(140)
+        self._einblenden.setStartValue(0.0)
+        self._einblenden.setEndValue(1.0)
+        self._einblenden.valueChanged.connect(self._anteil_setzen)
+        self.schleier.hide()
+
+    def farbe_setzen(self, farbe):
+        self.schleier.farbe = tuple(farbe)
+        self.schleier.update()
+
+    def _anteil_setzen(self, wert):
+        try:
+            self.schleier.anteil = max(0.0, min(1.0, float(wert)))
+        except (TypeError, ValueError):
+            self.schleier.anteil = 1.0
+        self.schleier.update()
+
+    def _ist_modal(self, w):
+        if w is self.fenster or w is self.schleier or not isinstance(w, QtWidgets.QWidget):
+            return False
+        try:
+            return bool(w.isWindow() and (w.isModal()
+                                          or w.windowModality() != QtCore.Qt.NonModal))
+        except RuntimeError:
+            # Das Qt-Objekt ist schon abgebaut
+            return False
+
+    def eventFilter(self, obj, event):
+        try:
+            typ = event.type()
+        except (AttributeError, RuntimeError):
+            return False
+        if typ == QtCore.QEvent.Show:
+            if not any(o is obj for o in self._offen) and self._ist_modal(obj):
+                self._offen.append(obj)
+                self.aktualisieren()
+        elif typ == QtCore.QEvent.Hide:
+            if any(o is obj for o in self._offen):
+                self._offen = [o for o in self._offen if o is not obj]
+                self.aktualisieren()
+        return False
+
+    @contextlib.contextmanager
+    def halten(self):
+        """Schleier fuer die Dauer eines Blocks, etwa um einen nativen
+        Dateidialog, den der Ereignisfilter nicht zu sehen bekommt."""
+        self._halten += 1
+        self.aktualisieren()
+        try:
+            yield
+        finally:
+            self._halten -= 1
+            self.aktualisieren()
+
+    def aktiv(self):
+        return bool(self._offen or self._halten > 0)
+
+    def aktualisieren(self):
+        # Ueber dem Ladeschirm liegt schon ein Schleier - nicht doppelt.
+        soll = self.aktiv() and self.fenster.isVisible() and not self._schon_dunkel()
+        if soll:
+            self.schleier.setGeometry(self.fenster.rect())
+            self.schleier.raise_()
+            if not self.schleier.isVisible():
+                self.schleier.anteil = 0.0
+                self.schleier.show()
+                self._einblenden.start()
+        elif self.schleier.isVisible():
+            self._einblenden.stop()
+            self.schleier.hide()
 
 
 class MainWindow(QtWidgets.QWidget):
@@ -6647,6 +6863,13 @@ class MainWindow(QtWidgets.QWidget):
         ]
         self._build_ui()
         self.lade_schirm = LadeSchirm(self)
+        # Abdunkeln bei Dialogen; der Filter sitzt an der Anwendung, damit
+        # er jedes modale Fenster sieht, auch QMessageBox und Dateidialoge.
+        self.abdunkler = Abdunkler(self, lambda: self.lade_schirm.isVisible())
+        self.abdunkler.farbe_setzen(THEMES[self.theme].get('schleier', (0, 0, 0, 140)))
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self.abdunkler)
         # Ob der letzte Ordner geladen wird, entscheidet der Startdialog
         # (_startauswahl), sobald das Fenster steht.
 
@@ -6668,6 +6891,9 @@ class MainWindow(QtWidgets.QWidget):
         schirm = getattr(self, 'lade_schirm', None)
         if schirm is not None and schirm.isVisible():
             schirm.setGeometry(self.rect())
+        dunkel = getattr(self, 'abdunkler', None)
+        if dunkel is not None and dunkel.schleier.isVisible():
+            dunkel.schleier.setGeometry(self.rect())
 
     # Workflow-Schritte der Schrittleiste. 'load' und 'keys' sind reine
     # Hinweis-Seiten; 'smooth' und 'render' entsprechen bei RAW Pass 1 bzw.
@@ -6805,11 +7031,9 @@ class MainWindow(QtWidgets.QWidget):
         row_gal.addWidget(self.btn_kf_edit)
         self.btn_erstes = QtWidgets.QPushButton("\u23ee")
         self.btn_letztes = QtWidgets.QPushButton("\u23ed")
-        for knopf, tip_de, ziel in ((self.btn_erstes, "Zum ersten Bild", 0),
-                                    (self.btn_letztes, "Zum letzten Bild", -1)):
+        for knopf, ziel in ((self.btn_erstes, 0), (self.btn_letztes, -1)):
             knopf.setObjectName("mini")
             knopf.setFixedWidth(34)
-            knopf.setToolTip(tip_de)
             knopf.clicked.connect(lambda _=False, z=ziel: self._springe_zu(z))
             row_gal.addWidget(knopf)
         left_layout.addLayout(row_gal)
@@ -6818,19 +7042,9 @@ class MainWindow(QtWidgets.QWidget):
         row_ber = QtWidgets.QHBoxLayout()
         row_ber.setSpacing(4)
         self.btn_start_hier = QtWidgets.QPushButton("\u21e4 Startbild")
-        self.btn_start_hier.setToolTip(
-            "Das gewaehlte Bild wird das erste des Arbeitsgangs. Alle Bilder "
-            "davor bleiben in Pass 1, Pass 2 und im Video aussen vor.\n"
-            "Zuruecknehmen: das allererste Bild waehlen und noch einmal klicken.\n"
-            "Danach Pass 1 neu laufen lassen.")
         self.btn_start_hier.clicked.connect(lambda _=False: self._setze_bereich('start'))
         row_ber.addWidget(self.btn_start_hier)
         self.btn_ende_hier = QtWidgets.QPushButton("Endbild \u21e5")
-        self.btn_ende_hier.setToolTip(
-            "Das gewaehlte Bild wird das letzte des Arbeitsgangs. Alle Bilder "
-            "danach bleiben aussen vor.\n"
-            "Zuruecknehmen: das allerletzte Bild waehlen und noch einmal klicken.\n"
-            "Danach Pass 1 neu laufen lassen.")
         self.btn_ende_hier.clicked.connect(lambda _=False: self._setze_bereich('ende'))
         row_ber.addWidget(self.btn_ende_hier)
         left_layout.addLayout(row_ber)
@@ -7271,11 +7485,6 @@ class MainWindow(QtWidgets.QWidget):
         self.txt_arp_template.setReadOnly(True)
         self.txt_arp_template.setText(get_arp_template_path())
         self.txt_arp_template.setPlaceholderText("wird im Bilderordner gesucht")
-        self.txt_arp_template.setToolTip(
-            "Vollständiges, in der Engine gespeichertes Profil.\n"
-            "Purelapse setzt darin nur die Belichtung und lässt alles andere unangetastet.\n"
-            "Liegt bereits ein von der Engine geschriebenes Profil im Bilderordner, wird das automatisch benutzt."
-        )
         gperf.addWidget(self.txt_arp_template, 2, 1)
         self.btn_arp_browse = QtWidgets.QPushButton("...")
         self.btn_arp_browse.setMaximumWidth(40)
@@ -7313,23 +7522,9 @@ class MainWindow(QtWidgets.QWidget):
                                  "4", "6", "8"])
         gperf.addWidget(self.cmb_procs, 5, 1, 1, 2)
         self.chk_diag = QtWidgets.QCheckBox("Diagnose-Modus (Protokolldateien schreiben)")
-        self.chk_diag.setToolTip(
-            "Legt im Bilderordner Messprotokolle und Pruefberichte an:\n"
-            "purelapse_pass1.csv, purelapse_pass2.csv, purelapse_profiles.csv,\n"
-            "purelapse_arp_check.log und purelapse_art.log.\n\n"
-            "Nur fuer die Fehlersuche gedacht. Im Normalbetrieb aus lassen -\n"
-            "Warnungen erscheinen ohnehin im Log-Fenster.")
         gperf.addWidget(self.chk_diag, 6, 0, 1, 3)
         self.chk_tiff16 = QtWidgets.QCheckBox(
             "16-Bit-Zwischenbilder (TIFF) für höchste Qualität")
-        self.chk_tiff16.setToolTip(
-            "Die Engine entwickelt in Pass 2 nach 16-Bit-TIFF statt nach JPG, und\n"
-            "das Video wird durchgehend in 16 Bit gerechnet. Feine Verlaeufe im\n"
-            "Himmel bleiben dadurch frei von Stufen - vor allem zusammen mit\n"
-            "HEVC 10 Bit oder ProRes.\n\n"
-            "Braucht ein Vielfaches an Platz: bei 24 Megapixeln etwa 120 MB je\n"
-            "Bild, bei 1000 Bildern also rund 120 GB. Purelapse prueft vorher,\n"
-            "ob der Platz reicht.")
         gperf.addWidget(self.chk_tiff16, 7, 0, 1, 3)
         vset.addWidget(self.box_perf)
         self.box_telegram = QtWidgets.QGroupBox("Benachrichtigung (Telegram)")
@@ -7426,13 +7621,6 @@ class MainWindow(QtWidgets.QWidget):
         self.btn_preview.clicked.connect(self._start_preview)
         row_btn.addWidget(self.btn_preview, stretch=1)
         self.btn_schnell = QtWidgets.QPushButton(" \u26a1 Schnellvorschau")
-        self.btn_schnell.setToolTip(
-            "Ein grobes Video in kurzer Zeit, aus den eingebetteten "
-            "Vorschaubildern der Kamera, mit der Glaettung aus dem Diagramm "
-            "und dem eingestellten Bildausschnitt.\n\n"
-            "Nur zur ersten Beurteilung: keine Engine, keine Keyframes, "
-            "keine Schnelleinstellungen, keine Effekte, hoechstens 1280 Pixel "
-            "breit. Das Video oeffnet sich nach dem Erstellen von selbst.")
         self.btn_schnell.clicked.connect(self._start_schnell)
         row_btn.addWidget(self.btn_schnell, stretch=1)
         self.btn_q_add = QtWidgets.QPushButton(" Zur Warteschlange")
@@ -8118,7 +8306,7 @@ class MainWindow(QtWidgets.QWidget):
                 "Auto-matched tone curve switched off: it would be computed "
                 "anew for every frame and make the video flicker."))
         if fehlgeschlagen:
-            self._on_log("> ACHTUNG: " + self._t(
+            self._on_log(self._t("> ACHTUNG: ", "> WARNING: ") + self._t(
                 "nicht im Profil wiedergefunden: ", "not found in profile: ")
                 + ", ".join(fehlgeschlagen))
         else:
@@ -8147,6 +8335,11 @@ class MainWindow(QtWidgets.QWidget):
     def _t(self, de, en):
         return en if self.lang == 'en' else de
 
+    def _tab(self, de):
+        """Ein Text aus der Uebersetzungstabelle in der aktuellen Sprache -
+        fuer Beschriftungen, die zur Laufzeit neu gesetzt werden."""
+        return TRANSLATIONS.get(de, de) if self.lang == 'en' else de
+
     def _on_theme_changed(self, idx=None):
         self._apply_theme('light' if self.cmb_theme.currentIndex() == 1 else 'dark')
 
@@ -8162,6 +8355,8 @@ class MainWindow(QtWidgets.QWidget):
         app = QtWidgets.QApplication.instance()
         if app:
             app.setStyleSheet(build_stylesheet(t))
+        if getattr(self, 'abdunkler', None) is not None:
+            self.abdunkler.farbe_setzen(THEMES[self.theme].get('schleier', (0, 0, 0, 140)))
         self.list_widget.setStyleSheet(
             f"QListWidget {{ background: {t['gallery']}; border: 1px solid {t['border']};"
             f" border-radius: 8px; }}"
@@ -8248,6 +8443,10 @@ class MainWindow(QtWidgets.QWidget):
             'btn_preview': 'TT_PREVIEW', 'btn_q_add': 'TT_QADD', 'btn_q_run': 'TT_QRUN',
             'btn_open_dir': 'TT_OPENDIR',
             'txt_lat': 'TT_SUN', 'txt_lon': 'TT_SUN', 'txt_utc': 'TT_SUN',
+            'btn_erstes': 'TT_ERSTES', 'btn_letztes': 'TT_LETZTES',
+            'btn_start_hier': 'TT_STARTBILD', 'btn_ende_hier': 'TT_ENDBILD',
+            'txt_arp_template': 'TT_ARPTPL', 'chk_diag': 'TT_DIAG',
+            'chk_tiff16': 'TT_TIFF16', 'btn_schnell': 'TT_SCHNELL',
         }
         table = TRANSLATIONS_TT_EN if self.lang == 'en' else TRANSLATIONS
         for attr, key in mapping.items():
@@ -8328,7 +8527,8 @@ class MainWindow(QtWidgets.QWidget):
             return
         dlg = ResetDialog(self.target_dir, self.lang, self)
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
-            self._on_log(f"purelapse@engine:~$ RESET - {dlg.deleted} Dateien geloescht")
+            self._on_log(self._t(f"purelapse@engine:~$ RESET - {dlg.deleted} Dateien geloescht",
+                                 f"purelapse@engine:~$ RESET - {dlg.deleted} files deleted"))
             self.cam_keyframes = None
             self.lbl_cam_status.setText("Standard (Mitte)" if self.lang == 'de'
                                         else "Default (centred)")
@@ -8339,7 +8539,8 @@ class MainWindow(QtWidgets.QWidget):
         start = self.target_dir or get_last_path() or os.path.expanduser("~")
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Zeitraffer-Ordner waehlen", start, options=options)
+        d = QtWidgets.QFileDialog.getExistingDirectory(
+            self, self._t("Zeitraffer-Ordner wählen", "Choose timelapse folder"), start, options=options)
         if d:
             self._set_folder(d)
 
@@ -8357,7 +8558,7 @@ class MainWindow(QtWidgets.QWidget):
         self.cam_keyframes = None
         self.lbl_cam_status.setText("Standard (Mitte)")
         zustand_setzen(self.lbl_cam_status, "", 'art')
-        self.btn_roi.setText(" [+] Messbereich (ROI) festlegen")
+        self.btn_roi.setText(self._tab(" [+] Messbereich (ROI) festlegen"))
         self.btn_roi.setStyleSheet("")
         # Die Engine nur dann umstellen, wenn die eingestellte in diesem
         # Ordner nichts vorfindet. Vorher wurde gegen eine Modul-globale
@@ -8383,7 +8584,8 @@ class MainWindow(QtWidgets.QWidget):
                 f"{ENGINES[erkannt]['label']}."))
         jpg = glob.glob(os.path.join(self.target_dir, "*.jpg")) + glob.glob(os.path.join(self.target_dir, "*.JPG"))
         nef = find_raw_files(self.target_dir)
-        self.lbl_count.setText(f"Ordner gewählt: {len(jpg)} JPG(s) und {len(nef)} NEF(s) gefunden.")
+        self.lbl_count.setText(self._t(f"Ordner gewählt: {len(jpg)} JPG(s) und {len(nef)} NEF(s) gefunden.",
+                                       f"Folder selected: {len(jpg)} JPG(s) and {len(nef)} NEF(s) found."))
         self._gps_from_exif(files=(nef if nef else jpg), silent=True)
         self._auto_step = True   # nach dem Einlesen den passenden Schritt zeigen
         self._refresh_preview()
@@ -8413,7 +8615,11 @@ class MainWindow(QtWidgets.QWidget):
 
     def _browse_art_cli(self):
         start_dir = os.path.dirname(self.txt_art_path.text()) if os.path.exists(self.txt_art_path.text()) else os.path.expanduser("~")
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, f"{eng('bin')} ausführbare Datei wählen", start_dir)
+        with self.abdunkler.halten():
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self, self._t(f"{eng('bin')} ausführbare Datei wählen",
+                              f"Choose the {eng('bin')} executable"),
+                start_dir)
         if path and os.path.isfile(path):
             self.txt_art_path.setText(path)
             save_art_path(path)
@@ -8423,17 +8629,22 @@ class MainWindow(QtWidgets.QWidget):
         if eng('kind') == 'darktable':
             return  # Basisprofil-Konzept gibt es bei Darktable nicht
         start_dir = self.target_dir or os.path.expanduser("~")
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Basisprofil wählen", start_dir,
-            f"{eng('label')}-Profile (*{eng('ext')});;Alle Dateien (*)")
+        with self.abdunkler.halten():
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self, self._t("Basisprofil wählen", "Choose base profile"), start_dir,
+                self._t(f"{eng('label')}-Profile (*{eng('ext')});;Alle Dateien (*)",
+                        f"{eng('label')} profiles (*{eng('ext')});;All files (*)"))
         if not path or not os.path.isfile(path):
             return
         if not profile_is_complete(read_arp_dict(path)):
             QtWidgets.QMessageBox.warning(
-                self, "Unbrauchbares Profil",
-                "Diese Datei enthält kein vollständiges Profil (kein [Version]-Block).\n\n"
-                f"Bitte in {eng('label')} ein Bild öffnen und über 'Profil speichern' "
-                "eine Vorlage anlegen.")
+                self, self._t("Unbrauchbares Profil", "Unusable profile"),
+                self._t("Diese Datei enthält kein vollständiges Profil (kein [Version]-Block).\n\n"
+                        f"Bitte in {eng('label')} ein Bild öffnen und über 'Profil speichern' "
+                        "eine Vorlage anlegen.",
+                        "This file does not contain a complete profile (no [Version] block).\n\n"
+                        f"Please open an image in {eng('label')} and create a template via "
+                        "'save profile'."))
             return
         self.txt_arp_template.setText(path)
         save_arp_template_path(path)
@@ -8449,7 +8660,8 @@ class MainWindow(QtWidgets.QWidget):
         start = self.custom_out_dir or self.target_dir or os.path.expanduser("~")
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Export-Ordner waehlen", start, options=options)
+        d = QtWidgets.QFileDialog.getExistingDirectory(
+            self, self._t("Export-Ordner wählen", "Choose export folder"), start, options=options)
         if d:
             self.custom_out_dir = os.path.abspath(d)
         else:
@@ -8476,7 +8688,9 @@ class MainWindow(QtWidgets.QWidget):
     def _open_camera_path_dialog(self):
         files = self._arbeitsdateien()
         if not files:
-            QtWidgets.QMessageBox.warning(self, "Fehler", "Bitte wähle zuerst einen Ordner mit Bildern aus.")
+            QtWidgets.QMessageBox.warning(self, self._t("Fehler", "Error"),
+                                          self._t("Bitte wähle zuerst einen Ordner mit Bildern aus.",
+                                                  "Please choose a folder with images first."))
             return
         try:
             dlg = CameraPathDialog(self._referenzbild() or files[0], self.cam_keyframes,
@@ -8521,13 +8735,13 @@ class MainWindow(QtWidgets.QWidget):
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             if dlg.roi_rel and dlg.roi_rel[2] > 0.05 and dlg.roi_rel[3] > 0.05:
                 self.roi_rel = dlg.roi_rel
-                self.btn_roi.setText(" [✔] Messbereich (ROI) ist AKTIV! (Klick = neu)")
+                self.btn_roi.setText(self._tab(" [✔] Messbereich (ROI) ist AKTIV! (Klick = neu)"))
                 t_roi = self._farben()
                 self.btn_roi.setStyleSheet(
                     f"border: 1px solid {t_roi['accent']}; color: {t_roi['accent']};")
             else:
                 self.roi_rel = None
-                self.btn_roi.setText(" [+] Messbereich (ROI) festlegen")
+                self.btn_roi.setText(self._tab(" [+] Messbereich (ROI) festlegen"))
                 self.btn_roi.setStyleSheet("")
             self._refresh_preview()
 
@@ -9494,6 +9708,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def _codec_fallback_text(self, idx, grund):
         """Meldung, die den Fehlschlag erklaert, ohne FFmpeg zu zitieren."""
+        grund = probe_grund_text(grund, self.lang)
         c = codec_def(idx)
         fb = codec_def(c['fb'])
         art = {'nvenc': self._t("die NVIDIA-Grafikkarte", "the NVIDIA graphics card"),
@@ -9557,9 +9772,11 @@ class MainWindow(QtWidgets.QWidget):
         # protokollieren, statt auf eine Antwort zu warten.
         if self.batch_running:
             params['codec_idx'] = c['fb']
-            self._on_log(f"> ACHTUNG: {c['label']} laeuft hier nicht "
-                         f"({grund.splitlines()[0] if grund else '?'})")
-            self._on_log(f"> Es wird auf {fb['label']} umgestellt.")
+            erst = probe_grund_text(grund, self.lang).splitlines()[0] if grund else '?'
+            self._on_log(self._t(f"> ACHTUNG: {c['label']} laeuft hier nicht ({erst})",
+                                 f"> WARNING: {c['label']} does not work here ({erst})"))
+            self._on_log(self._t(f"> Es wird auf {fb['label']} umgestellt.",
+                                 f"> Switching to {fb['label']}."))
             return True
         antwort = QtWidgets.QMessageBox.question(
             self, self._t("Codec nicht verfuegbar", "Codec not available"),
@@ -9627,7 +9844,9 @@ class MainWindow(QtWidgets.QWidget):
         is_raw = self.rb_raw.isChecked()
         files = self._arbeitsdateien(is_raw)
         if len(files) < 50:
-            QtWidgets.QMessageBox.warning(self, "Zu wenige Bilder", f"Nur {len(files)} Bilder gefunden (mind. 50).")
+            QtWidgets.QMessageBox.warning(self, self._t("Zu wenige Bilder", "Too few images"),
+                                          self._t(f"Nur {len(files)} Bilder gefunden (mind. 50).",
+                                                  f"Only {len(files)} images found (at least 50)."))
             return None
         _, max_blur, min_blur = self.blur_options[self.cmb_blur.currentIndex()]
         width, res_name = self.res_map[self.cmb_res.currentIndex()]
@@ -9672,7 +9891,7 @@ class MainWindow(QtWidgets.QWidget):
                 p['art_cli_path'] = art if art and os.path.isfile(art) else ''
             else:
                 if not art or not os.path.isfile(art):
-                    QtWidgets.QMessageBox.warning(self, "Fehler", self._t(f"Bitte zuerst {eng('bin')} in den Einstellungen auswählen.",
+                    QtWidgets.QMessageBox.warning(self, self._t("Fehler", "Error"), self._t(f"Bitte zuerst {eng('bin')} in den Einstellungen auswählen.",
                             f"Please select {eng('bin')} in the settings first."))
                     return None
                 p['art_cli_path'] = art
@@ -10012,7 +10231,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def _telegram_chat_ermitteln(self):
         self._telegram_merken()
-        chat, info = telegram_chat_finden(self.txt_tg_token.text().strip())
+        chat, info = telegram_chat_finden(self.txt_tg_token.text().strip(), self.lang)
         if chat:
             self.txt_tg_chat.setText(chat)
             self._telegram_merken()
@@ -10028,7 +10247,8 @@ class MainWindow(QtWidgets.QWidget):
         ok, info = telegram_senden(
             self.txt_tg_token.text().strip(), self.txt_tg_chat.text().strip(),
             self._t("\U0001f44b Purelapse: Testnachricht. Die Benachrichtigung funktioniert.",
-                    "\U0001f44b Purelapse: test message. Notifications work."))
+                    "\U0001f44b Purelapse: test message. Notifications work."),
+            lang=self.lang)
         if ok:
             QtWidgets.QMessageBox.information(
                 self.dlg_settings, "Telegram",
@@ -10056,9 +10276,10 @@ class MainWindow(QtWidgets.QWidget):
                                 art or getattr(self, '_lauf_art', ""),
                                 getattr(self, '_ablauf', None), meldung, rest, self.lang)
         ergebnis = {}
+        lang = self.lang
 
         def senden():
-            ergebnis['wert'] = telegram_senden(tg['token'], tg['chat'], text)
+            ergebnis['wert'] = telegram_senden(tg['token'], tg['chat'], text, lang=lang)
 
         faden = threading.Thread(target=senden, daemon=True)
         faden.start()
@@ -10068,7 +10289,8 @@ class MainWindow(QtWidgets.QWidget):
             if 'wert' in ergebnis:
                 ok, info = ergebnis['wert']
                 if not ok:
-                    self._on_log(f"> WARNUNG: Telegram-Nachricht nicht gesendet: {info}")
+                    self._on_log(self._t(f"> WARNUNG: Telegram-Nachricht nicht gesendet: {info}",
+                                         f"> WARNING: Telegram message not sent: {info}"))
             elif versuch < 40:
                 QtCore.QTimer.singleShot(500, lambda: pruefen(versuch + 1))
         QtCore.QTimer.singleShot(500, pruefen)
