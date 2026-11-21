@@ -20,6 +20,9 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
   Suchmaschinen – bisher landete der Google-Crawler mit englischer
   Browsersprache immer auf der englischen Seite, die deutschen Seiten
   wurden dadurch womöglich nicht erfasst.
+- **Neue Projektadresse:** Purelapse liegt jetzt in der GitHub-Organisation
+  `purelapse` (github.com/purelapse/purelapse). Alle Links auf der Webseite
+  und in den READMEs zeigen dorthin; alte Links leitet GitHub weiter.
 
 ## [2.42.1-beta] – 2026-11-20
 

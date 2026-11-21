@@ -5,7 +5,7 @@
 **Zeitraffer ohne Flackern – aus RAW- oder JPG-Serien, mit ART, RawTherapee oder Darktable.**
 
 > ⚠️ **Beta-Version.** Purelapse wird aktiv entwickelt. Bitte Originalbilder
-> sichern und Fehler als [Issue](https://github.com/slvobng/purelapse/issues) melden.
+> sichern und Fehler als [Issue](https://github.com/purelapse/purelapse/issues) melden.
 
 ![Purelapse: Bildleiste, Helligkeitsverlauf und Einstellungen](docs/screenshot.jpg)
 
@@ -278,7 +278,7 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 
 1. **RawTherapee**, **ART** und/oder **darktable** installieren (für die
    RAW-Entwicklung).
-2. Unter [Releases](https://github.com/slvobng/purelapse/releases) die Datei `Purelapse-…-x86_64.AppImage`
+2. Unter [Releases](https://github.com/purelapse/purelapse/releases) die Datei `Purelapse-…-x86_64.AppImage`
    herunterladen.
 3. Ausführbar machen und starten:
    ```bash
@@ -297,7 +297,7 @@ Für JPG-Serien wird keine Engine benötigt.
 ## Aus dem Quelltext starten
 
 ```bash
-git clone https://github.com/slvobng/purelapse.git
+git clone https://github.com/purelapse/purelapse.git
 cd purelapse
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt

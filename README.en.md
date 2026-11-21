@@ -5,7 +5,7 @@
 **Flicker-free timelapses – from RAW or JPG sequences, with ART, RawTherapee or Darktable.**
 
 > ⚠️ **Beta version.** Purelapse is under active development. Please back up
-> your original images and report bugs as an [issue](https://github.com/slvobng/purelapse/issues).
+> your original images and report bugs as an [issue](https://github.com/purelapse/purelapse/issues).
 
 ![Purelapse: filmstrip, brightness chart and settings](docs/screenshot.jpg)
 
@@ -273,7 +273,7 @@ the sequence. Purelapse is built for this:
 
 1. Install **RawTherapee**, **ART** and/or **darktable** (for RAW development).
 2. Download `Purelapse-…-x86_64.AppImage` from
-   [Releases](https://github.com/slvobng/purelapse/releases).
+   [Releases](https://github.com/purelapse/purelapse/releases).
 3. Make it executable and start it:
    ```bash
    chmod +x Purelapse-*-x86_64.AppImage
@@ -291,7 +291,7 @@ JPG sequences don't need an engine.
 ## Running from source
 
 ```bash
-git clone https://github.com/slvobng/purelapse.git
+git clone https://github.com/purelapse/purelapse.git
 cd purelapse
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
