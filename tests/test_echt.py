@@ -67,7 +67,7 @@ pruef(r['kennung'] == pe.profil_kennung(prof) and r['dauer'] > 0, "Kennung/Dauer
 pruef(open(sc).read() == vorher_text and os.stat(sc).st_mtime_ns == vorher_zeit, "die Begleitdatei wurde angefasst")
 pruef(set(glob.glob(os.path.join(tempfile.gettempdir(), "purelapse_vorschau_*"))) == tmp_vorher,
       "der Arbeitsordner bleibt liegen")
-pruef(not glob.glob(o + "/*.jpg") and not os.path.exists(os.path.join(o, "Deflickered_JPG")),
+pruef(not glob.glob(o + "/*.jpg") and not os.path.exists(os.path.join(o, "Purelapse", "Deflickered_JPG")),
       "die Vorschau schreibt in den Bilderordner")
 hell, _, _ = pe.schnell_profil(prof, {'brightness': 40}, None)
 r2 = hole(hell)
@@ -101,7 +101,7 @@ vorschau = hole(ziel_profil, kante=300)['rgb']
 pe.write_arp_dict(sc, ziel_profil)
 e2 = lauf(parameter(o, d, raw_mode='pass2', art_cli_path=RT_CLI, calib_rounds=0))
 pruef(e2.ok(), f"Pass 2 scheitert: {e2.fehler[:1]}")
-fertig = cv2.cvtColor(cv2.imread(os.path.join(o, "Deflickered_JPG", os.path.splitext(os.path.basename(bild))[0] + ".jpg")),
+fertig = cv2.cvtColor(cv2.imread(os.path.join(o, "Purelapse", "Deflickered_JPG", os.path.splitext(os.path.basename(bild))[0] + ".jpg")),
                       cv2.COLOR_BGR2RGB)
 pruef(fertig.shape[:2] == vorschau.shape[:2] or True, "")
 klein = cv2.resize(fertig, (vorschau.shape[1], vorschau.shape[0]), interpolation=cv2.INTER_AREA)

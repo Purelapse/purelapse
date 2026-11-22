@@ -107,7 +107,7 @@ for i in range(n):
     open(f + ".xmp", "w").write(NORMAL)
 import json
 json.dump({os.path.basename(f): round(0.1 * i, 3) for i, f in enumerate(dateien)},
-          open(os.path.join(o2, pm.DEFLICKER_DB), "w"))
+          open(pm.pl_datei(o2, pm.DEFLICKER_DB, anlegen=True), "w"))
 # Keyframe A (Bild 1): echter Keyframe + Schaerfe + Farbbalance (Farbton 350, Saettigung 0)
 ka = mit_eintraegen(KF, [('sharpen', 1, struct.pack('<fff', 2.0, 0.5, 0.5).hex()),
                          ('colorbalancergb', 5, cb_params(350.0, 0.0))], rating=5)

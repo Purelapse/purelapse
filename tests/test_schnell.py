@@ -49,7 +49,7 @@ for art in ("raw", "jpg"):
         pruef(ok and fr.shape[1] <= 1280 and abs(fr.shape[1] / fr.shape[0] - 16 / 9) < 0.02, f"{art}: Format {fr.shape if ok else None}")
         print(f"   {art}: {n} Bilder in {dauer:.1f} s, Flackern {fl:.4f} EV")
     neu = set(os.listdir(o)) - vorher
-    pruef(neu == {os.path.basename(x) for x in v} and not os.path.exists(os.path.join(o, "Deflickered_JPG")) and not glob.glob(o + "/*.pp3"),
+    pruef(neu == {os.path.basename(x) for x in v} and not os.path.exists(os.path.join(o, "Purelapse", "Deflickered_JPG")) and not glob.glob(o + "/*.pp3"),
           f"{art}: Schnellvorschau hinterlaesst weitere Dateien: {neu}")
     f._start_schnell()
     pruef(len([x for x in videos(o) if "Schnellvorschau" in x]) == 1, f"{art}: zweiter Lauf legt eine weitere Datei an")

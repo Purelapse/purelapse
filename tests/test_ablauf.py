@@ -54,7 +54,7 @@ erst = pe.read_arp_dict(pe.sidecar(db[0]))
 pruef(list(erst.keys())[0] == 'Version', "[Version] nicht an erster Stelle")
 e2 = lauf(parameter(ob, db, raw_mode='pass2', art_cli_path=RT_CLI))
 pruef(e2.ok(), f"Pass 2 scheitert: {meld(e2)[:120]}")
-fl, n = ordner_flackern(os.path.join(ob, "Deflickered_JPG"))
+fl, n = ordner_flackern(os.path.join(ob, "Purelapse", "Deflickered_JPG"))
 pruef(n == N and fl < 0.005, f"entwickelte Bilder: {n} Stueck, Flackern {fl:.4f}")
 flv, nv = video_flackern(videos(ob)[0])
 pruef(nv == N and flv < 0.005, f"Video: {nv} Bilder, Flackern {flv:.4f}")
@@ -84,7 +84,7 @@ hell = [float(prof[i]['Exposure']['Brightness']) for i in (0, 10, 25, 40, N - 1)
 pruef(hell[0] == 0 and hell[1] == 0 and 10 < hell[2] < 20 and hell[3] == 30 and hell[4] == 30,
       f"Helligkeit nicht weich uebergeblendet: {hell}")
 pruef(all(pe.hl_lesen(p) == "Coloropp" for p in prof), "Lichter-Rekonstruktion nicht verteilt")
-jp = sorted(glob.glob(os.path.join(ob, "Deflickered_JPG", "*.jpg")))
+jp = sorted(glob.glob(os.path.join(ob, "Purelapse", "Deflickered_JPG", "*.jpg")))
 ev = [helligkeit_ev(cv2.imread(x)) for x in jp]
 pruef(ev[40] - ev[10] > 0.3, f"die Helligkeit des Keyframes kommt im Bild nicht an: {ev[40]-ev[10]:.2f}")
 pruef(flackern(ev) < 0.005, f"mit Keyframes flackert es: {flackern(ev):.4f}")
@@ -120,7 +120,7 @@ pruef(any(f"Fortsetzung: {N-1} von {N}" in z for z in e.log), "die fertigen Bild
 pruef(any("Entwicklung: 1 Bilder" in z for z in e.log), "es wird mehr als das eine Bild neu entwickelt")
 
 print("=== I. Fremdes Bild im Ausgabeordner ===")
-cv2.imwrite(os.path.join(oh, "Deflickered_JPG", "ALT_9999.jpg"), np.full((200, 300, 3), 255, np.uint8))
+cv2.imwrite(os.path.join(oh, "Purelapse", "Deflickered_JPG", "ALT_9999.jpg"), np.full((200, 300, 3), 255, np.uint8))
 for x in videos(oh): os.remove(x)
 e = lauf(parameter(oh, dh, raw_mode='pass2', art_cli_path=RT_CLI, engine='rt'))
 fl, n = video_flackern(videos(oh)[0])
@@ -135,7 +135,7 @@ e = lauf(parameter(ojb, djb, raw_mode='pass2', art_cli_path=RT_CLI, engine='rt',
          vor_start=lambda w: threading.Timer(1.5, lambda: setattr(w, '_abort', True)).start())
 os.environ["FAKE_VERZOEGERUNG"] = "0"
 pruef(not e.fertig and "abgebrochen" in meld(e).lower(), f"Abbruch nicht gemeldet: {meld(e)[:80]}")
-n_teil = len(glob.glob(os.path.join(ojb, "Deflickered_JPG", "*.jpg")))
+n_teil = len(glob.glob(os.path.join(ojb, "Purelapse", "Deflickered_JPG", "*.jpg")))
 pruef(0 < n_teil < N, f"unbrauchbarer Abbruchzeitpunkt: {n_teil}")
 laufend = [z for z in subprocess.run(["pgrep", "-af", "rawtherapee-cli"], capture_output=True,
                                      text=True).stdout.splitlines() if "pgrep" not in z]
@@ -145,7 +145,7 @@ pruef(e.ok(), f"Fortsetzung scheitert: {meld(e)[:100]}")
 pruef(any(f"Fortsetzung: {n_teil} von {N}" in z for z in e.log),
       f"die {n_teil} fertigen Bilder werden nicht uebernommen")
 pruef(any(f"Entwicklung: {N - n_teil} Bilder" in z for z in e.log), "es wird zu viel neu entwickelt")
-fl, n = ordner_flackern(os.path.join(ojb, "Deflickered_JPG"))
+fl, n = ordner_flackern(os.path.join(ojb, "Purelapse", "Deflickered_JPG"))
 pruef(n == N and fl < 0.005, f"nach der Fortsetzung: {n} Bilder, {fl:.4f} EV")
 print(f"   {n_teil} uebernommen, {N - n_teil} neu, Flackern {fl:.4f} EV")
 
@@ -167,15 +167,15 @@ pe.write_arp_dict(pe.sidecar(dl[25]), d)
 e = lauf(parameter(ol, dl, raw_mode='pass2', art_cli_path=ART_CLI, engine='art', procs=3, cores=8, diag=True))
 pruef(e.ok(), f"ART Pass 2: {meld(e)[:100]}")
 pruef(any("Prozesse parallel" in z for z in e.log), "es wird nicht parallel entwickelt")
-fl, n = ordner_flackern(os.path.join(ol, "Deflickered_JPG"))
+fl, n = ordner_flackern(os.path.join(ol, "Purelapse", "Deflickered_JPG"))
 pruef(n == N and fl < 0.005, f"ART: {n} Bilder, {fl:.4f} EV")
 p0 = pe.read_arp_dict(pe.sidecar(dl[0]))
 pruef(p0['White Balance'].get('Setting') == 'CustomTemp', f"ART-WB: {p0['White Balance'].get('Setting')}")
 pruef(p0['Exposure'].get('HLRecovery') == 'Color', "ART-Lichter nicht verteilt")
-dateien_diag = set(os.listdir(ol))
+dateien_diag = set(os.listdir(os.path.join(ol, "Purelapse")))
 for erwartet in ("purelapse_art.log", "purelapse_pass1.csv", "purelapse_pass2.csv"):
     pruef(erwartet in dateien_diag, f"Diagnose-Modus schreibt {erwartet} nicht")
-logtext = io.open(os.path.join(ol, "purelapse_art.log"), encoding="utf-8").read()
+logtext = io.open(os.path.join(ol, "Purelapse", "purelapse_art.log"), encoding="utf-8").read()
 pruef("Prozess 1/" in logtext and "Rueckgabewert 0" in logtext, "Engine-Protokoll unvollstaendig")
 
 print("=== M-R. Vorschau, Vergleich, Effekte, ProRes ===")
@@ -367,7 +367,7 @@ pruef(len(b.tiles) == 0 and not band.sichtbar, "im leeren Ordner bleibt der Stre
 
 print("=== X. Gleichzeitiges Messen: dieselben Zahlen ===")
 import time as _zeit
-jp = sorted(glob.glob(os.path.join(ob, "Deflickered_JPG", "*.jpg")))
+jp = sorted(glob.glob(os.path.join(ob, "Purelapse", "Deflickered_JPG", "*.jpg")))
 einzeln = [pm.measure_jpg_linear(x, None) for x in jp]
 for th in (1, 2, 4, 8):
     zugleich = pm.parallel_messen(pm.measure_jpg_linear, [(x, None) for x in jp], th)

@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.42.2-beta"
+VERSION = "2.43.0-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -135,6 +135,14 @@ DEFLICKER_DB = "purelapse_deflicker.json"
 CALIB_DB = "purelapse_calib.json"
 DEV_INDEX = ".purelapse_developed.json"
 RESULT_DB = "purelapse_result.json"
+# Alles, was Purelapse in einem Bilderordner anlegt - Videos, entwickelte
+# Bilder, Messwerte, Protokolle -, liegt im Unterordner "Purelapse". Nur die
+# Begleitdateien der Engines (.arp/.pp3/.xmp) bleiben neben den Bildern,
+# weil ART, RawTherapee und darktable sie genau dort erwarten.
+PL_ORDNER = "Purelapse"
+ZWISCHEN_ORDNER = "Deflickered_JPG"
+PROTOKOLLE = ("purelapse_pass1.csv", "purelapse_pass2.csv", "purelapse_profiles.csv",
+              "purelapse_arp_check.log", "purelapse_art.log")
 
 if os.environ.get("APPIMAGE"):
     # AppImage: das Programm liegt in einem schreibgeschuetzten Abbild.
@@ -2230,10 +2238,70 @@ def format_shutter(s):
 # ==========================================================================
 #  DEFLICKER-BASISWERTE UND DATEI-HELFER
 # ==========================================================================
+def pl_ordner(target_dir, anlegen=False):
+    """Der Purelapse-Ordner im Bilderordner. Beim Schreiben anlegen=True."""
+    d = os.path.join(target_dir, PL_ORDNER)
+    if anlegen:
+        os.makedirs(d, exist_ok=True)
+    return d
+
+
+def pl_datei(target_dir, name, anlegen=False):
+    """Pfad einer Purelapse-Datei (Messwerte, Protokolle) im Purelapse-Ordner."""
+    return os.path.join(pl_ordner(target_dir, anlegen), name)
+
+
+def zwischen_ordner(target_dir):
+    """Ordner der entwickelten Zwischenbilder (Deflickered_JPG)."""
+    return os.path.join(pl_ordner(target_dir), ZWISCHEN_ORDNER)
+
+
+def ist_purelapse_video(name):
+    return "_Purelapse_" in name and name.lower().endswith((".mp4", ".mov"))
+
+
+def alte_ablage_umraeumen(target_dir):
+    """
+    Bis 2.42 lagen Videos, Deflickered_JPG und die purelapse_*-Dateien lose
+    im Bilderordner. Raeumt sie einmalig in den Purelapse-Ordner.
+    Liegt dort schon eine gleichnamige Datei, bleibt die alte, wo sie ist -
+    ueberschrieben wird nichts.
+    Rueckgabe: (verschobene Namen, nicht verschobene Namen)
+    """
+    try:
+        namen = os.listdir(target_dir)
+    except OSError:
+        return [], []
+    alt = set((DEFLICKER_DB, CALIB_DB, RESULT_DB, ZWISCHEN_ORDNER) + PROTOKOLLE)
+    kandidaten = sorted(n for n in namen
+                        if (n in alt or ist_purelapse_video(n))
+                        and (os.path.isfile(os.path.join(target_dir, n))
+                             or (n == ZWISCHEN_ORDNER
+                                 and os.path.isdir(os.path.join(target_dir, n)))))
+    if not kandidaten:
+        return [], []
+    try:
+        ziel_ordner = pl_ordner(target_dir, anlegen=True)
+    except OSError:
+        return [], kandidaten
+    verschoben, geblieben = [], []
+    for n in kandidaten:
+        ziel = os.path.join(ziel_ordner, n)
+        if os.path.exists(ziel):
+            geblieben.append(n)
+            continue
+        try:
+            shutil.move(os.path.join(target_dir, n), ziel)
+            verschoben.append(n)
+        except OSError:
+            geblieben.append(n)
+    return verschoben, geblieben
+
+
 def save_base_ev(target_dir, mapping):
     # Ohne diese Werte fehlen Pass 2 die Grundlagen der Keyframe-Uebergaenge:
     # ein Fehler muss den Lauf anhalten, nicht nur auf der Konsole stehen.
-    datei_atomar(os.path.join(target_dir, DEFLICKER_DB),
+    datei_atomar(pl_datei(target_dir, DEFLICKER_DB, anlegen=True),
                  json.dumps(mapping, indent=1))
 
 def arp_fingerprint(arp_path):
@@ -2329,7 +2397,7 @@ def load_residuals(target_dir, files=None):
     veraendert hat.
     """
     try:
-        with open(os.path.join(target_dir, RESULT_DB), "r", encoding="utf-8") as f:
+        with open(pl_datei(target_dir, RESULT_DB), "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
         data = {}
@@ -2347,13 +2415,13 @@ def load_residuals(target_dir, files=None):
 def save_residuals(target_dir, mapping):
     # Nur fuer die Anzeige im Diagramm.
     try:
-        datei_atomar(os.path.join(target_dir, RESULT_DB), json.dumps(mapping, indent=0))
+        datei_atomar(pl_datei(target_dir, RESULT_DB, anlegen=True), json.dumps(mapping, indent=0))
     except OSError:
         pass
 
 def load_calib(target_dir):
     try:
-        with open(os.path.join(target_dir, CALIB_DB), "r", encoding="utf-8") as f:
+        with open(pl_datei(target_dir, CALIB_DB), "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
@@ -2361,11 +2429,11 @@ def load_calib(target_dir):
 def save_calib(target_dir, mapping):
     # Gehoert zu den Korrekturen in den Sidecars: geht sie verloren, rechnet
     # der naechste Lauf mit falschen Ausgangswerten.
-    datei_atomar(os.path.join(target_dir, CALIB_DB), json.dumps(mapping, indent=1))
+    datei_atomar(pl_datei(target_dir, CALIB_DB, anlegen=True), json.dumps(mapping, indent=1))
 
 def write_check_log(target_dir, filename, header, issues, checked):
     try:
-        with open(os.path.join(target_dir, filename), "w", encoding="utf-8") as f:
+        with open(pl_datei(target_dir, filename, anlegen=True), "w", encoding="utf-8") as f:
             f.write(header + "\n")
             f.write(f"Geprueft: {checked} Profile\n")
             f.write(f"Auffaelligkeiten: {len(issues)}\n\n")
@@ -2379,12 +2447,12 @@ def write_check_log(target_dir, filename, header, issues, checked):
         print(f"Fehler beim Schreiben von {filename}: {e}")
 
 def save_report(target_dir, filename, rows):
-    """Schreibt ein Messprotokoll als CSV in den Bilderordner."""
+    """Schreibt ein Messprotokoll als CSV in den Purelapse-Ordner."""
     if not rows:
         return
     try:
         import csv
-        path = os.path.join(target_dir, filename)
+        path = pl_datei(target_dir, filename, anlegen=True)
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
             w.writeheader()
@@ -2394,7 +2462,7 @@ def save_report(target_dir, filename, rows):
 
 def load_base_ev(target_dir):
     try:
-        with open(os.path.join(target_dir, DEFLICKER_DB), "r", encoding="utf-8") as f:
+        with open(pl_datei(target_dir, DEFLICKER_DB), "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
@@ -2884,8 +2952,8 @@ class ResetDialog(QtWidgets.QDialog):
                      "Logs and measurement data (CSV, LOG)"),
             'state': ("Betriebsdaten (Deflicker-Basiswerte, Kalibrierung)",
                       "Working data (deflicker base values, calibration)"),
-            'output': ("Entwickelte Bilder im Ordner Deflickered_JPG",
-                       "Developed images in the Deflickered_JPG folder"),
+            'output': ("Entwickelte Bilder im Ordner Purelapse/Deflickered_JPG",
+                       "Developed images in the Purelapse/Deflickered_JPG folder"),
             # Generisch statt "ART"/".arp und .xmp" hart codiert, damit der
             # Text zur jeweils aktiven Engine (ART/RawTherapee/Darktable) passt.
             'sidecars': (f"Sidecars ({eng('ext')} und .xmp) - LOESCHT DEINE "
@@ -2925,17 +2993,15 @@ class ResetDialog(QtWidgets.QDialog):
     def _scan(self):
         d = self.target_dir
         g = {'logs': [], 'state': [], 'output': [], 'sidecars': []}
-        for name in ("purelapse_pass1.csv", "purelapse_pass2.csv",
-                     "purelapse_profiles.csv", "purelapse_arp_check.log",
-                     "purelapse_art.log"):
-            p = os.path.join(d, name)
+        for name in PROTOKOLLE:
+            p = pl_datei(d, name)
             if os.path.exists(p):
                 g['logs'].append(p)
         for name in (DEFLICKER_DB, CALIB_DB):
-            p = os.path.join(d, name)
+            p = pl_datei(d, name)
             if os.path.exists(p):
                 g['state'].append(p)
-        out = os.path.join(d, "Deflickered_JPG")
+        out = zwischen_ordner(d)
         if os.path.isdir(out):
             g['output'] = sorted({p for ext in ZW_JPG + ZW_TIF
                                   for p in glob.glob(os.path.join(out, "*" + ext))})
@@ -2974,6 +3040,12 @@ class ResetDialog(QtWidgets.QDialog):
                     self.deleted += 1
                 except OSError:
                     pass
+        # Leer gewordene Ordner mit wegraeumen (rmdir loescht nur leere)
+        for leer in (zwischen_ordner(self.target_dir), pl_ordner(self.target_dir)):
+            try:
+                os.rmdir(leer)
+            except OSError:
+                pass
         self.accept()
 
 
@@ -3114,6 +3186,224 @@ class PreviewDialog(QtWidgets.QDialog):
 # ==========================================================================
 #  GALERIE-WORKER
 # ==========================================================================
+# ==========================================================================
+#  ORDNERWAHL MIT VORSCHAU
+#
+#  Beim Oeffnen eines Bilderordners zeigt der Dialog rechts, was darin liegt:
+#  Anzahl und Art der Bilder und sechs ueber die Serie verteilte Vorschauen.
+#  Gelesen werden nur die eingebetteten Vorschaubilder der Kamera bzw. JPGs in
+#  verkleinerter Aufloesung - schnell genug, um beim Durchklicken zu folgen.
+# ==========================================================================
+ORDNER_VORSCHAU_ANZAHL = 6
+
+
+def ordner_bilder(ordner):
+    """
+    Die Bilder eines Ordners fuer die Ordnerwahl.
+    Rueckgabe: (Liste der Bilder, Art) mit Art 'raw', 'jpg' oder None.
+    RAW hat Vorrang - so arbeitet auch das Hauptfenster.
+    """
+    try:
+        namen = sorted(os.listdir(ordner))
+    except OSError:
+        return [], None
+    raw = [os.path.join(ordner, n) for n in namen if is_raw_file(n)]
+    if raw:
+        return raw, 'raw'
+    jpg = [os.path.join(ordner, n) for n in namen if n.lower().endswith((".jpg", ".jpeg"))]
+    return jpg, ('jpg' if jpg else None)
+
+
+def ordner_auswahl(bilder, anzahl=ORDNER_VORSCHAU_ANZAHL):
+    """Gleichmaessig ueber die Serie verteilte Bilder, erstes und letztes inklusive."""
+    n = len(bilder)
+    if n <= anzahl:
+        return list(bilder)
+    return [bilder[round(i * (n - 1) / (anzahl - 1))] for i in range(anzahl)]
+
+
+def ordner_vorschau_bild(pfad, kante=320):
+    """Kleines Vorschaubild (BGR) - bei RAW das eingebettete der Kamera."""
+    img = None
+    try:
+        if is_raw_file(pfad):
+            with rawpy.imread(pfad) as raw:
+                try:
+                    thumb = raw.extract_thumb()
+                    if thumb.format == rawpy.ThumbFormat.JPEG:
+                        # Eingebettete Vorschauen sind meist nur 1 bis 2 MP gross
+                        img = cv2.imdecode(np.frombuffer(thumb.data, np.uint8), cv2.IMREAD_COLOR)
+                    else:
+                        img = cv2.cvtColor(thumb.data, cv2.COLOR_RGB2BGR)
+                except Exception:
+                    # Ohne eingebettetes Bild: selbst entwickeln, halbe Groesse
+                    rgb = raw.postprocess(use_camera_wb=True, half_size=True, no_auto_bright=True)
+                    img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        else:
+            img = cv2.imdecode(np.fromfile(pfad, dtype=np.uint8), cv2.IMREAD_REDUCED_COLOR_4)
+    except Exception:
+        img = None
+    if img is None or img.size == 0:
+        return None
+    h, w = img.shape[:2]
+    faktor = kante / float(max(h, w))
+    if faktor < 1.0:
+        img = cv2.resize(img, (max(1, int(w * faktor)), max(1, int(h * faktor))),
+                         interpolation=cv2.INTER_AREA)
+    return np.ascontiguousarray(img)
+
+
+class OrdnerVorschauLader(QtCore.QThread):
+    """Laedt die Vorschauen eines Ordners im Hintergrund, Bild fuer Bild."""
+    bild = QtCore.pyqtSignal(int, int, object)
+
+    def __init__(self, nummer, dateien):
+        super().__init__()
+        self.nummer = nummer
+        self.dateien = list(dateien)
+        self._abbruch = False
+
+    def abbrechen(self):
+        self._abbruch = True
+
+    def run(self):
+        for i, pfad in enumerate(self.dateien):
+            if self._abbruch:
+                return
+            self.bild.emit(self.nummer, i, ordner_vorschau_bild(pfad))
+
+
+class OrdnerDialog(QtWidgets.QFileDialog):
+    """Ordnerwahl, groesser als der Standard und mit Vorschau der Bilder."""
+
+    def __init__(self, parent, titel, start, lang='de'):
+        super().__init__(parent, titel, start)
+        self._de = (lang != 'en')
+        self.setFileMode(QtWidgets.QFileDialog.Directory)
+        self.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+        self.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+        self._nummer = 0
+        self._lader = None
+        self._alte_lader = []
+        self._ordner = None
+        self._bau_vorschau()
+        self._timer = QtCore.QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(180)
+        self._timer.timeout.connect(self._laden)
+        self.currentChanged.connect(self._gewaehlt)
+        self.directoryEntered.connect(self._gewaehlt)
+        # Etwa die halbe Flaeche des Hauptfensters: 70 % Breite und Hoehe
+        if parent is not None:
+            self.resize(max(900, int(parent.width() * 0.7)),
+                        max(560, int(parent.height() * 0.7)))
+        self._gewaehlt(start)
+
+    def _t(self, de, en):
+        return de if self._de else en
+
+    def _bau_vorschau(self):
+        self.vorschau = QtWidgets.QFrame()
+        self.vorschau.setObjectName("statuscard")
+        self.vorschau.setMinimumWidth(300)
+        v = QtWidgets.QVBoxLayout(self.vorschau)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(8)
+        self.lbl_v_titel = QtWidgets.QLabel(self._t("Vorschau", "Preview"))
+        self.lbl_v_titel.setObjectName("statustitel")
+        self.lbl_v_titel.setWordWrap(True)
+        v.addWidget(self.lbl_v_titel)
+        self.lbl_v_info = QtWidgets.QLabel("")
+        self.lbl_v_info.setObjectName("hint")
+        self.lbl_v_info.setWordWrap(True)
+        v.addWidget(self.lbl_v_info)
+        raster = QtWidgets.QGridLayout()
+        raster.setSpacing(6)
+        self.kacheln = []
+        for i in range(ORDNER_VORSCHAU_ANZAHL):
+            k = QtWidgets.QLabel()
+            k.setAlignment(QtCore.Qt.AlignCenter)
+            k.setMinimumSize(150, 100)
+            k.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+            raster.addWidget(k, i // 2, i % 2)
+            self.kacheln.append(k)
+        v.addLayout(raster, 1)
+        gitter = self.layout()
+        if isinstance(gitter, QtWidgets.QGridLayout):
+            gitter.addWidget(self.vorschau, 0, gitter.columnCount(), gitter.rowCount(), 1)
+
+    def _gewaehlt(self, pfad):
+        if pfad and os.path.isdir(pfad):
+            self._ordner = pfad
+            self._timer.start()
+
+    def _anhalten(self):
+        if self._lader is not None:
+            self._lader.abbrechen()
+            self._alte_lader.append(self._lader)
+            self._lader = None
+        self._alte_lader = [l for l in self._alte_lader if l.isRunning()]
+
+    def _laden(self):
+        ordner = self._ordner
+        self._anhalten()
+        self._nummer += 1
+        for k in self.kacheln:
+            k.clear()
+            k.setText("")
+        bilder, art = ordner_bilder(ordner) if ordner else ([], None)
+        self.lbl_v_titel.setText(os.path.basename(os.path.normpath(ordner or "")) or (ordner or ""))
+        if not bilder:
+            self.lbl_v_info.setText(self._t("Keine Bilder in diesem Ordner.",
+                                            "No images in this folder."))
+            return
+        endung = os.path.splitext(bilder[0])[1].lstrip(".").upper()
+        anzahl = len(bilder)
+        text = (self._t(f"{anzahl} Bilder ({endung})", f"{anzahl} images ({endung})"))
+        text += "\n" + os.path.basename(bilder[0]) + " \u2026 " + os.path.basename(bilder[-1])
+        if anzahl < 50:
+            text += "\n" + self._t("Für einen Zeitraffer braucht Purelapse mindestens 50 Bilder.",
+                                    "Purelapse needs at least 50 images for a timelapse.")
+        self.lbl_v_info.setText(text)
+        auswahl = ordner_auswahl(bilder)
+        for k in self.kacheln[len(auswahl):]:
+            k.hide()
+        for k in self.kacheln[:len(auswahl)]:
+            k.show()
+            k.setText("\u2026")
+        self._lader = OrdnerVorschauLader(self._nummer, auswahl)
+        self._lader.bild.connect(self._bild_da)
+        self._lader.start()
+
+    def _bild_da(self, nummer, index, img):
+        if nummer != self._nummer or not (0 <= index < len(self.kacheln)):
+            return
+        kachel = self.kacheln[index]
+        if img is None:
+            kachel.setText("\u2013")
+            return
+        h, w = img.shape[:2]
+        rgb = np.ascontiguousarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        qimg = QtGui.QImage(rgb.data, w, h, 3 * w, QtGui.QImage.Format_RGB888).copy()
+        pm = QtGui.QPixmap.fromImage(qimg)
+        kachel.setPixmap(pm.scaled(kachel.width(), kachel.height(),
+                                   QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        kachel.setToolTip(os.path.basename(self._lader.dateien[index])
+                          if self._lader is not None and index < len(self._lader.dateien) else "")
+
+    def done(self, ergebnis):
+        self._timer.stop()
+        self._anhalten()
+        for l in self._alte_lader:
+            l.wait(2000)
+        super().done(ergebnis)
+
+    def ordner(self):
+        """Der gewaehlte Ordner nach exec_(), sonst ''."""
+        wahl = self.selectedFiles()
+        return wahl[0] if wahl else ""
+
+
 class VorschauLader(QtCore.QThread):
     """
     Laedt das Vorschaubild einmalig im Hintergrund.
@@ -4432,7 +4722,7 @@ class Worker(QtCore.QThread):
         out_dir_mode = p['out_dir_mode']
         custom_dir = p.get('custom_out_dir', '')
         if out_dir_mode == 0:
-            out_base = abs_target_dir
+            out_base = pl_ordner(abs_target_dir, anlegen=True)
         elif out_dir_mode == 1:
             out_base = os.path.dirname(abs_target_dir)
         elif out_dir_mode == 2:
@@ -4617,6 +4907,15 @@ class Worker(QtCore.QThread):
     def run(self):
         try:
             set_engine(self.p.get('engine', 'art'))
+            # Auftraege aus der Warteschlange kommen ohne _set_folder hierher
+            if self.p.get('target_dir'):
+                verschoben, _ = alte_ablage_umraeumen(self.p['target_dir'])
+                if verschoben:
+                    self.log.emit(self._t(
+                        f"> {len(verschoben)} Dateien aus einer aelteren Version in den Ordner "
+                        f"{PL_ORDNER} verschoben.",
+                        f"> Moved {len(verschoben)} files from an older version into the "
+                        f"{PL_ORDNER} folder."))
             mode = self.p.get('mode', 'normal')
             if mode == 'plain':
                 self._run_plain()
@@ -4931,7 +5230,7 @@ class Worker(QtCore.QThread):
             self.log.emit(self._t("> Führe Optische Stabilisierung durch...",
                 "> Running optical stabilisation..."))
             stab_diffs = calculate_stabilization(valid_files, self.status, self.progress, self._check_abort)
-        out_dir = os.path.join(abs_target_dir, "Deflickered_JPG")
+        out_dir = zwischen_ordner(abs_target_dir)
         os.makedirs(out_dir, exist_ok=True)
         ffmpeg_proc, out_video = None, None
         render_sequence = list(valid_files)
@@ -5599,7 +5898,7 @@ class Worker(QtCore.QThread):
         # im Diagnose-Modus - im Normalbetrieb entstehen keine Dateien.
         if not self._diag() or not any(lf is not None for lf in logs):
             return
-        pfad = os.path.join(self.p['target_dir'], "purelapse_art.log")
+        pfad = pl_datei(self.p['target_dir'], "purelapse_art.log", anlegen=True)
         try:
             with open(pfad, "a", encoding="utf-8") as ziel:
                 ziel.write(f"\n===== {label} - {time.strftime('%Y-%m-%d %H:%M:%S')}"
@@ -5725,7 +6024,7 @@ class Worker(QtCore.QThread):
                                   f"> darktable-cli: {jobs} processes at once."))
         env = os.environ.copy()
         env["OMP_NUM_THREADS"] = str(max(1, kerne // jobs))
-        log_path = os.path.join(self.p['target_dir'], "purelapse_art.log")
+        log_path = pl_datei(self.p['target_dir'], "purelapse_art.log")
         dt_log = None
         if self._diag():
             try:
@@ -6242,7 +6541,7 @@ class Worker(QtCore.QThread):
                 )
         self._automatik_einfrieren(files)
         self._prepare_keyframe_profiles(files)
-        out_dir = os.path.join(abs_target_dir, "Deflickered_JPG")
+        out_dir = zwischen_ordner(abs_target_dir)
         os.makedirs(out_dir, exist_ok=True)
         tief = bool(p.get('tiff16'))
         self._zw_tief = tief
@@ -6569,11 +6868,18 @@ def workflow_stand(ordner, lang='de'):
     if not teile:
         teile.append("no images" if en else "keine Bilder")
     schritte = []
-    if os.path.exists(os.path.join(ordner, DEFLICKER_DB)):
+    # Neue Ablage im Purelapse-Ordner, aeltere Ordner noch lose daneben
+    try:
+        im_pl = os.listdir(pl_ordner(ordner))
+    except OSError:
+        im_pl = []
+    if (os.path.exists(pl_datei(ordner, DEFLICKER_DB))
+            or os.path.exists(os.path.join(ordner, DEFLICKER_DB))):
         schritte.append("pass 1 done" if en else "Pass 1 erledigt")
-    if os.path.isdir(os.path.join(ordner, "Deflickered_JPG")):
+    if (os.path.isdir(zwischen_ordner(ordner))
+            or os.path.isdir(os.path.join(ordner, ZWISCHEN_ORDNER))):
         schritte.append("frames developed" if en else "Bilder entwickelt")
-    videos = [n for n in namen if "_Purelapse_" in n and n.lower().endswith((".mp4", ".mov"))]
+    videos = [n for n in namen + im_pl if ist_purelapse_video(n)]
     if videos:
         schritte.append((f"{len(videos)} video(s)" if en else f"{len(videos)} Video(s)"))
     try:
@@ -7404,7 +7710,7 @@ class MainWindow(QtWidgets.QWidget):
         gexp = QtWidgets.QGridLayout(self.box_export)
         gexp.addWidget(QtWidgets.QLabel("Speichern in:"), 0, 0)
         self.cmb_export_dir = QtWidgets.QComboBox()
-        self.cmb_export_dir.addItems(["1. Quell-Ordner (Bilder)", "2. Übergeordneter Ordner", "3. Programmverzeichnis (purelapse)", "4. Eigener Ordner wählen..."])
+        self.cmb_export_dir.addItems(["1. Purelapse-Ordner im Bilderordner (empfohlen)", "2. Übergeordneter Ordner", "3. Programmverzeichnis (purelapse)", "4. Eigener Ordner wählen..."])
         self.cmb_export_dir.currentIndexChanged.connect(self._on_export_dir_changed)
         gexp.addWidget(self.cmb_export_dir, 0, 1)
         self.btn_custom_dir = QtWidgets.QPushButton("...")
@@ -7815,10 +8121,10 @@ class MainWindow(QtWidgets.QWidget):
         if not files or not self.target_dir:
             return False
         if key == 'smooth':
-            return is_raw and os.path.exists(os.path.join(self.target_dir, DEFLICKER_DB))
+            return is_raw and os.path.exists(pl_datei(self.target_dir, DEFLICKER_DB))
         if key == 'keys':
             return self._kf_count > 0
-        return os.path.exists(os.path.join(self.target_dir, RESULT_DB))
+        return os.path.exists(pl_datei(self.target_dir, RESULT_DB))
 
     def _update_steps(self):
         """Beschriftet Schrittleiste, Hinweistexte und den Hauptknopf neu."""
@@ -8537,16 +8843,33 @@ class MainWindow(QtWidgets.QWidget):
 
     def _browse(self):
         start = self.target_dir or get_last_path() or os.path.expanduser("~")
-        options = QtWidgets.QFileDialog.Options()
-        options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        d = QtWidgets.QFileDialog.getExistingDirectory(
-            self, self._t("Zeitraffer-Ordner wählen", "Choose timelapse folder"), start, options=options)
+        dlg = OrdnerDialog(self, self._t("Zeitraffer-Ordner wählen", "Choose timelapse folder"),
+                           start, self.lang)
+        d = dlg.ordner() if dlg.exec_() == QtWidgets.QDialog.Accepted else ""
         if d:
             self._set_folder(d)
+
+    def _alte_ablage_melden(self, verschoben, geblieben):
+        """Meldet im Protokoll, was beim Oeffnen umgeraeumt wurde."""
+        if verschoben:
+            self._on_log(self._t(
+                f"purelapse@engine:~$ {len(verschoben)} Dateien aus einer aelteren Version "
+                f"in den Ordner {PL_ORDNER} verschoben: " + ", ".join(verschoben[:6])
+                + (" ..." if len(verschoben) > 6 else ""),
+                f"purelapse@engine:~$ Moved {len(verschoben)} files from an older version "
+                f"into the {PL_ORDNER} folder: " + ", ".join(verschoben[:6])
+                + (" ..." if len(verschoben) > 6 else "")))
+        if geblieben:
+            self._on_log(self._t(
+                f"> HINWEIS: {len(geblieben)} aeltere Dateien blieben im Bilderordner, weil im "
+                f"Ordner {PL_ORDNER} schon gleichnamige liegen: " + ", ".join(geblieben[:6]),
+                f"> NOTE: {len(geblieben)} older files stayed in the image folder because the "
+                f"{PL_ORDNER} folder already holds files of the same name: " + ", ".join(geblieben[:6])))
 
     def _set_folder(self, path):
         self.target_dir = os.path.abspath(path)
         self.lbl_path.setText(self.target_dir)
+        self._alte_ablage_melden(*alte_ablage_umraeumen(self.target_dir))
         save_last_path(self.target_dir)
         b_alt = lade_bereiche().get(self.target_dir) or ["", ""]
         self._bereich = (b_alt[0] or None, (b_alt[1] if len(b_alt) > 1 else "") or None)

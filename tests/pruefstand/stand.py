@@ -191,5 +191,13 @@ def parameter(ordner, dateien, **mehr):
 
 
 def videos(ordner):
-    return sorted(glob.glob(os.path.join(ordner, "*.mp4"))
+    """Fertige Videos: im Purelapse-Ordner des Bilderordners (aeltere Laeufe: lose)."""
+    return sorted(glob.glob(os.path.join(ordner, "Purelapse", "*.mp4"))
+                  + glob.glob(os.path.join(ordner, "Purelapse", "*.mov"))
+                  + glob.glob(os.path.join(ordner, "*.mp4"))
                   + glob.glob(os.path.join(ordner, "*.mov")))
+
+
+def pl(ordner, *teile):
+    """Pfad im Purelapse-Ordner eines Bilderordners."""
+    return os.path.join(ordner, "Purelapse", *teile)

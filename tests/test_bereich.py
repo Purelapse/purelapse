@@ -39,7 +39,7 @@ pruef(len(glob.glob(o + "/*.pp3")) == 59 and not os.path.exists(d[0] + ".pp3") a
       f"Pass 1 schreibt {len(glob.glob(o + '/*.pp3'))} Profile")
 f._go_step('render'); f._start()
 pruef("Fertig" in f.lbl_status.text(), f"Pass 2: {f.lbl_status.text()}")
-jp = sorted(glob.glob(os.path.join(o, "Deflickered_JPG", "*.jpg")))
+jp = sorted(glob.glob(os.path.join(o, "Purelapse", "Deflickered_JPG", "*.jpg")))
 pruef(len(jp) == 59 and os.path.basename(jp[0]) == "IMG_0006.jpg" and os.path.basename(jp[-1]) == "IMG_0064.jpg", f"entwickelt: {len(jp)}")
 v = videos(o); fl, n = video_flackern(v[0]) if v else (9, 0)
 pruef(n == 59 and fl < 0.006, f"Video: {n} Bilder, Flackern {fl:.4f}")

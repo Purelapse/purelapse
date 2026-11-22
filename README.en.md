@@ -156,7 +156,7 @@ the sequence. Purelapse is built for this:
 | **Frame rate** | 23.976 · 24 · 25 · 29.97 · 30 · 50 · 59.94 · 60 · 120 fps |
 | **Quality** | Visually lossless (CRF 16) · High (CRF 20) · Standard (CRF 23) · Low (CRF 28) |
 | **Fade in / out** | Off · 0.5 · 1 · 2 · 3 seconds from/to black |
-| **Location** | Image folder, parent folder, program folder or a folder of your choice |
+| **Location** | `Purelapse` folder inside the image folder (default), parent folder, program folder or a folder of your choice |
 | **Existing file** | Create a new version (`_v1`, `_v2`, …) or overwrite |
 
 **Video codecs:**
@@ -324,6 +324,11 @@ python tests/alle.py
 Purelapse writes exactly one configuration file:
 `~/.config/purelapse/purelapse.json`. Settings from older versions
 (`~/.purelapse_*`) are taken over on first start and removed.
+
+In the image folder, only the engine's sidecar files (`.arp`, `.pp3`,
+`.xmp`) sit next to the images. Everything else – videos, developed frames
+(`Deflickered_JPG`), measurement data and logs – goes into the subfolder
+`Purelapse`.
 
 ## License
 

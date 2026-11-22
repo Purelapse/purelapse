@@ -31,12 +31,12 @@ for name, kw, grenze in (("kleine Sonne", dict(sonne=True), 0.002), ("grosse Son
     pe.set_engine('rt')
     lauf(parameter(o, d, raw_mode='pass1', make_video=False, art_cli_path=RT_CLI))
     e = lauf(parameter(o, d, raw_mode='pass2', make_video=False, art_cli_path=RT_CLI))
-    fl, n = sichtbar(os.path.join(o, "Deflickered_JPG"))
+    fl, n = sichtbar(os.path.join(o, "Purelapse", "Deflickered_JPG"))
     pruef(e.ok() and n == 40 and fl < grenze, f"{name}: {fl:.4f} EV ({n} Bilder) {e.fehler[:1]}")
     print(f"   {name}: {fl:.5f} EV")
 o = os.path.join(ARBEIT, "bb_jpg"); d, _ = szene(o, n=40, art="jpg", sonne=True, sonne_r=45)
 lauf(parameter(o, d, make_video=False))
-fl, _ = sichtbar(os.path.join(o, "Deflickered_JPG"))
+fl, _ = sichtbar(os.path.join(o, "Purelapse", "Deflickered_JPG"))
 pruef(fl < 0.006, f"JPG-Ablauf mit grosser Sonne: {fl:.4f}")
 # Saum: gleiche Werte, wenn die Grenze um eine Stufe wackelt
 lum = np.ones((100, 100), np.float32); voll = np.zeros((100, 100), bool); voll[40:60, 40:60] = True
@@ -60,10 +60,10 @@ pe.set_engine('rt')
 lauf(parameter(o, d, raw_mode='pass1', make_video=False, art_cli_path=RT_CLI))
 e = lauf(parameter(o, d, raw_mode='pass2', art_cli_path=RT_CLI, tiff16=True, codec_idx=9))
 pruef(e.ok(), f"Pass 2 mit 16 Bit scheitert: {e.fehler[:1]}")
-tifs = sorted(glob.glob(os.path.join(o, "Deflickered_JPG", "*.tif")))
+tifs = sorted(glob.glob(os.path.join(o, "Purelapse", "Deflickered_JPG", "*.tif")))
 pruef(len(tifs) == 30, f"{len(tifs)} TIFFs")
 pruef(tifs and cv2.imread(tifs[0], cv2.IMREAD_UNCHANGED).dtype == np.uint16, "TIFF nicht 16 Bit")
-fl, _ = sichtbar(os.path.join(o, "Deflickered_JPG"), "*.tif")
+fl, _ = sichtbar(os.path.join(o, "Purelapse", "Deflickered_JPG"), "*.tif")
 pruef(fl < 0.002, f"16 Bit flackert: {fl:.4f}")
 pruef(any("-tz" in z and "-b16" in z for z in e.log), "Engine nicht mit -tz -b16 aufgerufen")
 pruef(any("bgr48le" in z for z in e.log), "FFmpeg bekommt keine 16 Bit")
@@ -108,7 +108,7 @@ pruef(abs(ersetzt16 - ersetzt8) <= 5 and ersetzt8 < 100,
       f"Astro-Clean ersetzt 8 Bit {ersetzt8}, 16 Bit {ersetzt16} Bildpunkte")
 # Zurueck auf JPG: Bilder werden neu entwickelt, keine TIFFs im Film
 e = lauf(parameter(o, d, raw_mode='pass2', art_cli_path=RT_CLI, tiff16=False))
-pruef(e.ok() and len(glob.glob(os.path.join(o, "Deflickered_JPG", "*.jpg"))) == 30, "Rueckweg zu JPG")
+pruef(e.ok() and len(glob.glob(os.path.join(o, "Purelapse", "Deflickered_JPG", "*.jpg"))) == 30, "Rueckweg zu JPG")
 pruef(any("entwickle" in z.lower() or "Entwicklung" in z for z in e.log) and not any("uebersprungen" in z for z in e.log),
       "beim Formatwechsel wird nicht neu entwickelt")
 # Platzpruefung

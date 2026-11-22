@@ -91,6 +91,12 @@ code { font-family: var(--mono); font-size: 0.9em; }
   font-size: 14px; color: var(--dim); background: rgba(21, 25, 35, 0.7);
 }
 .pill b { color: var(--orange); font-weight: 600; }
+a.pill { display: inline-block; max-width: 100%; text-align: center; line-height: 1.5;
+         transition: border-color .15s, color .15s; }
+a.pill b { margin-right: 6px; }
+a.pill span[aria-hidden] { margin-left: 6px; }
+@media (max-width: 720px) { a.pill { border-radius: 14px; font-size: 13px; padding: 6px 12px; } }
+a.pill:hover { border-color: var(--orange); color: var(--text); text-decoration: none; }
 .hero h1 { font-size: clamp(40px, 7vw, 76px); font-weight: 800; margin: 22px auto 0; max-width: 14ch; }
 .grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero .lead { font-size: clamp(18px, 2.2vw, 21px); color: var(--dim); max-width: 640px; margin: 22px auto 0; }

@@ -3,6 +3,53 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [2.43.0-beta] – 2026-11-22
+
+Ordnerwahl mit Vorschau der Bilder, und alles, was Purelapse erzeugt, liegt
+jetzt geordnet im Unterordner „Purelapse“ statt lose zwischen den Bildern.
+
+### Neu
+- **Ordnerwahl mit Vorschau:** Der Dialog „Zeitraffer-Ordner wählen“ zeigt
+  rechts, was im markierten Ordner liegt: Anzahl und Art der Bilder, erstes
+  und letztes Bild und sechs über die Serie verteilte Vorschauen. Bei RAW
+  werden die eingebetteten Vorschaubilder der Kamera gelesen, im
+  Hintergrund – das Durchklicken bleibt flüssig. Unter 50 Bildern steht ein
+  Hinweis. Der Dialog ist größer als bisher, etwa 70 % von Breite und Höhe
+  des Hauptfensters.
+
+### Geändert
+- **Eigener Ordner „Purelapse“ im Bilderordner:** Videos, entwickelte Bilder
+  (`Deflickered_JPG`), Messwerte (`purelapse_deflicker.json`,
+  `purelapse_calib.json`, `purelapse_result.json`) und die Protokolle des
+  Diagnose-Modus liegen nicht mehr lose zwischen den Bildern, sondern im
+  Unterordner `Purelapse`. Neben den Bildern bleiben nur die Begleitdateien
+  der Engine (`.arp`, `.pp3`, `.xmp`), weil ART, RawTherapee und darktable
+  sie dort erwarten.
+- **Ältere Ordner werden umgeräumt:** Beim Öffnen eines Ordners – und beim
+  Start eines Auftrags aus der Warteschlange – verschiebt Purelapse die
+  losen Dateien älterer Versionen einmalig in den Ordner `Purelapse` und
+  meldet das im Protokoll. Fremde Dateien bleiben unberührt; liegt im
+  Ordner `Purelapse` schon eine gleichnamige Datei, wird nichts
+  überschrieben.
+- Speicherort „1. Quell-Ordner (Bilder)“ heißt jetzt „1. Purelapse-Ordner im
+  Bilderordner (empfohlen)“. Übergeordneter, Programm- und eigener Ordner bleiben
+  wählbar. „Ordner öffnen“ zeigt auf den Purelapse-Ordner.
+- „Zurücksetzen“ sucht an der neuen Stelle und räumt den Ordner `Purelapse`
+  weg, wenn er danach leer ist.
+
+### Intern
+- Neue Prüfreihe `test_ordnerwahl.py` (Bilder finden, Auswahl über die
+  Serie, Vorschaubilder für RAW und JPG, Lader im Hintergrund).
+- Neue Prüfreihe `test_ordner.py`: Ablage bei RAW und JPG, mit und ohne
+  Diagnose-Modus, eigener Speicherort, Umräumen alter Ordner (auch ohne
+  Überschreiben), Startdialog und Zurücksetzen.
+
+### Webseite
+- Technik-Bereich: neuer Abschnitt zur Ablage im Ordner `Purelapse`.
+- **Mastodon:** Link auf [@purelapse@mastodon.social](https://mastodon.social/@purelapse)
+  in der Fußzeile, mit `rel="me"` – damit bestätigt Mastodon die Webseite
+  im Profil mit einem grünen Häkchen.
+
 ## [2.42.2-beta] – 2026-11-21
 
 Englische Oberfläche ohne deutsche Reste und ein abgedunkelter Hintergrund,

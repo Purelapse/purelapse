@@ -160,7 +160,7 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 | **Bildrate** | 23,976 · 24 · 25 · 29,97 · 30 · 50 · 59,94 · 60 · 120 fps |
 | **Qualität** | Visuell verlustfrei (CRF 16) · Hoch (CRF 20) · Standard (CRF 23) · Niedrig (CRF 28) |
 | **Ein-/Ausblenden** | Aus · 0,5 · 1 · 2 · 3 Sekunden aus/nach Schwarz |
-| **Speicherort** | Bilderordner, übergeordneter Ordner, Programmordner oder eigener Ordner |
+| **Speicherort** | Ordner `Purelapse` im Bilderordner (Standard), übergeordneter Ordner, Programmordner oder eigener Ordner |
 | **Vorhandene Datei** | Neue Version anlegen (`_v1`, `_v2`, …) oder überschreiben |
 
 **Video-Codecs:**
@@ -329,6 +329,11 @@ python tests/alle.py
 Purelapse legt genau eine Konfigurationsdatei an:
 `~/.config/purelapse/purelapse.json`. Einstellungen älterer Versionen
 (`~/.purelapse_*`) werden beim ersten Start übernommen und entfernt.
+
+Im Bilderordner liegen neben den Bildern nur die Begleitdateien der Engine
+(`.arp`, `.pp3`, `.xmp`). Alles andere – Videos, entwickelte Bilder
+(`Deflickered_JPG`), Messwerte und Protokolle – legt Purelapse im
+Unterordner `Purelapse` ab.
 
 ## Lizenz
 

@@ -137,6 +137,7 @@ for i in [k for k, c in enumerate(VC) if c["hw"] is None]:
 
 print("=== 5. Ausgabepfad ===")
 blk = schnitt("    def _get_output_video_path", "    def _remove_satellites")
+exec("PL_ORDNER = 'Purelapse'\n" + schnitt("def pl_ordner(", "def pl_datei("), ns)
 exec("class S:\n    def emit(self, *a): pass\n"
      "class W2:\n    output_ready = S()\n"
      "    def __init__(self, p): self.p = p\n" + blk, ns)
@@ -150,6 +151,8 @@ for i, c in enumerate(VC):
     pfad = ns["W2"](p)._get_output_video_path()
     pruef(pfad.endswith(c["ext"]), f"Codec {i}: Pfad endet nicht auf {c['ext']}")
     pruef("Nacht01_Purelapse_2160p_25fps" in pfad, f"Codec {i}: Name falsch gebildet")
+    pruef(os.path.dirname(pfad) == os.path.join(basis, "Nacht01", "Purelapse")
+          and os.path.isdir(os.path.dirname(pfad)), f"Codec {i}: Video nicht im Purelapse-Ordner: {pfad}")
 # Versionierung behaelt die Endung
 p = dict(grund, codec_idx=4, versioning=True)
 pfad1 = ns["W2"](p)._get_output_video_path()
@@ -181,7 +184,7 @@ pruef("self.cmb_engine.setEnabled(False)" in launch,
 pruef("self.cmb_engine.setEnabled(True)" in
       schnitt("    def _enable_buttons", "    def _queue_refresh"),
       "Engine-Auswahl wird nach dem Lauf nicht wieder freigegeben")
-pruef('VERSION = "2.42.2-beta"' in src, "Versionsnummer nicht erhoeht")
+pruef('VERSION = "2.43.0-beta"' in src, "Versionsnummer nicht erhoeht")
 pruef(src.count("codec_idx == 0") == 0 and src.count("crf_vals[qual_idx]") == 0,
       "alte if/elif-Codecauswahl noch vorhanden")
 

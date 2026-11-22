@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Purelapse – Zeitraffer ohne Flackern unter Linux</title>
 <meta name="description" content="Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee und darktable, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux.">
+<link rel="me" href="https://mastodon.social/@purelapse">
 <link rel="canonical" href="https://purelapse.org/">
 <link rel="alternate" hreflang="de" href="https://purelapse.org/">
 <link rel="alternate" hreflang="en" href="https://purelapse.org/en.html">
@@ -19,7 +20,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=6">
+<link rel="stylesheet" href="assets/style.css?v=7">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});var bot=/bot|crawl|spider|slurp|lighthouse|preview/i.test(navigator.userAgent||"");if(!bot&&(l==="en"||(!l&&!de))){location.replace("en.html"+location.hash)}}catch(e){}</script>
 <script type="application/ld+json">
 {
@@ -65,11 +66,11 @@
 <main id="main">
   <section class="hero">
     <div class="wrap">
-      <span class="pill"><b>Beta 2.42.2-beta</b> · Open Source · Linux</span>
+      <a class="pill" href="versionen.html#v2-43-0"><b>Neu in 2.43</b><span>Ordnerwahl mit Vorschau · alles geordnet im Ordner Purelapse</span><span aria-hidden="true">→</span></a>
       <h1>Zeitraffer<br><span class="grad-text">ohne Flackern.</span></h1>
       <p class="lead">Purelapse glättet die Helligkeit deiner RAW- oder JPG-Serien, steuert ART, RawTherapee oder darktable und rendert ein sauberes Video – vom Sonnenuntergang bis zum Holy Grail.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.2-beta</small></span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.43.0-beta/Purelapse-2.43.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.43.0-beta</small></span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span>Quelltext auf GitHub</span></a>
       </div>
       <p class="meta"><span>Kostenlos</span><span>GPL-3.0</span><span>Deutsch &amp; Englisch</span></p>
@@ -181,12 +182,12 @@
       </div>
       <div>
         <div class="cta" style="justify-content:flex-start;margin-top:0;margin-bottom:22px">
-          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.42.2-beta</small></span></a>
+          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.43.0-beta/Purelapse-2.43.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.43.0-beta</small></span></a>
         </div>
         <div class="term">
-          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.42.2-beta-x86_64.AppImage\n./Purelapse-2.42.2-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
-          <pre><span class="p">$</span> chmod +x Purelapse-2.42.2-beta-x86_64.AppImage
-<span class="p">$</span> ./Purelapse-2.42.2-beta-x86_64.AppImage</pre>
+          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.43.0-beta-x86_64.AppImage\n./Purelapse-2.43.0-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
+          <pre><span class="p">$</span> chmod +x Purelapse-2.43.0-beta-x86_64.AppImage
+<span class="p">$</span> ./Purelapse-2.43.0-beta-x86_64.AppImage</pre>
         </div>
         <p class="req">Läuft auf Linux Mint 21 / Ubuntu 22.04 und neuer (x86_64). <a href="versionen.html">Was ist neu? Alle Versionen →</a></p>
       </div>
@@ -229,7 +230,7 @@
       <h2>Gern geteilt.</h2>
       <p>Purelapse ist eine Beta. Rückmeldungen, Fehlerberichte und Ideen sind sehr willkommen.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.42.2-beta/Purelapse-2.42.2-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.43.0-beta/Purelapse-2.43.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse/issues">Fehler melden</a>
       </div>
     </div>
@@ -276,7 +277,7 @@
               <div class="tbl"><table>
                 <thead><tr><th>Arbeitsgang</th><th>Was passiert</th></tr></thead>
                 <tbody>
-                  <tr><td>JPG-Direkt</td><td>Misst alle JPGs, gleicht Helligkeit und Farbkanäle aus, legt die entflackerten Bilder (JPG-Qualität 95) in <code>Deflickered_JPG</code> ab und rendert in einem Durchgang das Video.</td></tr>
+                  <tr><td>JPG-Direkt</td><td>Misst alle JPGs, gleicht Helligkeit und Farbkanäle aus, legt die entflackerten Bilder (JPG-Qualität 95) in <code>Purelapse/Deflickered_JPG</code> ab und rendert in einem Durchgang das Video.</td></tr>
                   <tr><td>RAW Pass 1</td><td>Misst jedes RAW in linearem Licht, berechnet die Zielkurve und schreibt die Belichtungskorrektur in die Begleitdatei der Engine (<code>.arp</code>, <code>.pp3</code> oder <code>.xmp</code>).</td></tr>
                   <tr><td>RAW Pass 2</td><td>Verteilt die Keyframes, lässt die Engine entwickeln, misst das Ergebnis nach, kalibriert nach und rendert das Video.</td></tr>
                   <tr><td>Vorschau (5 Bilder)</td><td>Entwickelt fünf gleichmäßig über die Sequenz verteilte Bilder mit allen aktuellen Einstellungen.</td></tr>
@@ -514,7 +515,7 @@
               </ol>
               <h4>ART und RawTherapee</h4>
               <ul>
-                <li>Aufruf: <code>ART-cli -S -Y -o Deflickered_JPG -j100 -c &lt;Bilder&gt;</code> (RawTherapee zusätzlich <code>-d</code>). <code>-S</code> statt <code>-s</code>: Fehlt eine Begleitdatei, bricht die Engine ab, statt still mit dem Standardprofil zu entwickeln.</li>
+                <li>Aufruf: <code>ART-cli -S -Y -o Purelapse/Deflickered_JPG -j100 -c &lt;Bilder&gt;</code> (RawTherapee zusätzlich <code>-d</code>). <code>-S</code> statt <code>-s</code>: Fehlt eine Begleitdatei, bricht die Engine ab, statt still mit dem Standardprofil zu entwickeln.</li>
                 <li>Mit 16-Bit-Zwischenbildern: <code>-tz -b16</code> (gepacktes 16-Bit-TIFF) statt <code>-j100</code>.</li>
                 <li>Mehrere Prozesse teilen sich die Bilder (jeder n-te). Jeder Prozess bekommt <code>OMP_NUM_THREADS = Kerne / Prozesse</code>.</li>
                 <li>Die Ausgabe der Engine wird nach Fehlern durchsucht; nicht geladene Profile werden gezählt und gemeldet.</li>
@@ -531,7 +532,7 @@
               <p>Option in den Einstellungen. Die Engine entwickelt nach 16-Bit-TIFF, das Video wird durchgehend in 16 Bit gerechnet (Übergabe an FFmpeg als <code>bgr48le</code>). Feine Verläufe im Himmel bleiben frei von Stufen, besonders mit HEVC 10 Bit oder ProRes. Vorher prüft Purelapse den Platz: <code>Breite × Höhe × 6 Byte × 0,85</code> je Bild, plus 5 % Reserve (bei 24 Megapixeln rund 120 MB je Bild). Wer umschaltet, bekommt die Bilder neu entwickelt.</p>
               <h4>Fortsetzen und Abbruch</h4>
               <ul>
-                <li>In <code>Deflickered_JPG/.purelapse_developed.json</code> merkt sich Purelapse je Bild den Fingerabdruck seines Profils (SHA-1) und das Format. Beim nächsten Lauf wird nur entwickelt, was fehlt oder dessen Profil sich geändert hat.</li>
+                <li>In <code>Purelapse/Deflickered_JPG/.purelapse_developed.json</code> merkt sich Purelapse je Bild den Fingerabdruck seines Profils (SHA-1) und das Format. Beim nächsten Lauf wird nur entwickelt, was fehlt oder dessen Profil sich geändert hat.</li>
                 <li>Nach einem Abbruch bleiben fertige Bilder erhalten. Die jüngsten Dateien – eine je laufendem Prozess – werden verworfen, weil sie mitten im Schreiben unterbrochen worden sein können.</li>
                 <li>Ins Video kommt genau das entwickelte Bild jedes Quellbildes, nicht einfach alles im Ausgabeordner; fehlt eines, nennt Purelapse es.</li>
               </ul>
@@ -645,7 +646,7 @@
               <h4>Dateiname und Speicherort</h4>
               <ul>
                 <li>Name: <code>&lt;Ordner&gt;_Purelapse_&lt;Auflösung&gt;_&lt;fps&gt;fps</code>, bei Versionierung mit <code>_v1</code>, <code>_v2</code> …; alternativ wird überschrieben.</li>
-                <li>Speicherort: Bilderordner, übergeordneter Ordner, Programmordner oder ein eigener Ordner.</li>
+                <li>Speicherort: der Ordner <code>Purelapse</code> im Bilderordner (Standard), der übergeordnete Ordner, der Programmordner oder ein eigener Ordner.</li>
                 <li>Die Größenschätzung rechnet mit <code>1,25 MB/s × Auflösungs- × Qualitäts- × Codec-Faktor × fps/25</code> und zeigt dazu die Videolänge.</li>
               </ul>
             </div>
@@ -717,17 +718,19 @@
                 </tbody>
               </table></div>
               <h4>Im Bilderordner</h4>
+              <p>Neben den Bildern liegen nur die Begleitdateien der Engine – ART, RawTherapee und darktable erwarten sie dort. Alles andere, was Purelapse anlegt, steht im Unterordner <code>Purelapse/</code>. Ordner aus älteren Versionen räumt Purelapse beim Öffnen einmalig dorthin um; vorhandene Dateien werden dabei nie überschrieben.</p>
               <div class="tbl"><table>
                 <tbody>
-                  <tr><td><code>*.arp</code> / <code>*.pp3</code> / <code>*.xmp</code></td><td>Profile der Engine mit Korrektur und Keyframe-Gestaltung</td></tr>
-                  <tr><td><code>purelapse_deflicker.json</code></td><td>Pass-1-Belichtungswerte je Bild</td></tr>
-                  <tr><td><code>purelapse_calib.json</code></td><td>Nachkalibrierung je Bild</td></tr>
-                  <tr><td><code>purelapse_result.json</code></td><td>Restabweichung je Bild nach Pass 2</td></tr>
-                  <tr><td><code>Deflickered_JPG/</code></td><td>Entwickelte bzw. entflackerte Bilder (JPG oder 16-Bit-TIFF) und der Entwicklungsmerker</td></tr>
+                  <tr><td><code>*.arp</code> / <code>*.pp3</code> / <code>*.xmp</code></td><td>Profile der Engine mit Korrektur und Keyframe-Gestaltung – neben den Bildern</td></tr>
+                  <tr><td><code>Purelapse/*_Purelapse_*.mp4</code></td><td>Die fertigen Videos (Standard-Speicherort)</td></tr>
+                  <tr><td><code>Purelapse/purelapse_deflicker.json</code></td><td>Pass-1-Belichtungswerte je Bild</td></tr>
+                  <tr><td><code>Purelapse/purelapse_calib.json</code></td><td>Nachkalibrierung je Bild</td></tr>
+                  <tr><td><code>Purelapse/purelapse_result.json</code></td><td>Restabweichung je Bild nach Pass 2</td></tr>
+                  <tr><td><code>Purelapse/Deflickered_JPG/</code></td><td>Entwickelte bzw. entflackerte Bilder (JPG oder 16-Bit-TIFF) und der Entwicklungsmerker</td></tr>
                 </tbody>
               </table></div>
               <h4>Diagnose-Modus</h4>
-              <p>Schreibt zusätzlich <code>purelapse_pass1.csv</code> (Messung, Ziel, Korrektur, Clipping, Weißabgleich je Bild), <code>purelapse_pass2.csv</code> (Nachmessung und Rest), <code>purelapse_profiles.csv</code> (Profilwerte nach der Keyframe-Verteilung), <code>purelapse_arp_check.log</code> (Formatprüfung) und <code>purelapse_art.log</code> (Ausgabe der Engine). Nur für die Fehlersuche; Warnungen stehen ohnehin im Protokoll.</p>
+              <p>Schreibt zusätzlich in den Ordner <code>Purelapse/</code>: <code>purelapse_pass1.csv</code> (Messung, Ziel, Korrektur, Clipping, Weißabgleich je Bild), <code>purelapse_pass2.csv</code> (Nachmessung und Rest), <code>purelapse_profiles.csv</code> (Profilwerte nach der Keyframe-Verteilung), <code>purelapse_arp_check.log</code> (Formatprüfung) und <code>purelapse_art.log</code> (Ausgabe der Engine). Nur für die Fehlersuche; Warnungen stehen ohnehin im Protokoll.</p>
               <h4>Zurücksetzen</h4>
               <p>Löscht wahlweise Protokolle und Messdaten, Betriebsdaten (Basiswerte, Kalibrierung), entwickelte Bilder und – deutlich rot markiert – die Begleitdateien samt Bearbeitungen und Keyframes. RAW- und JPG-Originale werden nie angetastet.</p>
               <h4>Sicheres Schreiben</h4>
@@ -765,7 +768,7 @@
   <div class="wrap">
     <a class="brand" href="index.html"><img src="assets/icon.png" alt="" width="24" height="24">Purelapse</a>
     <span>Purelapse steht unter der <a href="https://github.com/purelapse/purelapse/blob/main/LICENSE">GPL-3.0</a>. ART, RawTherapee, darktable und FFmpeg gehören ihren jeweiligen Projekten.</span>
-    <nav aria-label="Links"><a href="https://github.com/purelapse/purelapse">GitHub</a><a href="https://github.com/purelapse/purelapse/issues">Fehler melden</a><a href="versionen.html">Versionen</a><a href="https://github.com/purelapse/purelapse/releases">GitHub-Releases</a></nav>
+    <nav aria-label="Links"><a href="https://github.com/purelapse/purelapse">GitHub</a><a rel="me" href="https://mastodon.social/@purelapse">Mastodon</a><a href="https://github.com/purelapse/purelapse/issues">Fehler melden</a><a href="versionen.html">Versionen</a><a href="https://github.com/purelapse/purelapse/releases">GitHub-Releases</a></nav>
   </div>
 </footer>
 

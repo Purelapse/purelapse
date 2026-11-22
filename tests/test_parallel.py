@@ -86,6 +86,7 @@ pruef(auf(["a"], 0) == [["a"]], "jobs=0 wird zu 1")
 print("=== 4. Protokoll und Zaehlung ===")
 blk = (schnitt("    def _count_rendered", "    def _run_darktable_cli"))
 exec(schnitt("# Zwischenbilder der Engine: JPG (Standard) oder 16-Bit-TIFF", "def _dev_kennung"), ns)
+exec("PL_ORDNER = 'Purelapse'\n" + schnitt("def pl_ordner(", "def zwischen_ordner("), ns)
 exec("class Sig:\n    def __init__(self): self.gesendet = []\n"
      "    def emit(self, *a): self.gesendet.append(a)\n"
      "class W:\n"
@@ -146,7 +147,7 @@ pruef(any(0 < v < 15 for v in werte),
       f"keine Zwischenmeldung, Anzeige springt von 0 auf fertig: {werte}")
 pruef(not any("ACHTUNG" in str(a) for a in w.log.gesendet),
       f"Fehlermeldung ohne Fehler: {w.log.gesendet}")
-logdatei = os.path.join(lauf, "purelapse_art.log")
+logdatei = os.path.join(lauf, "Purelapse", "purelapse_art.log")
 pruef(os.path.exists(logdatei), "Diagnose-Modus hat kein Protokoll geschrieben")
 inhalt = io.open(logdatei, encoding="utf-8").read()
 for i in (1, 2, 3):

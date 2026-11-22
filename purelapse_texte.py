@@ -174,7 +174,7 @@ TRANSLATIONS = {
     "Standard (CRF 23)": "Standard (CRF 23)",
     "Niedrig (CRF 28)": "Low (CRF 28)",
     "H.264 (CPU Standard)": "H.264 (CPU standard)",
-    "1. Quell-Ordner (Bilder)": "1. Source folder (images)",
+    "1. Purelapse-Ordner im Bilderordner (empfohlen)": "1. Purelapse folder in the image folder (recommended)",
     "2. Übergeordneter Ordner": "2. Parent folder",
     "3. Programmverzeichnis (purelapse)": "3. Program directory (purelapse)",
     "4. Eigener Ordner wählen...": "4. Choose your own folder...",
@@ -240,7 +240,7 @@ TRANSLATIONS = {
                  "Purelapse setzt darin nur die Belichtung und lässt alles andere unangetastet.\n"
                  "Liegt bereits ein von der Engine geschriebenes Profil im Bilderordner,\n"
                  "wird das automatisch benutzt.",
-    "TT_DIAG": "Legt im Bilderordner Messprotokolle und Pruefberichte an:\n"
+    "TT_DIAG": "Legt im Ordner Purelapse Messprotokolle und Pruefberichte an:\n"
                "purelapse_pass1.csv, purelapse_pass2.csv, purelapse_profiles.csv,\n"
                "purelapse_arp_check.log und purelapse_art.log.\n\n"
                "Nur fuer die Fehlersuche gedacht. Im Normalbetrieb aus lassen -\n"
@@ -340,7 +340,7 @@ TRANSLATIONS_TT_EN = {
                  "Purelapse only sets the exposure in it and leaves everything else untouched.\n"
                  "If the image folder already holds a profile written by the engine,\n"
                  "that one is used automatically.",
-    "TT_DIAG": "Writes measurement logs and check reports into the image folder:\n"
+    "TT_DIAG": "Writes measurement logs and check reports into the Purelapse folder:\n"
                "purelapse_pass1.csv, purelapse_pass2.csv, purelapse_profiles.csv,\n"
                "purelapse_arp_check.log and purelapse_art.log.\n\n"
                "Meant for troubleshooting only. Leave it off in normal use -\n"

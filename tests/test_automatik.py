@@ -132,7 +132,7 @@ for engine, cli, sek in (('rt', RT_CLI, 'Exposure'), ('art', ART_CLI, 'ToneCurve
     pruef(all(p[sek]['HistogramMatching'] == 'false' for p in prof), f"{engine}: nicht alle Profile eingefroren")
     pruef(len({p[sek]['Curve'] for p in prof}) == 1 and prof[0][sek]['Curve'] == pe.FILMKURVE[engine][1],
           f"{engine}: die Bilder haben nicht alle dieselbe Kurve")
-    out = os.path.join(o, "Deflickered_JPG")
+    out = os.path.join(o, "Purelapse", "Deflickered_JPG")
     fl, n = ordner_flackern(out); him, vor = tonwert_flackern(out)
     pruef(n == N and fl < 0.005, f"{engine}: Flackern gesamt {fl:.4f}")
     pruef(him < 0.005 and vor < 0.005, f"{engine}: Himmel {him:.4f}, Vordergrund {vor:.4f}")
