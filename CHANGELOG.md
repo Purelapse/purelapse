@@ -3,7 +3,9 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
-## [Unveröffentlicht]
+## [2.44.0-beta] – 2026-11-22
+
+Ein ruhigeres, professionelleres Erscheinungsbild nach dem Vorbild von DaVinci Resolve – und die Ordnerwahl zeigt jetzt alle Bilder eines Ordners als scrollbares Raster.
 
 ### Neu
 - **Ordnerwahl: alle Bilder als scrollbares Raster.** Statt sechs ausgewählter Vorschauen zeigt der Dialog jetzt jedes Bild des Ordners. Geladen werden nur die Kacheln, die gerade zu sehen sind (plus eine Zeile Vorlauf) – beim Scrollen kommen die nächsten nach, beim Wechsel des Ordners bricht das Laden sofort ab. Das Durchklicken bleibt so bei 50 wie bei 5000 Bildern flüssig. Ein Tooltip nennt Nummer und Dateinamen.
