@@ -20,7 +20,9 @@ for t in sorted(glob.glob(os.path.join(hier, muster))):
     t0 = time.time()
     r = subprocess.run([sys.executable, t], capture_output=True, text=True)
     letzte = (r.stdout.strip().splitlines() or [""])[-1]
-    ok = r.returncode == 0
+    # Manche Reihen melden Fehler nur in der letzten Zeile ("... 2 fehlgeschlagen")
+    gezaehlt = letzte.rsplit(",", 1)[-1].split()
+    ok = r.returncode == 0 and not (gezaehlt[:1] != ["0"] and gezaehlt[-1:] == ["fehlgeschlagen"])
     print(f"{'OK    ' if ok else 'FEHLER'} {os.path.basename(t):24s} {time.time() - t0:5.0f} s  {letzte}")
     if not ok:
         fehler.append(t)

@@ -17,7 +17,18 @@ ARBEIT = os.environ.get("PURELAPSE_ARBEIT", os.path.join(__import__("tempfile").
 # Eigenes Heimverzeichnis, damit keine Einstellungsdateien verstreut werden
 HEIM = os.path.join(ARBEIT, "heim")
 os.makedirs(HEIM, exist_ok=True)
+# Pakete, die mit "pip install --user" unter ~/.local liegen (z. B. OpenCV),
+# muessen auch die nachgebauten Engines noch finden, obwohl HOME umgebogen wird.
+import site
+os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
 os.environ["HOME"] = HEIM
+# Eigener Ordner fuer Zwischendateien: ein gleichzeitig offenes Purelapse
+# legt seine Vorschau-Ordner sonst ins selbe /tmp und stoert die Zaehlung.
+import tempfile
+TEMP = os.path.join(ARBEIT, "tmp")
+os.makedirs(TEMP, exist_ok=True)
+os.environ["TMPDIR"] = TEMP
+tempfile.tempdir = TEMP
 sys.path.insert(0, os.path.join(HIER, "stubs"))
 sys.path.insert(0, PROJEKT)
 sys.argv = ["purelapse"]

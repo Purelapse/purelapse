@@ -137,8 +137,14 @@ os.environ["FAKE_VERZOEGERUNG"] = "0"
 pruef(not e.fertig and "abgebrochen" in meld(e).lower(), f"Abbruch nicht gemeldet: {meld(e)[:80]}")
 n_teil = len(glob.glob(os.path.join(ojb, "Purelapse", "Deflickered_JPG", "*.jpg")))
 pruef(0 < n_teil < N, f"unbrauchbarer Abbruchzeitpunkt: {n_teil}")
-laufend = [z for z in subprocess.run(["pgrep", "-af", "rawtherapee-cli"], capture_output=True,
-                                     text=True).stdout.splitlines() if "pgrep" not in z]
+def eigene_engines():
+    # Nur die nachgebaute Engine dieses Pruefstands zaehlen - ein echtes
+    # RawTherapee, das nebenher fuer ein offenes Purelapse arbeitet, gehoert
+    # nicht zu dieser Pruefung.
+    return [z for z in subprocess.run(["pgrep", "-af", "rawtherapee-cli"], capture_output=True,
+                                      text=True).stdout.splitlines()
+            if "pgrep" not in z and RT_CLI in z]
+laufend = eigene_engines()
 pruef(not laufend, f"nach dem Abbruch laufen noch Engine-Prozesse: {len(laufend)}")
 e = lauf(parameter(ojb, djb, raw_mode='pass2', art_cli_path=RT_CLI, engine='rt'))
 pruef(e.ok(), f"Fortsetzung scheitert: {meld(e)[:100]}")
@@ -265,6 +271,8 @@ pruef(fl > 0.002, "mit ausgebrannter Sonne waere ein so gutes Ergebnis verdaecht
                   "misst die Pruefung noch das Richtige?")
 print(f"   Video ueber die Oberflaeche, mit ausgebrannter Sonne: {fl:.4f} EV")
 n0 = len(_basis.PROTOKOLL)
+# Ob NVIDIA wirklich da ist, haengt vom Rechner ab - hier fest: nicht verfuegbar
+f._codec_probe[1] = (False, "Driver does not support the required nvenc API version")
 f.cmb_codec.setCurrentIndex(1)
 pruef(f.cmb_codec.currentIndex() == 0, "nicht verfuegbarer Codec bleibt gewaehlt")
 pruef(any(a == 'frage' and "NVIDIA" in x for a, t, x in _basis.PROTOKOLL[n0:]), "keine Rueckfrage zum Codec")

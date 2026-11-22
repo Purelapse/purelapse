@@ -184,7 +184,7 @@ pruef("self.cmb_engine.setEnabled(False)" in launch,
 pruef("self.cmb_engine.setEnabled(True)" in
       schnitt("    def _enable_buttons", "    def _queue_refresh"),
       "Engine-Auswahl wird nach dem Lauf nicht wieder freigegeben")
-pruef('VERSION = "2.43.0-beta"' in src, "Versionsnummer nicht erhoeht")
+pruef('VERSION = "2.43.1-beta"' in src, "Versionsnummer nicht erhoeht")
 pruef(src.count("codec_idx == 0") == 0 and src.count("crf_vals[qual_idx]") == 0,
       "alte if/elif-Codecauswahl noch vorhanden")
 

@@ -3,6 +3,20 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [2.43.1-beta] – 2026-11-22
+
+Korrektur zu 2.43.0: Keyframes stimmen nach einem Wechsel der Engine wieder überall überein.
+
+### Behoben
+- **Keyframes nach einem Engine-Wechsel:** Ob ein Bild Keyframe ist, hängt von der Engine ab – bei RawTherapee und ART zählt auch der Eintrag im Profil, bei darktable nur der Stern in der `.xmp`. Nach dem Umschalten rechneten Zähler und Entwicklung schon mit der neuen Engine, die Sterne in der Bildleiste zeigten noch den alten Stand. So stand oben „8 bearbeitete Keyframes“, der Filter zeigte 4, und vier Bilder wurden als Keyframe entwickelt, ohne dass man es sah. Jetzt liest die Bildleiste ihre Sterne beim Engine-Wechsel neu, meldet Abweichungen im Protokoll und schreibt dabei nichts in die Dateien.
+- Vorschau mit der Engine: Nach einem Abbruch fasst das Aufräumen des Arbeitsordners kurz nach, falls die Engine noch an ihren Dateien hängt.
+
+### Intern
+- Neue Prüfreihe `test_kf_engine.py`: Bildleiste, Filter, Zähler und Dateien stimmen nach dem Wechsel zwischen darktable und RawTherapee überein; das Abgleichen schreibt keine Datei.
+- Prüfstand: Pakete, die mit `pip install --user` unter `~/.local` liegen (etwa OpenCV), finden jetzt auch die nachgebauten Engines. Vorher scheiterten auf solchen Rechnern acht Prüfreihen, obwohl das Programm selbst in Ordnung war.
+- `tests/alle.py` wertet jetzt auch Prüfreihen als fehlgeschlagen, die ihre Fehler nur in der letzten Zeile melden („… 2 fehlgeschlagen“). Dabei fiel eine veraltete Erwartung in `test_schnell.py` auf: Das Video der Schnellvorschau liegt jetzt richtig im Ordner `Purelapse`.
+- Prüfstand: Die Codec-Prüfung gibt jetzt selbst vor, dass NVIDIA fehlt – auf Rechnern mit NVIDIA-Grafikkarte schlug sie sonst fehl, obwohl der Codec zu Recht wählbar blieb. Zwischendateien legt der Prüfstand in einen eigenen Ordner statt ins allgemeine `/tmp`, damit ein gleichzeitig offenes Purelapse die Zählung nicht stört. Ebenso zählt die Prüfung „keine Engine läuft nach dem Abbruch weiter“ nur noch die nachgebaute Engine des Prüfstands, nicht ein echtes RawTherapee, das nebenher arbeitet.
+
 ## [2.43.0-beta] – 2026-11-22
 
 Ordnerwahl mit Vorschau der Bilder, und alles, was Purelapse erzeugt, liegt

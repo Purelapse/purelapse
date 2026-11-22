@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.43.0-beta"
+VERSION = "2.43.1-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -3620,7 +3620,13 @@ class EngineVorschau(QtCore.QThread):
         except Exception as e:
             erg['fehler'] = str(e)[:200]
         finally:
-            shutil.rmtree(ordner, ignore_errors=True)
+            # Nach einem Abbruch kann die Engine noch einen Augenblick an
+            # ihren Dateien haengen - dann kurz warten und nachfassen.
+            for _ in range(20):
+                shutil.rmtree(ordner, ignore_errors=True)
+                if not os.path.exists(ordner):
+                    break
+                time.sleep(0.05)
         erg['dauer'] = time.time() - start
         self.fertig.emit(erg)
 
@@ -8931,6 +8937,13 @@ class MainWindow(QtWidgets.QWidget):
             w.setVisible(not ist_dt)
         self.lbl_dt_note.setVisible(ist_dt)
         if self.target_dir:
+            anders = self._sterne_abgleichen()
+            if anders:
+                self._on_log("> " + self._t(
+                    f"HINWEIS: Mit {eng('label')} gelten {anders} Bilder anders als bisher "
+                    "angezeigt als Keyframe - die Sterne in der Bildleiste sind angepasst.",
+                    f"NOTE: With {eng('label')}, {anders} images count differently as keyframes "
+                    "than shown so far - the stars in the gallery have been updated."))
             self._recount_keyframes()
         if hasattr(self, 'btn_start'):
             self._update_steps()
@@ -9601,6 +9614,8 @@ class MainWindow(QtWidgets.QWidget):
         else:
             lbl_txt.setStyleSheet("color: #cccccc; font-size: 10px;")
             chk_kf.setStyleSheet("color: #888888; font-size: 10px;")
+        if getattr(self, '_sterne_sync', False):
+            return      # nur Anzeige nachziehen - die Dateien stimmen schon
         # Rank im INI-Profil nur bei ART/RawTherapee. Bei Darktable wuerde
         # write_arp_dict ein Belichtungsmodul in den Verlauf schreiben.
         if eng('kind') == 'ini' and os.path.exists(arp_path):
@@ -9624,6 +9639,34 @@ class MainWindow(QtWidgets.QWidget):
             self._on_log("> " + self._t("HINWEIS: ", "NOTE: ")
                          + DT_STERNE_HINWEIS['en' if self.lang == 'en' else 'de'])
         self._recount_keyframes()
+
+    def _sterne_abgleichen(self):
+        """
+        Liest die Keyframe-Sterne der Bildleiste neu aus den Begleitdateien.
+
+        Ob ein Bild Keyframe ist, haengt von der Engine ab: bei RawTherapee
+        und ART zaehlt auch "Rank=5" im Profil, bei Darktable nur die .xmp.
+        Nach einem Engine-Wechsel zeigte die Bildleiste sonst noch die alten
+        Sterne, waehrend Zaehler und Entwicklung schon die neuen nahmen -
+        oben "8 Keyframes", im Filter 4. Geschrieben wird dabei nichts.
+        Rueckgabe: Zahl der geaenderten Sterne.
+        """
+        if not self.target_dir or not self.tiles:
+            return 0
+        anders = 0
+        self._sterne_sync = True
+        try:
+            for t in self.tiles:
+                chk, name = t.get('chk'), t.get('name')
+                if chk is None or not name:
+                    continue
+                ist = check_is_keyframe(sidecar(os.path.join(self.target_dir, name)))
+                if chk.isChecked() != ist:
+                    chk.setChecked(ist)
+                    anders += 1
+        finally:
+            self._sterne_sync = False
+        return anders
 
     def _kf_linien_neu(self):
         """
