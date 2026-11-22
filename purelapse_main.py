@@ -3190,11 +3190,15 @@ class PreviewDialog(QtWidgets.QDialog):
 #  ORDNERWAHL MIT VORSCHAU
 #
 #  Beim Oeffnen eines Bilderordners zeigt der Dialog rechts, was darin liegt:
-#  Anzahl und Art der Bilder und sechs ueber die Serie verteilte Vorschauen.
-#  Gelesen werden nur die eingebetteten Vorschaubilder der Kamera bzw. JPGs in
-#  verkleinerter Aufloesung - schnell genug, um beim Durchklicken zu folgen.
+#  Anzahl und Art der Bilder und ALLE Bilder als scrollbares Raster.
+#  Geladen werden nur die Kacheln, die gerade zu sehen sind (plus eine Zeile
+#  Vorlauf) - so bleibt das Durchklicken bei 50 wie bei 5000 Bildern
+#  fluessig. Gelesen werden die eingebetteten Vorschaubilder der Kamera bzw.
+#  JPGs in verkleinerter Aufloesung.
 # ==========================================================================
-ORDNER_VORSCHAU_ANZAHL = 6
+ORDNER_KACHEL_B = 148      # Rasterzelle in logischen Pixeln
+ORDNER_KACHEL_H = 104
+ORDNER_BILD_KANTE = 280    # Vorschaubild doppelt so gross: scharf auf HiDPI
 
 
 def ordner_bilder(ordner):
@@ -3214,12 +3218,24 @@ def ordner_bilder(ordner):
     return jpg, ('jpg' if jpg else None)
 
 
-def ordner_auswahl(bilder, anzahl=ORDNER_VORSCHAU_ANZAHL):
-    """Gleichmaessig ueber die Serie verteilte Bilder, erstes und letztes inklusive."""
-    n = len(bilder)
-    if n <= anzahl:
-        return list(bilder)
-    return [bilder[round(i * (n - 1) / (anzahl - 1))] for i in range(anzahl)]
+def raster_bereich(roll, hoehe, breite, anzahl, kachel_b=ORDNER_KACHEL_B,
+                   kachel_h=ORDNER_KACHEL_H, vorlauf=1):
+    """
+    Welche Kacheln eines Rasters sind sichtbar?
+
+    roll: Rollposition in Pixeln, hoehe/breite: sichtbarer Bereich.
+    Rueckgabe: Liste der Indizes, die oben sichtbaren zuerst - in dieser
+    Reihenfolge laedt der Hintergrundlader. Eine Zeile Vorlauf ober- und
+    unterhalb, damit beim langsamen Scrollen kein Loch aufblitzt.
+    """
+    if anzahl <= 0 or hoehe <= 0:
+        return []
+    spalten = max(1, int(breite) // kachel_b)
+    zeilen = (anzahl + spalten - 1) // spalten
+    erste = max(0, int(roll) // kachel_h - vorlauf)
+    letzte = min(zeilen - 1, (int(roll) + int(hoehe)) // kachel_h + vorlauf)
+    return [i for z in range(erste, letzte + 1)
+            for i in range(z * spalten, min(anzahl, (z + 1) * spalten))]
 
 
 def ordner_vorschau_bild(pfad, kante=320):
@@ -3253,28 +3269,53 @@ def ordner_vorschau_bild(pfad, kante=320):
     return np.ascontiguousarray(img)
 
 
-class OrdnerVorschauLader(QtCore.QThread):
-    """Laedt die Vorschauen eines Ordners im Hintergrund, Bild fuer Bild."""
+class OrdnerRasterLader(QtCore.QThread):
+    """
+    Laedt Vorschaubilder im Hintergrund, in der Reihenfolge einer
+    Wunschliste, die der Dialog beim Scrollen jederzeit ersetzen kann.
+
+    Ist die Liste leer, endet der Lader. Kommen danach neue Wuensche,
+    legt der Dialog einen neuen an - wuenschen() sagt ihm, ob dieser hier
+    noch annimmt. Beides geschieht unter derselben Sperre, damit kein
+    Wunsch in einem gerade endenden Lader verloren geht.
+    """
     bild = QtCore.pyqtSignal(int, int, object)
 
-    def __init__(self, nummer, dateien):
+    def __init__(self, nummer, dateien, kante=ORDNER_BILD_KANTE):
         super().__init__()
         self.nummer = nummer
         self.dateien = list(dateien)
+        self.kante = kante
+        self._sperre = threading.Lock()
+        self._wunsch = []
+        self._nimmt_an = True
         self._abbruch = False
 
+    def wuenschen(self, indizes):
+        """Neue Wunschliste. False: dieser Lader ist schon fertig."""
+        with self._sperre:
+            if not self._nimmt_an:
+                return False
+            self._wunsch = [i for i in indizes if 0 <= i < len(self.dateien)]
+            return True
+
     def abbrechen(self):
-        self._abbruch = True
+        with self._sperre:
+            self._abbruch = True
+            self._wunsch = []
 
     def run(self):
-        for i, pfad in enumerate(self.dateien):
-            if self._abbruch:
-                return
-            self.bild.emit(self.nummer, i, ordner_vorschau_bild(pfad))
+        while True:
+            with self._sperre:
+                if self._abbruch or not self._wunsch:
+                    self._nimmt_an = False
+                    return
+                i = self._wunsch.pop(0)
+            self.bild.emit(self.nummer, i, ordner_vorschau_bild(self.dateien[i], self.kante))
 
 
 class OrdnerDialog(QtWidgets.QFileDialog):
-    """Ordnerwahl, groesser als der Standard und mit Vorschau der Bilder."""
+    """Ordnerwahl, groesser als der Standard und mit allen Bildern als Raster."""
 
     def __init__(self, parent, titel, start, lang='de'):
         super().__init__(parent, titel, start)
@@ -3286,17 +3327,25 @@ class OrdnerDialog(QtWidgets.QFileDialog):
         self._lader = None
         self._alte_lader = []
         self._ordner = None
+        self._bilder = []
+        self._fertig = set()          # Kacheln, die schon ein Bild haben
         self._bau_vorschau()
         self._timer = QtCore.QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(180)
         self._timer.timeout.connect(self._laden)
+        # Beim Scrollen kurz warten, bis die Position steht
+        self._roll_timer = QtCore.QTimer(self)
+        self._roll_timer.setSingleShot(True)
+        self._roll_timer.setInterval(60)
+        self._roll_timer.timeout.connect(self._sichtbare_laden)
+        self.raster.verticalScrollBar().valueChanged.connect(lambda _w: self._roll_timer.start())
         self.currentChanged.connect(self._gewaehlt)
         self.directoryEntered.connect(self._gewaehlt)
         # Etwa die halbe Flaeche des Hauptfensters: 70 % Breite und Hoehe
         if parent is not None:
-            self.resize(max(900, int(parent.width() * 0.7)),
-                        max(560, int(parent.height() * 0.7)))
+            self.resize(max(980, int(parent.width() * 0.7)),
+                        max(600, int(parent.height() * 0.7)))
         self._gewaehlt(start)
 
     def _t(self, de, en):
@@ -3305,10 +3354,11 @@ class OrdnerDialog(QtWidgets.QFileDialog):
     def _bau_vorschau(self):
         self.vorschau = QtWidgets.QFrame()
         self.vorschau.setObjectName("statuscard")
-        self.vorschau.setMinimumWidth(300)
+        # Platz fuer drei Spalten Kacheln samt Bildlaufleiste
+        self.vorschau.setMinimumWidth(3 * ORDNER_KACHEL_B + 40)
         v = QtWidgets.QVBoxLayout(self.vorschau)
-        v.setContentsMargins(12, 10, 12, 10)
-        v.setSpacing(8)
+        v.setContentsMargins(10, 10, 10, 10)
+        v.setSpacing(6)
         self.lbl_v_titel = QtWidgets.QLabel(self._t("Vorschau", "Preview"))
         self.lbl_v_titel.setObjectName("statustitel")
         self.lbl_v_titel.setWordWrap(True)
@@ -3317,20 +3367,27 @@ class OrdnerDialog(QtWidgets.QFileDialog):
         self.lbl_v_info.setObjectName("hint")
         self.lbl_v_info.setWordWrap(True)
         v.addWidget(self.lbl_v_info)
-        raster = QtWidgets.QGridLayout()
-        raster.setSpacing(6)
-        self.kacheln = []
-        for i in range(ORDNER_VORSCHAU_ANZAHL):
-            k = QtWidgets.QLabel()
-            k.setAlignment(QtCore.Qt.AlignCenter)
-            k.setMinimumSize(150, 100)
-            k.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-            raster.addWidget(k, i // 2, i % 2)
-            self.kacheln.append(k)
-        v.addLayout(raster, 1)
+        self.raster = QtWidgets.QListWidget()
+        self.raster.setObjectName("ordnerraster")
+        self.raster.setViewMode(QtWidgets.QListView.IconMode)
+        self.raster.setMovement(QtWidgets.QListView.Static)
+        self.raster.setResizeMode(QtWidgets.QListView.Adjust)
+        self.raster.setUniformItemSizes(True)
+        self.raster.setGridSize(QtCore.QSize(ORDNER_KACHEL_B, ORDNER_KACHEL_H))
+        self.raster.setIconSize(QtCore.QSize(ORDNER_KACHEL_B - 8, ORDNER_KACHEL_H - 8))
+        self.raster.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.raster.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+        self.raster.verticalScrollBar().setSingleStep(ORDNER_KACHEL_H // 3)
+        self.raster.setFocusPolicy(QtCore.Qt.NoFocus)
+        v.addWidget(self.raster, 1)
         gitter = self.layout()
         if isinstance(gitter, QtWidgets.QGridLayout):
             gitter.addWidget(self.vorschau, 0, gitter.columnCount(), gitter.rowCount(), 1)
+
+    def resizeEvent(self, ereignis):
+        super().resizeEvent(ereignis)
+        if hasattr(self, '_roll_timer'):
+            self._roll_timer.start()       # breiter: mehr Spalten sichtbar
 
     def _gewaehlt(self, pfad):
         if pfad and os.path.isdir(pfad):
@@ -3348,10 +3405,10 @@ class OrdnerDialog(QtWidgets.QFileDialog):
         ordner = self._ordner
         self._anhalten()
         self._nummer += 1
-        for k in self.kacheln:
-            k.clear()
-            k.setText("")
+        self._fertig = set()
+        self.raster.clear()
         bilder, art = ordner_bilder(ordner) if ordner else ([], None)
+        self._bilder = bilder
         self.lbl_v_titel.setText(os.path.basename(os.path.normpath(ordner or "")) or (ordner or ""))
         if not bilder:
             self.lbl_v_info.setText(self._t("Keine Bilder in diesem Ordner.",
@@ -3360,39 +3417,53 @@ class OrdnerDialog(QtWidgets.QFileDialog):
         endung = os.path.splitext(bilder[0])[1].lstrip(".").upper()
         anzahl = len(bilder)
         text = (self._t(f"{anzahl} Bilder ({endung})", f"{anzahl} images ({endung})"))
-        text += "\n" + os.path.basename(bilder[0]) + " \u2026 " + os.path.basename(bilder[-1])
+        text += "  ·  " + os.path.basename(bilder[0]) + " … " + os.path.basename(bilder[-1])
         if anzahl < 50:
             text += "\n" + self._t("Für einen Zeitraffer braucht Purelapse mindestens 50 Bilder.",
                                     "Purelapse needs at least 50 images for a timelapse.")
         self.lbl_v_info.setText(text)
-        auswahl = ordner_auswahl(bilder)
-        for k in self.kacheln[len(auswahl):]:
-            k.hide()
-        for k in self.kacheln[:len(auswahl)]:
-            k.show()
-            k.setText("\u2026")
-        self._lader = OrdnerVorschauLader(self._nummer, auswahl)
+        # Leere Kacheln fuer alle Bilder - die Bilder kommen beim Scrollen
+        for i, pfad in enumerate(bilder):
+            eintrag = QtWidgets.QListWidgetItem()
+            eintrag.setToolTip(f"{i + 1}  ·  {os.path.basename(pfad)}")
+            eintrag.setSizeHint(QtCore.QSize(ORDNER_KACHEL_B, ORDNER_KACHEL_H))
+            self.raster.addItem(eintrag)
+        self.raster.verticalScrollBar().setValue(0)
+        self._sichtbare_laden()
+
+    def _sichtbare_laden(self):
+        """Laedt, was gerade zu sehen ist und noch kein Bild hat."""
+        if not self._bilder:
+            return
+        sicht = self.raster.viewport()
+        wunsch = [i for i in raster_bereich(self.raster.verticalScrollBar().value(),
+                                            sicht.height(), sicht.width(), len(self._bilder))
+                  if i not in self._fertig]
+        if not wunsch:
+            return
+        if self._lader is not None and self._lader.wuenschen(wunsch):
+            return
+        if self._lader is not None:
+            self._alte_lader.append(self._lader)
+        self._lader = OrdnerRasterLader(self._nummer, self._bilder)
         self._lader.bild.connect(self._bild_da)
+        self._lader.wuenschen(wunsch)
         self._lader.start()
 
     def _bild_da(self, nummer, index, img):
-        if nummer != self._nummer or not (0 <= index < len(self.kacheln)):
+        if nummer != self._nummer or not (0 <= index < self.raster.count()):
             return
-        kachel = self.kacheln[index]
+        self._fertig.add(index)
         if img is None:
-            kachel.setText("\u2013")
             return
         h, w = img.shape[:2]
         rgb = np.ascontiguousarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         qimg = QtGui.QImage(rgb.data, w, h, 3 * w, QtGui.QImage.Format_RGB888).copy()
-        pm = QtGui.QPixmap.fromImage(qimg)
-        kachel.setPixmap(pm.scaled(kachel.width(), kachel.height(),
-                                   QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-        kachel.setToolTip(os.path.basename(self._lader.dateien[index])
-                          if self._lader is not None and index < len(self._lader.dateien) else "")
+        self.raster.item(index).setIcon(QtGui.QIcon(QtGui.QPixmap.fromImage(qimg)))
 
     def done(self, ergebnis):
         self._timer.stop()
+        self._roll_timer.stop()
         self._anhalten()
         for l in self._alte_lader:
             l.wait(2000)

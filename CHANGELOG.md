@@ -3,6 +3,19 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+### Neu
+- **Ordnerwahl: alle Bilder als scrollbares Raster.** Statt sechs ausgewählter Vorschauen zeigt der Dialog jetzt jedes Bild des Ordners. Geladen werden nur die Kacheln, die gerade zu sehen sind (plus eine Zeile Vorlauf) – beim Scrollen kommen die nächsten nach, beim Wechsel des Ordners bricht das Laden sofort ab. Das Durchklicken bleibt so bei 50 wie bei 5000 Bildern flüssig. Ein Tooltip nennt Nummer und Dateinamen.
+
+### Geändert
+- **Ruhigeres dunkles Erscheinungsbild nach dem Vorbild von DaVinci Resolve:** neutrale Grautöne ohne Blaustich, Trennlinien dunkler als die Flächen (Bereiche wirken eingelassen statt umrandet), Eingabefelder dunkler als ihre Umgebung, kleinere Eckenradien und etwas kompaktere Abstände. Beschriftungen sind gedämpft, Weiß bleibt dem Wichtigen vorbehalten.
+- Schrittleiste: Der aktive Schritt wird nicht mehr ganz eingefärbt, sondern heller hinterlegt mit einer farbigen Unterkante; die übrigen Schritte zeigen ihre Farbe nur als schmale Linie. Die Schrittfarben sind etwas gedämpft.
+- Das helle Farbschema behält seine Farben und übernimmt die kleineren Radien und Abstände.
+
+### Intern
+- `test_ordnerwahl.py` neu gefasst: sichtbarer Bereich des Rasters (auch bei 5000 Bildern gleich viele Kacheln), Wunschliste des Laders samt Ersetzen während des Ladens, Nachladen beim Scrollen, kein Bild aus dem vorigen Ordner.
+
 ## [2.43.1-beta] – 2026-11-22
 
 Korrektur zu 2.43.0: Keyframes stimmen nach einem Wechsel der Engine wieder überall überein.

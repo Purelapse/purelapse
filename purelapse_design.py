@@ -19,21 +19,26 @@ import numpy as np
 # ==========================================================================
 THEMES = {
     'dark': {
-        # Ruhige, neutrale Grautoene in drei Stufen: Fenster, Flaeche
-        # (Gruppen, Karten), Bedienelement. Die Raender sind nur einen
-        # Schritt heller als die Flaeche, auf der sie liegen - sie gliedern,
-        # ohne ein Gitter zu zeichnen. Farbe tragen allein der aktive
-        # Schritt, der Hauptknopf und die Zustaende (gut, Warnung, Fehler).
-        'bg': "#14161a", 'panel': "#1b1e24", 'panel2': "#242830",
-        'hover': "#2c313b", 'border': "#2b3039", 'border2': "#3a404c",
-        'text': "#e4e7ec", 'dim': "#8d95a3", 'faint': "#5e6674",
+        # Nach dem Vorbild von DaVinci Resolve: rein neutrale Grautoene ohne
+        # Blaustich, in drei Stufen - Fenster, Flaeche, Bedienelement. Die
+        # Trennlinien sind DUNKLER als die Flaechen: Bereiche wirken dadurch
+        # eingelassen statt umrandet, und viele Knoepfe bleiben ruhig.
+        # Weiss ist fuer Wichtiges reserviert, Beschriftungen sind gedaempft.
+        # Farbe tragen nur schmale Linien, der Hauptknopf und die Zustaende.
+        'bg': "#1a1a1a", 'panel': "#222222", 'panel2': "#2b2b2b",
+        'hover': "#343434", 'border': "#121212", 'border2': "#3b3b3b",
+        'text': "#d4d4d4", 'dim': "#8e8e8e", 'faint': "#646464",
         'accent': "#5b9cf6", 'accent_hi': "#7db1f8", 'accent_text': "#0d1117",
-        'warn': "#f0a94a", 'ok': "#56c27a", 'err': "#f2777a",
-        # Eine Farbe je Arbeitsschritt (siehe thema_mit_schritt).
-        'steps': {'load': "#5b9cf6", 'smooth': "#35b8a8",
-                  'keys': "#e2b340", 'render': "#a48cf7"},
-        'log_bg': "#111317", 'log_fg': "#cdd2da",
-        'graph_bg': "#171a1f", 'gallery': "#181b20", 'sel': "#2b4f78",
+        'warn': "#e0a04a", 'ok': "#5bb67a", 'err': "#e8787a",
+        # Eine Farbe je Arbeitsschritt (siehe thema_mit_schritt) -
+        # etwas gedaempft, damit sie neben dem Grau nicht schreien.
+        'steps': {'load': "#649ce6", 'smooth': "#3aa697",
+                  'keys': "#d4a73e", 'render': "#a28fea"},
+        # Eingabefelder liegen dunkler als ihre Flaeche - eingelassen wie
+        # die Felder in DaVinci, statt weiss umrandet.
+        'feld': "#171717",
+        'log_bg': "#141414", 'log_fg': "#c4c4c4",
+        'graph_bg': "#1c1c1c", 'gallery': "#1d1d1d", 'sel': "#3a3a3a",
         # Schleier ueber dem Hauptfenster, solange ein Dialog davor steht
         # (Rot, Gruen, Blau, Deckkraft 0..255)
         'schleier': (0, 0, 0, 140),
@@ -326,15 +331,16 @@ def _schritt_regeln(t):
     """
     regeln = []
     for key, farbe in t.get('steps', {}).items():
-        def band(oben):
-            return (f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {oben},"
-                    f" stop:0.8 {oben}, stop:0.801 {farbe}, stop:1 {farbe})")
+        # Wie die Seitenreiter in DaVinci: der Schritt bleibt grau, nur
+        # eine schmale Linie unten traegt seine Farbe. Der aktive Schritt
+        # wird heller und bekommt eine kraeftigere Linie - statt ganz
+        # eingefaerbt zu werden.
         sel = f'QPushButton#step[schritt="{key}"]'
-        regeln.append(f"{sel} {{ background: {band(t['panel'])};"
-                      f" border-bottom: 1px solid {farbe}; }}")
-        regeln.append(f"{sel}:hover {{ background: {band(t['panel2'])}; }}")
-        regeln.append(f"{sel}:checked {{ background: {farbe};"
-                      f" border: 2px solid {farbe}; }}")
+        regeln.append(f"{sel} {{ background: {t['panel']};"
+                      f" border-bottom: 2px solid {farbe_mischen(t['panel'], farbe, 0.55)}; }}")
+        regeln.append(f"{sel}:hover {{ background: {t['panel2']}; }}")
+        regeln.append(f"{sel}:checked {{ background: {t['panel2']}; color: {t['text']};"
+                      f" border: 1px solid {t['border']}; border-bottom: 3px solid {farbe}; }}")
     return "\n".join(regeln)
 
 
@@ -349,27 +355,32 @@ def build_stylesheet(t):
     aktiv_bg = farbe_mischen(t['panel2'], t['accent'], 0.10)
     aktiv_rand = farbe_mischen(t['border'], t['accent'], 0.45)
     warn_bg = farbe_mischen(t['panel'], t['warn'], 0.16)
+    feld = t.get('feld', t['panel2'])
     return f"""
     QWidget {{ background: {t['bg']}; color: {t['text']};
                font-size: 12px; }}
     QLabel {{ background: transparent; }}
     QGroupBox {{ background: {t['panel']}; border: 1px solid {t['border']};
-                 border-radius: 8px; margin-top: 0px;
+                 border-radius: 4px; margin-top: 0px;
                  padding: 24px 6px 6px 6px; }}
     QGroupBox::title {{ subcontrol-origin: padding;
                         subcontrol-position: top left;
                         left: 15px; top: 9px; color: {t['dim']}; }}
     QLineEdit, QComboBox, QAbstractSpinBox {{
-        background: {t['panel2']}; border: 1px solid {t['border2']};
-        border-radius: 6px; padding: 5px 8px; min-height: 18px;
+        background: {feld}; border: 1px solid {t['border']};
+        border-radius: 3px; padding: 4px 7px; min-height: 18px;
         selection-background-color: {t['accent']};
         selection-color: {t['accent_text']}; }}
     QPlainTextEdit, QListWidget {{
-        background: {t['panel2']}; border: 1px solid {t['border']};
-        border-radius: 6px; padding: 4px 7px;
+        background: {feld}; border: 1px solid {t['border']};
+        border-radius: 3px; padding: 4px 7px;
         selection-background-color: {t['accent']};
         selection-color: {t['accent_text']}; }}
-    QLineEdit:hover, QComboBox:hover {{ border: 1px solid {t['faint']}; }}
+    QListWidget#ordnerraster {{ padding: 2px; }}
+    QListWidget#ordnerraster::item {{ background: {t['panel2']}; margin: 3px;
+                                      border-radius: 2px; }}
+    QListWidget#ordnerraster::item:hover {{ background: {t['hover']}; }}
+    QLineEdit:hover, QComboBox:hover {{ border: 1px solid {t['border2']}; }}
     QLineEdit:focus, QComboBox:focus {{ border: 1px solid {t['accent']}; }}
     QLineEdit:read-only {{ color: {t['dim']}; }}
     QComboBox::drop-down {{ border: none; width: 22px; }}
@@ -382,32 +393,32 @@ def build_stylesheet(t):
         border: 1px solid {t['border2']}; padding: 3px;
         selection-background-color: {t['accent']}; selection-color: {t['accent_text']};
         outline: none; }}
-    QPushButton {{ background: {t['panel2']}; border: 1px solid {t['border2']};
-                   border-radius: 6px; padding: 6px 12px; min-height: 16px; }}
-    QPushButton:hover {{ background: {t['hover']}; border: 1px solid {t['faint']}; }}
-    QPushButton:pressed {{ background: {t['border2']}; }}
+    QPushButton {{ background: {t['panel2']}; border: 1px solid {t['border']};
+                   border-radius: 3px; padding: 5px 11px; min-height: 16px; }}
+    QPushButton:hover {{ background: {t['hover']}; border: 1px solid {t['border']}; }}
+    QPushButton:pressed {{ background: {feld}; }}
     QPushButton:disabled {{ color: {t['faint']}; background: {t['panel']};
                             border: 1px solid {t['border']}; }}
     QPushButton#primary {{ background: {t['accent']}; color: {t['accent_text']};
                            border: 1px solid {t['accent']}; font-weight: bold;
-                           padding: 8px 14px; }}
+                           padding: 6px 14px; }}
     QPushButton#primary:hover {{ background: {t['accent_hi']};
                                  border: 1px solid {t['accent_hi']}; }}
     QPushButton#primary:disabled {{ background: {t['panel2']}; color: {t['faint']};
                                     border: 1px solid {t['border']}; }}
     QPushButton#step {{ background: {t['panel']}; color: {t['dim']};
                         border: 1px solid {t['border']};
-                        text-align: left; padding: 9px 12px; }}
+                        text-align: left; padding: 8px 12px; }}
     QPushButton#step[done="true"] {{ color: {t['ok']}; }}
     QPushButton#step:hover {{ color: {t['text']}; background: {t['panel2']}; }}
-    QPushButton#step:checked {{ background: {t['accent']}; color: {t['accent_text']};
-                                border: 2px solid {t['accent']}; font-weight: bold;
-                                padding: 8px 11px; }}
-    QPushButton#step[done="true"]:checked {{ color: {t['accent_text']}; }}
+    QPushButton#step:checked {{ background: {t['panel2']}; color: {t['text']};
+                                border: 1px solid {t['border']};
+                                border-bottom: 3px solid {t['accent']}; font-weight: bold; }}
+    QPushButton#step[done="true"]:checked {{ color: {t['text']}; }}
     {_schritt_regeln(t)}
     {_ikon_regeln(t)}
     QFrame#stepline {{ background: {t['accent']}; border: none;
-                       min-height: 3px; max-height: 3px; }}
+                       min-height: 2px; max-height: 2px; }}
     QPushButton#toggle:checked {{ border: 1px solid {t['accent']};
                                   color: {t['accent']}; }}
     QPushButton::menu-indicator {{ subcontrol-position: right center;
@@ -415,23 +426,23 @@ def build_stylesheet(t):
     QLabel#steparrow {{ color: {t['faint']}; font-size: 18px; padding: 0 2px; }}
     QLabel#hint {{ color: {t['dim']}; }}
     QMenu {{ background: {t['panel2']}; border: 1px solid {t['border2']}; padding: 4px; }}
-    QMenu::item {{ padding: 6px 18px; border-radius: 4px; }}
+    QMenu::item {{ padding: 5px 18px; border-radius: 2px; }}
     QMenu::item:selected {{ background: {t['accent']}; color: {t['accent_text']}; }}
     QMenu::item:disabled {{ color: {t['faint']}; }}
-    QTabWidget::pane {{ border: 1px solid {t['border']}; border-radius: 8px;
+    QTabWidget::pane {{ border: 1px solid {t['border']}; border-radius: 4px;
                         background: {t['panel']}; top: -1px; }}
     QTabBar::tab {{ background: transparent; color: {t['dim']};
-                    padding: 7px 16px; margin-right: 2px;
-                    border-top-left-radius: 7px; border-top-right-radius: 7px; }}
+                    padding: 6px 14px; margin-right: 2px;
+                    border-top-left-radius: 3px; border-top-right-radius: 3px; }}
     QTabBar::tab:selected {{ background: {t['panel']}; color: {t['text']};
                              border: 1px solid {t['border']}; border-bottom: none; }}
     QTabBar::tab:hover:!selected {{ color: {t['text']}; }}
     QTabBar::tab:disabled {{ color: {t['faint']}; }}
     QCheckBox, QRadioButton {{ spacing: 8px; background: transparent; }}
     QCheckBox:disabled, QRadioButton:disabled {{ color: {t['faint']}; }}
-    QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px;
-        border: 1px solid {t['border2']}; background: {t['panel2']}; }}
-    QCheckBox::indicator {{ border-radius: 4px; }}
+    QCheckBox::indicator, QRadioButton::indicator {{ width: 14px; height: 14px;
+        border: 1px solid {t['border2']}; background: {feld}; }}
+    QCheckBox::indicator {{ border-radius: 2px; }}
     QRadioButton::indicator {{ border-radius: 8px; }}
     QCheckBox::indicator:hover, QRadioButton::indicator:hover {{
         border: 1px solid {t['accent']}; }}
@@ -456,19 +467,19 @@ def build_stylesheet(t):
     QSlider::handle:horizontal {{ background: {t['panel']};
         border: 2px solid {t['accent']}; width: 13px; height: 13px;
         margin: -6px 0; border-radius: 8px; }}
-    QProgressBar {{ background: {t['panel2']}; border: none;
-                    border-radius: 4px; min-height: 8px; max-height: 8px;
+    QProgressBar {{ background: {feld}; border: none;
+                    border-radius: 2px; min-height: 6px; max-height: 6px;
                     text-align: center; color: transparent; }}
-    QProgressBar::chunk {{ background: {t['accent']}; border-radius: 4px; }}
+    QProgressBar::chunk {{ background: {t['accent']}; border-radius: 2px; }}
     QFrame#statuscard {{ background: {t['panel']}; border: 1px solid {t['border']};
-                         border-radius: 8px; }}
+                         border-radius: 4px; }}
     QWidget#ladeschirm {{ background: rgba(0, 0, 0, 150); }}
     QLabel#statustitel {{ font-size: 14px; font-weight: bold; color: {t['text']}; }}
     QLabel#statuszeit {{ color: {t['dim']}; }}
     QLabel#prozent {{ font-weight: bold; color: {t['text']}; }}
     QFrame#ablauf {{ background: transparent; border: none; }}
     QFrame#phase {{ background: {t['panel2']}; border: 1px solid {t['border']};
-                    border-radius: 6px; }}
+                    border-radius: 3px; }}
     QFrame#phase[zustand="aktiv"] {{ background: {aktiv_bg};
                                      border: 1px solid {aktiv_rand}; }}
     QFrame#phasenstrich {{ background: {t['border2']}; border: none;
@@ -485,15 +496,15 @@ def build_stylesheet(t):
     QLabel#phasezeit[zustand="offen"] {{ color: {t['faint']}; }}
     QLabel#phasezeit[zustand="entfallen"] {{ color: {t['faint']}; }}
     QLabel#badge {{ background: {t['panel2']}; color: {t['dim']};
-                    border-radius: 9px; padding: 2px 10px; font-size: 11px; }}
+                    border-radius: 3px; padding: 2px 8px; font-size: 11px; }}
     QLabel#badge[art="aktiv"] {{ background: {warn_bg}; color: {t['warn']};
                                  font-weight: bold; }}
     QLabel#badge[art="fest"] {{ color: {t['text']}; }}
     QFrame#trenner {{ background: {t['border']}; border: none;
                       min-height: 1px; max-height: 1px; }}
-    QScrollBar:vertical {{ background: transparent; width: 11px; margin: 0; }}
-    QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 0; }}
-    QScrollBar::handle {{ background: {t['border2']}; border-radius: 5px;
+    QScrollBar:vertical {{ background: transparent; width: 9px; margin: 0; }}
+    QScrollBar:horizontal {{ background: transparent; height: 9px; margin: 0; }}
+    QScrollBar::handle {{ background: {t['border2']}; border-radius: 4px;
                           min-height: 28px; min-width: 28px; }}
     QScrollBar::handle:hover {{ background: {t['faint']}; }}
     QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}

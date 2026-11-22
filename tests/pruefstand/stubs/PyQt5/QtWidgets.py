@@ -334,6 +334,7 @@ class _Rollbalken:
         self._liste = liste
         self.valueChanged = Sig()
     def value(self): return getattr(self._liste, '_rollwert', 0)
+    def setSingleStep(self, n): pass
     def maximum(self):
         lage, _ = self._liste._raster()
         zeilen = (max(lage.values()) + 1) if lage else 0
