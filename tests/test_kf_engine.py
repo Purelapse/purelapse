@@ -59,5 +59,21 @@ pruef(not pe.check_is_keyframe(d[5] + ".pp3"), "Stern von Hand entfernt, Profil 
 s, g, z = stand_der_anzeige(w)
 pruef(s == g == z == 2, f"nach dem Entfernen: Sterne {s}, Filter {g}, Zaehler {z}")
 
+print("=== 4. Neu einlesen: nichts vom vorigen Lader ===")
+w.cmb_engine.setCurrentIndex(1)
+n_vorher, kf_vorher = len(w.tiles), w._kf_count
+alt = w.gallery_worker
+nachzuegler = (alt.image_ready, alt.scan_done, alt.finished_loading)
+w._refresh_preview()
+n_neu = len(w.tiles)
+# Was der alte Lader schon abgeschickt hatte, kommt jetzt noch an
+from PyQt5 import QtGui
+nachzuegler[0].emit(0, "alt.NEF", QtGui.QImage(), {'kf': True, 'luma': 0.2})
+nachzuegler[1].emit(0, 99, [], [], 7)
+pruef(len(w.tiles) == n_neu == n_vorher, f"Kacheln vom vorigen Lader angehaengt: {n_vorher} -> {n_neu} -> {len(w.tiles)}")
+pruef(w._kf_count == kf_vorher and "2 bearbeitete Keyframes" in w.lbl_count.text(),
+      f"Zaehler vom vorigen Lader ueberschrieben: {w._kf_count} / {w.lbl_count.text()}")
+pruef(len(w.kf_marker) == kf_vorher, f"Keyframe-Linien doppelt: {len(w.kf_marker)} statt {kf_vorher}")
+
 print(f"\n{OK} Pruefungen bestanden, {FEHL} fehlgeschlagen")
 sys.exit(1 if FEHL else 0)

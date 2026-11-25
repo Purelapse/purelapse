@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.44.0-beta"
+VERSION = "2.44.1-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -1978,8 +1978,9 @@ def sequenz_helligkeit(bloecke):
             gemeinsam |= b[1]
     gemeinsam = cv2.dilate(gemeinsam.astype(np.uint8), kern) > 0
     gemeinsam_ok = (~gemeinsam).mean() >= MESS_MIN_ANTEIL
+    verhaeltnis = [None] * len(bloecke) if gemeinsam_ok else _verhaeltnis_messung(bloecke, form, kern)
     out = []
-    for b in bloecke:
+    for nr, b in enumerate(bloecke):
         if b is None:
             out.append(None)
             continue
@@ -1987,11 +1988,72 @@ def sequenz_helligkeit(bloecke):
         if gemeinsam_ok and summen.shape == form:
             gut = ~gemeinsam
         else:
+            if verhaeltnis[nr] is not None:
+                out.append(verhaeltnis[nr])
+                continue
             gut = ~(cv2.dilate(voll.astype(np.uint8), kern) > 0)
             if gut.mean() < MESS_MIN_ANTEIL:
                 gut = np.ones_like(voll)
         anzahl = int(gut.sum())
         out.append(float(summen[gut].sum(dtype=np.float64)) / (anzahl * n_px) if anzahl else None)
+    return out
+
+
+def _nan_median_spalten(a):
+    """Median je Spalte ohne NaN, NaN wo eine Spalte keinen Wert hat.
+    Ueber Sortieren - np.nanmedian ist hier rund zwanzigmal langsamer."""
+    a = a.reshape(a.shape[0], -1)
+    sortiert = np.sort(a, axis=0)              # NaN landen hinten
+    anzahl = np.isfinite(a).sum(axis=0)
+    unten = np.clip((anzahl - 1) // 2, 0, a.shape[0] - 1)
+    oben = np.clip(anzahl // 2, 0, a.shape[0] - 1)
+    spalten = np.arange(a.shape[1])
+    med = (sortiert[unten, spalten] + sortiert[oben, spalten]) / 2.0
+    med[anzahl == 0] = np.nan
+    return med
+
+
+def _verhaeltnis_messung(bloecke, form, kern, fenster=12):
+    """
+    Helligkeit ueber Verhaeltnisse zu benachbarten Bildern - fuer Serien,
+    in denen fast ueberall irgendwann etwas ausbrennt.
+
+    Bisher entschied in diesem Fall jedes Bild fuer sich, welche Bloecke
+    zaehlen. Das kippt bei der Nachkalibrierung: wird ein Bild heller,
+    brennen mehr Bloecke aus, fallen aus der Messung heraus, und uebrig
+    bleiben die dunklen Ecken. Das Bild misst sich DUNKLER, wird noch
+    heller gemacht - und so fort bis zum Anschlag. Gesehen in einem
+    Kerzenlicht-Zeitraffer mit Slider: einzelne Bilder sprangen um fast
+    eine Blende.
+
+    Hier wird jeder Block mit demselben Block eines Bezugs verglichen -
+    dem Median der Nachbarbilder (+-fenster), damit auch eine Kamerafahrt
+    passt -, und je Bild zaehlt der Median dieser Verhaeltnisse. Wird ein
+    Bild um den Faktor k heller, sind alle nicht ausgebrannten
+    Verhaeltnisse k, gleich welche Bloecke gerade ausbrennen.
+    Rueckgabe: Liste wie bloecke (None, wo so nicht messbar).
+    """
+    idx = [i for i, b in enumerate(bloecke) if b is not None and b[0].shape == form]
+    out = [None] * len(bloecke)
+    if len(idx) < 2:
+        return out
+    s = np.stack([bloecke[i][0].ravel() for i in idx]).astype(np.float64)
+    v = np.stack([(cv2.dilate(bloecke[i][1].astype(np.uint8), kern) > 0).ravel() for i in idx])
+    s_frei = np.where(v, np.nan, s)
+    n = len(idx)
+    for j, i in enumerate(idx):
+        von, bis = max(0, j - fenster), min(n, j + fenster + 1)
+        bezug = _nan_median_spalten(s_frei[von:bis])
+        frei = np.isfinite(bezug) & ~v[j]
+        if not frei.any():
+            continue
+        # Sehr dunkle Bloecke rauschen - sie bestimmen das Verhaeltnis nicht mit
+        frei &= bezug > np.nanmax(bezug) * 0.01
+        if frei.sum() < max(4, int(0.05 * frei.size)):
+            continue
+        q = s[j][frei] / bezug[frei]
+        skala = float(np.nanmean(bezug[np.isfinite(bezug)])) / bloecke[i][2]
+        out[i] = float(np.median(q)) * skala
     return out
 
 
@@ -5594,6 +5656,15 @@ class Worker(QtCore.QThread):
             self.status.emit(f"Schreibe Sidecar: {name}")
             self.progress.emit(i + 1, len(valid_files))
         save_base_ev(abs_target_dir, new_base)
+        # Die Nachkalibrierung von Pass 2 korrigiert die Abweichung zu DIESEN
+        # Basiswerten. Nach einer neuen Messung gelten die alten Korrekturen
+        # nicht mehr - sie wuerden sonst in jeden weiteren Lauf eingerechnet.
+        try:
+            os.remove(pl_datei(abs_target_dir, CALIB_DB))
+            self.log.emit(self._t("> Alte Nachkalibrierung verworfen - sie gehoerte zur vorigen Messung.",
+                                  "> Old recalibration discarded - it belonged to the previous measurement."))
+        except OSError:
+            pass
         self._save_report("purelapse_pass1.csv", report)
         self._validate_profiles(valid_files, template, "nach Pass 1")
         clipped = sum(1 for r in report if r['clip_frac'] > 0.01)
@@ -8946,6 +9017,9 @@ class MainWindow(QtWidgets.QWidget):
     def _set_folder(self, path):
         self.target_dir = os.path.abspath(path)
         self.lbl_path.setText(self.target_dir)
+        # Das Video des letzten Laufs gehoert zum alten Ordner - sonst oeffnete
+        # "Ordner oeffnen" nach einem Ordnerwechsel weiter den alten.
+        self.last_output_dir = ""
         self._alte_ablage_melden(*alte_ablage_umraeumen(self.target_dir))
         save_last_path(self.target_dir)
         b_alt = lade_bereiche().get(self.target_dir) or ["", ""]
@@ -9212,14 +9286,26 @@ class MainWindow(QtWidgets.QWidget):
         if getattr(self, 'lade_schirm', None) is not None:
             self.lade_schirm.zeige(self.target_dir, self.lang)
         self.gallery_worker = GalleryWorker(self.target_dir, self.roi_rel, lang=self.lang)
-        self.gallery_worker.scan_done.connect(self._on_scan_done)
-        self.gallery_worker.gaps_found.connect(self._on_gaps_found)
-        self.gallery_worker.curves_ready.connect(self._on_curves_ready)
-        self.gallery_worker.status.connect(self._on_gallery_status)
-        self.gallery_worker.progress.connect(self._on_gallery_progress)
-        self.gallery_worker.image_ready.connect(self._on_image_ready)
-        self.gallery_worker.finished_loading.connect(self._on_finished_loading)
-        self.gallery_worker.start()
+        # Jeder Ladelauf bekommt eine Nummer. Signale, die ein abgeloester
+        # Lader schon abgeschickt hatte, kommen sonst noch nach dem Leeren
+        # der Bildleiste an - und haengen alte Kacheln vor die neuen: aus
+        # 2 Keyframes wurden kurz 4, und die Zeilen passten nicht mehr zum
+        # Diagramm. blockSignals() hilft dagegen nicht, es haelt nur kuenftige
+        # Signale auf, keine, die schon in der Warteschlange stehen.
+        self._galerie_lauf = getattr(self, '_galerie_lauf', 0) + 1
+        lauf = self._galerie_lauf
+
+        def nur_aktuell(slot):
+            return lambda *a: slot(*a) if lauf == self._galerie_lauf else None
+        w = self.gallery_worker
+        w.scan_done.connect(nur_aktuell(self._on_scan_done))
+        w.gaps_found.connect(nur_aktuell(self._on_gaps_found))
+        w.curves_ready.connect(nur_aktuell(self._on_curves_ready))
+        w.status.connect(nur_aktuell(self._on_gallery_status))
+        w.progress.connect(nur_aktuell(self._on_gallery_progress))
+        w.image_ready.connect(nur_aktuell(self._on_image_ready))
+        w.finished_loading.connect(nur_aktuell(self._on_finished_loading))
+        w.start()
 
     def _on_gallery_status(self, text):
         """Zeigt Zaehlerstand und ETA waehrend des Einlesens an."""
@@ -10472,7 +10558,12 @@ class MainWindow(QtWidgets.QWidget):
             return SCRIPT_DIR
         if idx == 3 and self.custom_out_dir:
             return self.custom_out_dir
-        return self.target_dir or ""
+        if self.target_dir:
+            # Standard: der Ordner "Purelapse" im Bilderordner - solange es ihn
+            # noch nicht gibt, der Bilderordner selbst.
+            pl = pl_ordner(self.target_dir)
+            return pl if os.path.isdir(pl) else self.target_dir
+        return ""
 
     def _open_output_dir(self):
         d = self._current_output_dir()

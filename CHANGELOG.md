@@ -3,6 +3,21 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [2.44.1-beta] – 2026-11-25
+
+Korrektur zu 2.44.0: Die Entflackerung bleibt auch bei viel Ausgebranntem stabil – etwa bei Kerzenlicht oder Lampen im Bild, zumal mit Kamerafahrt.
+
+### Behoben
+- **Nachkalibrierung lief bei viel Ausgebranntem weg – Video flackerte trotz Entflackerung:** Brennt in einer Serie fast überall irgendwann etwas aus (Kerzen, Lampen, helle Flächen; bei einer Kamerafahrt wandern sie zudem durchs Bild), entschied bisher jedes Bild selbst, welche Bereiche es misst. Wurde ein Bild heller gemacht, brannte mehr aus, fiel aus der Messung heraus – und das Bild maß sich dunkler. Die Nachkalibrierung machte es daraufhin noch heller, bis zum Anschlag von ±0,5 EV. Gesehen in einem Kerzenlicht-Zeitraffer mit Slider: einzelne Bilder sprangen um fast eine Blende, mit einem oder zwei Keyframes gleichermaßen. Jetzt vergleicht die Messung in diesem Fall jeden Bereich mit demselben Bereich der Nachbarbilder und nimmt je Bild den Median dieser Verhältnisse. Ein heller gemachtes Bild misst sich damit heller, gleich welche Bereiche dabei ausbrennen.
+- **Alte Nachkalibrierung wurde weitergetragen:** Die Korrekturen der Nachkalibrierung (`purelapse_calib.json`) blieben auch nach einem neuen Pass 1 stehen und wurden in jeden weiteren Lauf eingerechnet – fehlerhafte Werte wurde man so nicht mehr los. Pass 1 verwirft sie jetzt, denn sie gehören zur vorigen Messung, und meldet das im Protokoll.
+- **Keyframes kurz doppelt gezählt:** Beim Neu-Einlesen der Bildleiste konnten Bilder des vorigen Ladelaufs noch nachträglich ankommen und wurden vor die neuen gehängt – aus 2 Keyframes wurden kurz 4, und Bildleiste und Diagramm passten nicht mehr zueinander. Jetzt nimmt die Bildleiste nur noch, was vom aktuellen Ladelauf stammt.
+- **„Ordner öffnen“ nach einem Ordnerwechsel:** Der Knopf öffnete weiter den Ausgabeordner des letzten Laufs – auch wenn inzwischen ein anderer Bilderordner geladen war. Jetzt gehört der zuletzt erzeugte Ausgabeordner zum Bilderordner und wird beim Wechsel vergessen. Ohne Lauf öffnet der Knopf den Ordner `Purelapse` im Bilderordner, solange es ihn noch nicht gibt den Bilderordner selbst.
+
+### Intern
+- Neue Prüfreihe `test_messung_lichter.py`: Serie mit Kamerafahrt, in der kaum ein Bereich in allen Bildern frei bleibt – heller und dunkler gemachte Bilder müssen sich in die richtige Richtung messen, die Nachkalibrierung darf nicht weglaufen. Mit dem alten Stand schlagen 8 Prüfungen fehl.
+- `test_kf_engine.py`: Nachzügler eines abgelösten Laders verändern weder Bildleiste noch Zähler noch Keyframe-Linien.
+- `test_ordner.py`: Pass 1 verwirft eine vorhandene Nachkalibrierung; „Ordner öffnen“ nach einem Lauf, nach dem Wechsel in einen anderen Ordner und zurück.
+
 ## [2.44.0-beta] – 2026-11-22
 
 Ein ruhigeres, professionelleres Erscheinungsbild nach dem Vorbild von DaVinci Resolve – und die Ordnerwahl zeigt jetzt alle Bilder eines Ordners als scrollbares Raster.

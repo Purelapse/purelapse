@@ -27,3 +27,4 @@ purelapse_pruefung/
 
 # Bildschirmfotos zum Hochladen in Releases (liegen im Release, nicht im Code)
 *_screenshot.jpg
+/*.mp4
