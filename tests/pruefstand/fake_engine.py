@@ -75,6 +75,24 @@ Luma=0
 Chroma=15
 Gamma=1.7
 
+[Vibrance]
+Enabled=false
+Pastels=0
+Saturated=0
+PSThreshold=0;75;
+ProtectSkins=false
+AvoidColorShift=true
+PastSatTog=true
+
+[Shadows & Highlights]
+Enabled=false
+Highlights=0
+HighlightTonalWidth=70
+Shadows=0
+ShadowTonalWidth=30
+Radius=40
+Lab=false
+
 [RAW]
 HotPixelFilter=false
 DeadPixelFilter=false
@@ -116,6 +134,16 @@ Enabled=false
 Brightness=0
 Contrast=0
 Chromaticity=0
+
+[ToneEqualizer]
+Enabled=false
+Band0=0
+Band1=0
+Band2=0
+Band3=0
+Band4=0
+Regularization=4
+Pivot=0
 
 [Channel Mixer]
 Enabled=false

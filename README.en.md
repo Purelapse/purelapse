@@ -56,7 +56,7 @@ JPG sequences are processed in a single pass, without an external engine.
 | Area | Features |
 |---|---|
 | **Deflicker** | Measurement in linear light (16 bit) without blown-out areas, two-stage smoothing, recalibration until residual flicker is below 0.008 EV, measuring area (ROI), light progression sunrise/sunset/constant |
-| **Holy grail** | Compensates exposure and ISO jumps, detects ramping intervals, EXIF exposure and sun elevation as curves |
+| **Holy grail** | Compensates exposure and ISO jumps, detects ramping intervals, EXIF exposure and sun elevation as curves, remove night in 24-hour timelapses |
 | **RAW development** | ART, RawTherapee, Darktable; formats NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
 | **Keyframes** | Smooth blending between keyframes (with Darktable the complete module stack), quick settings with a real engine preview, automatic optimisation, highlight reconstruction |
 | **Video** | 720p to 8K, 23.976 to 120 fps, H.264, H.265 (also 10 bit), ProRes 422 HQ, BT.709 colour space, optional 16-bit intermediate images, CPU or NVIDIA, Intel QuickSync, VAAPI, four quality levels |
@@ -94,6 +94,10 @@ JPG sequences are processed in a single pass, without an external engine.
   own exposure change is kept as an offset, the rest of the history untouched.
 - **JPG workflow.** JPG sequences are deflickered directly, without an engine,
   and can optionally be saved as single images without a video.
+- **Can be switched off.** Without the *Deflicker* tick the timelapse keeps the
+  brightness the camera recorded – keyframes, camera move, telemetry and
+  effects still work. For RAW, pass 1 then only prepares the profiles. The
+  switch is remembered per folder.
 
 ## Holy grail: day-to-night transitions
 
@@ -110,6 +114,12 @@ the sequence. Purelapse is built for this:
 - **Sun elevation.** With latitude and longitude (or GPS from the image),
   Purelapse shows the sun elevation as a curve and marks the limits of civil,
   nautical and astronomical twilight – ideal for placing keyframes.
+- **Remove night.** In 24-hour timelapses, frames below an adjustable scene
+  brightness drop out of the video. Image and EXIF exposure are measured
+  together, in stops below daylight – so the night is detected even when the
+  camera exposed longer at night. The threshold is a line in the chart that
+  can be dragged; single outliers (headlights, a cloud) do not chop up the
+  night. The whole series is still deflickered so the twilight is right.
 
 ## Keyframes and quick settings
 
@@ -122,25 +132,32 @@ the sequence. Purelapse is built for this:
   and about 60 more – are blended smoothly, hues along the shorter way round
   the colour wheel. Switches, masks and modules that exist in only one
   keyframe come from the nearer keyframe; Purelapse reports them beforehand.
-- **Quick settings** (ART and RawTherapee; for Darktable brightness,
-  contrast, saturation and sharpening) right inside Purelapse via
+  Exception: shadows and highlights and colour balance rgb are blended
+  smoothly from their zero setting even then.
+- **Quick settings** (ART and RawTherapee; for Darktable all except white
+  balance and denoising) right inside Purelapse via
   *Edit keyframe…*, without opening the engine:
 
   | Control | Range |
   |---|---|
   | Colour temperature | 2000 – 12000 K |
   | Green balance | 0.6 – 1.8 |
-  | Brightness, contrast, saturation | −100 – +100 |
+  | Brightness, contrast, vibrance, saturation | −100 – +100 |
+  | Recover highlights, lift shadows | 0 – 100 |
   | Sharpening | 1 – 1000 |
   | Denoise luminance / chrominance | 0 – 100 |
 
   Every control has its own checkbox: anything left unticked stays unchanged
   in the profile. Exposure is excluded – that belongs to the deflicker.
+  Highlights and shadows work locally (ART: tone equalizer, RawTherapee:
+  shadows/highlights, Darktable: shadows and highlights); Purelapse scales
+  the values per engine so the same slider does roughly the same everywhere.
 - **Real preview.** The engine develops the frame with the chosen values,
   with a histogram and *show before*.
-- **Automatic optimisation.** Measures the frame and suggests brightness,
-  contrast, saturation, sharpening and denoising (matched to the ISO value) –
-  each with the reason the value is based on.
+- **Automatic optimisation.** Measures the frame and makes it pleasing:
+  pulls the highlights down, lifts the shadows, gives the midtones punch and
+  the colours vibrance; plus sharpening and denoising matched to the ISO
+  value. Night scenes stay dark. Each value with the reason it is based on.
 - **Copy from another keyframe.** Transfer the settings of one keyframe to
   another.
 - **Highlight reconstruction.** Against the pink sun disc: recovers clipped

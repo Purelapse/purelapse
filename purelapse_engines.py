@@ -527,10 +527,18 @@ def strip_rank(arp_data):
 #  Deflicker. Was hier "Helligkeit" heisst, ist der Tonwert-Regler, der
 #  neben der Belichtung sitzt und ihr nicht in die Arbeit faellt.
 #
-#  Felder je Regler: Sektion, Schluessel, Minimum, Maximum, Neutralwert.
-#  Minimum und Maximum sind die Grenzen der jeweiligen Engine; wo deren
-#  Bereich fuer einen Schieberegler unbrauchbar weit ist (Gruenabgleich bis
-#  100), steht in QUICK_CONTROLS ein engerer Bereich fuer die Bedienung.
+#  Felder je Regler: Sektion, Schluessel, Minimum, Maximum, Neutralwert,
+#  wahlweise Faktor und weitere Schluessel. Minimum und Maximum gelten fuer
+#  den Reglerwert; wo der Bereich der Engine fuer einen Schieberegler
+#  unbrauchbar weit ist (Gruenabgleich bis 100), steht in QUICK_CONTROLS
+#  ein engerer Bereich fuer die Bedienung.
+#
+#  Faktor: in die Datei kommt Reglerwert x Faktor. Damit bedeutet
+#  "Tiefen aufhellen 40" in allen drei Engines ungefaehr dasselbe, obwohl
+#  ihre Werkzeuge verschieden stark zupacken.
+#  Weitere Schluessel: ((Schluessel, Faktor), ...) in derselben Sektion,
+#  fuer Werkzeuge, bei denen ein Regler mehrere Werte braucht - etwa die
+#  Baender des Tonwert-Equalizers.
 # ==========================================================================
 QUICK_CONTROLS = [
     dict(id='wb_temp',    de="Farbtemperatur",  en="Colour temperature",
@@ -540,6 +548,12 @@ QUICK_CONTROLS = [
     dict(id='brightness', de="Helligkeit",      en="Brightness",
          einheit="",    dezimal=0, ui_min=-100,  ui_max=100,   schritt=1),
     dict(id='contrast',   de="Kontrast",        en="Contrast",
+         einheit="",    dezimal=0, ui_min=-100,  ui_max=100,   schritt=1),
+    dict(id='highlights', de="Lichter abdunkeln", en="Recover highlights",
+         einheit="",    dezimal=0, ui_min=0,     ui_max=100,   schritt=1),
+    dict(id='shadows',    de="Tiefen aufhellen", en="Lift shadows",
+         einheit="",    dezimal=0, ui_min=0,     ui_max=100,   schritt=1),
+    dict(id='vibrance',   de="Dynamik",         en="Vibrance",
          einheit="",    dezimal=0, ui_min=-100,  ui_max=100,   schritt=1),
     dict(id='saturation', de="Saettigung",      en="Saturation",
          einheit="",    dezimal=0, ui_min=-100,  ui_max=100,   schritt=1),
@@ -558,6 +572,16 @@ QUICK_KEYS = {
         'brightness': ('Luminance Curve', 'Brightness',  -100, 100,   0),
         'contrast':   ('Luminance Curve', 'Contrast',    -100, 100,   0),
         'saturation': ('Saturation',      'Saturation',  -100, 100,   0),
+        'vibrance':   ('Saturation',      'Vibrance',    -100, 100,   0),
+        # Tiefen und Lichter ueber den Tonwert-Equalizer (ART hat kein
+        # eigenes Werkzeug dafuer). Fuenf Baender, gemessen in Blenden
+        # unter Weiss: Band0 <= -8, Band1 -6, Band2 -4, Band3 -2, Band4 >= 0.
+        # Ein Bandwert v hebt um v/100 * 3 Blenden (Band0-2 aufwaerts,
+        # Band3-4 abwaerts) - src/engine/iptoneequalizer.cc, tone_eq().
+        'shadows':    ('ToneEqualizer',   'Band1',       0,    100,   0,
+                       0.6, (('Band0', 0.35), ('Band2', 0.2))),
+        'highlights': ('ToneEqualizer',   'Band4',       0,    100,   0,
+                       -0.5, (('Band3', -0.2),)),
         'sharpen':    ('Sharpening',      'Amount',      1,    1000,  200),
         'denoise_l':  ('Denoise',         'Luminance',   0,    100,   0),
         'denoise_c':  ('Denoise',         'Chrominance', 0,    100,   15),
@@ -568,6 +592,16 @@ QUICK_KEYS = {
         'brightness': ('Exposure',      'Brightness',  -100, 100,   0),
         'contrast':   ('Exposure',      'Contrast',    -100, 100,   0),
         'saturation': ('Exposure',      'Saturation',  -100, 100,   0),
+        # Dynamik: RawTherapee trennt Pastell- und kraeftige Toene; beide
+        # bekommen denselben Wert (rtengine/ipvibrance.cc).
+        'vibrance':   ('Vibrance',      'Pastels',     -100, 100,   0,
+                       1.0, (('Saturated', 1.0),)),
+        # [Shadows & Highlights] wirkt als Gamma 4^(-Wert/100) in der
+        # Maske (rtengine/ipshadowshighlights.cc) und damit weit kraeftiger
+        # als der Equalizer in ART. Der Faktor bringt beide auf etwa
+        # dieselbe Wirkung je Reglerstellung.
+        'shadows':    ('Shadows & Highlights', 'Shadows',    0, 100,   0, 0.3),
+        'highlights': ('Shadows & Highlights', 'Highlights', 0, 100,   0, 0.75),
         'sharpen':    ('Sharpening',    'Amount',      1,    1000,  200),
         'denoise_l':  ('Directional Pyramid Denoising', 'Luma',   0, 100, 0),
         'denoise_c':  ('Directional Pyramid Denoising', 'Chroma', 0, 100, 15),
@@ -583,13 +617,21 @@ QUICK_KEYS = {
         'brightness': ('dt:colorbalancergb#0', 'brilliance_global', -100, 100, 0),
         'contrast':   ('dt:colorbalancergb#0', 'contrast',          -100, 100, 0),
         'saturation': ('dt:colorbalancergb#0', 'saturation_global', -100, 100, 0),
+        'vibrance':   ('dt:colorbalancergb#0', 'vibrance',          -100, 100, 0),
+        # Modul "Schatten und Lichter" (shadhi): Tiefen positiv hellen auf,
+        # Lichter negativ dunkeln ab.
+        'shadows':    ('dt:shadhi#0',          'shadows',           0,    100, 0),
+        'highlights': ('dt:shadhi#0',          'highlights',        0,    100, 0),
         'sharpen':    ('dt:sharpen#0',         'amount',            1,    800, 200),
     },
 }
 # Regler -> Modulwert: Prozent wie in Darktables Oberflaeche; die Schaerfe
 # so, dass 200 (Grundwert von ART/RawTherapee) Darktables 0,5 entspricht.
+# Tiefen und Lichter mit 0,6: Darktables Grundwerte +50/-50 sind schon
+# eine kraeftige Aufhellung; Purelapse 100 entspricht dort 60.
 QUICK_DT = {'brightness': 0.01, 'contrast': 0.01, 'saturation': 0.01,
-            'sharpen': 1.0 / 400.0}
+            'vibrance': 0.01, 'sharpen': 1.0 / 400.0,
+            'shadows': 0.6, 'highlights': -0.6}
 
 
 # ==========================================================================
@@ -710,7 +752,9 @@ def quick_defs(engine=None):
         if not eintrag:
             continue
         d = dict(c)
-        d['sec'], d['key'], d['min'], d['max'], d['neutral'] = eintrag
+        d['sec'], d['key'], d['min'], d['max'], d['neutral'] = eintrag[:5]
+        d['faktor'] = float(eintrag[5]) if len(eintrag) > 5 else 1.0
+        d['mehr'] = tuple(eintrag[6]) if len(eintrag) > 6 else ()
         out.append(d)
     return out
 
@@ -751,8 +795,9 @@ def quick_read(profile, engine=None):
             continue
         try:
             # Listenwerte wie "512;0;0;0" -> erster Eintrag
-            werte[d['id']] = float(str(roh).split(';')[0].strip())
-        except (TypeError, ValueError):
+            werte[d['id']] = (float(str(roh).split(';')[0].strip())
+                              / d.get('faktor', 1.0))
+        except (TypeError, ValueError, ZeroDivisionError):
             werte[d['id']] = float(d['neutral'])
     return werte
 
@@ -791,9 +836,11 @@ def quick_apply(profile, werte, engine=None):
         sek = profile.setdefault(d['sec'], {})
         if 'Enabled' in sek:
             sek['Enabled'] = "true"
-        sek[d['key']] = (str(int(round(v))) if d['dezimal'] == 0
-                         else f"{v:.{d['dezimal']}f}")
-        geschrieben.append((d['sec'], d['key'], sek[d['key']]))
+        for key, f in ((d['key'], d.get('faktor', 1.0)),) + tuple(d.get('mehr', ())):
+            w = v * float(f)
+            sek[key] = (str(int(round(w))) if d['dezimal'] == 0
+                        else f"{w:.{d['dezimal']}f}")
+            geschrieben.append((d['sec'], key, sek[key]))
         if d['sec'] == 'White Balance':
             wb_beruehrt = True
     if wb_beruehrt:
@@ -1551,11 +1598,22 @@ _DT_HASHES = ('history_current_hash', 'history_basic_hash', 'history_auto_hash')
 
 
 # Grundwerte der Module, die Purelapse bei Bedarf selbst anlegt - aus den
-# $DEFAULT-Angaben im Quelltext von darktable 4.6.1 (keines der drei
-# Module aendert sie beim Laden).
+# $DEFAULT-Angaben im Quelltext von darktable 4.6.1 (keines der Module
+# aendert sie beim Laden; die eine Abweichung steht bei shadhi).
 DT_STANDARD = {
     'hotpixels': (1, {'strength': 0.25, 'threshold': 0.05, 'markfixed': 0,
                       'permissive': 0}),
+    # shadhi: Felder und Grundwerte aus src/iop/shadhi.c (Version 5) -
+    # mit EINER Ausnahme: Tiefen und Lichter stehen auf 0 statt +50/-50.
+    # Darktables Grundwerte wirken schon beim Einschalten; hier soll das
+    # neu angelegte Modul nichts tun, solange der Regler nicht bewegt ist.
+    # order 0 = DT_IOP_GAUSSIAN_ZERO, flags 127 = UNBOUND_DEFAULT,
+    # shadhi_algo 1 = SHADHI_ALGO_BILATERAL.
+    'shadhi': (5, {'order': 0, 'radius': 100.0, 'shadows': 0.0,
+                   'whitepoint': 0.0, 'highlights': 0.0, 'reserved2': 0.0,
+                   'compress': 50.0, 'shadows_ccorrect': 100.0,
+                   'highlights_ccorrect': 50.0, 'flags': 127,
+                   'low_approximation': 0.000001, 'shadhi_algo': 1}),
     'sharpen': (1, {'radius': 2.0, 'amount': 0.5, 'threshold': 0.5}),
     'colorbalancergb': (5, dict(
         {n: 0.0 for n in ('shadows_Y', 'shadows_C', 'shadows_H', 'midtones_Y',
@@ -1984,12 +2042,64 @@ def _dt_mischen_float(art, a, b, t):
     return a + (b - a) * t
 
 
+# Module, deren Wirkung sich auf Null stellen laesst, ohne sie
+# auszuschalten: je Modul die Felder, die dafuer auf 0 muessen. Ein
+# fehlendes Modul ist dasselbe wie eines mit diesen Nullwerten - fehlt es
+# in einem der beiden Keyframes, wird von Null aus ueberblendet statt in
+# der Mitte hart umzuschalten.
+DT_NULLBAR = {
+    'shadhi': ('shadows', 'highlights', 'whitepoint'),
+    'colorbalancergb': tuple(n for n in DT_STANDARD['colorbalancergb'][1]
+                             if DT_STANDARD['colorbalancergb'][1][n] == 0.0
+                             and n not in ('saturation_formula',)),
+}
+
+
+def dt_neutral_gegenstueck(sec, vorhanden):
+    """
+    Die wirkungslose Fassung eines Moduls, das nur in EINEM Keyframe steht.
+
+    Kopie des vorhandenen Moduls - gleiche Version, Maske, Ueberblendung -
+    mit den Wirkungsfeldern auf 0. Rueckgabe None, wenn sich das Modul so
+    nicht neutral stellen laesst.
+    """
+    if not sec.startswith(DT_SEK) or not vorhanden:
+        return None
+    op = sec[len(DT_SEK):].partition('#')[0]
+    felder = DT_NULLBAR.get(op)
+    eintrag = DT_LAYOUTS.get(op)
+    if not felder or not eintrag \
+            or eintrag[0] != _dt_int(vorhanden.get('~modversion'), -1) \
+            or vorhanden.get('~enabled') != '1':
+        return None
+    namen = {n: (art, anz) for n, art, anz in eintrag[1]}
+    if not all(n in vorhanden for n in namen):
+        return None
+    neu = dict(vorhanden)
+    for n in felder:
+        art, anz = namen[n]
+        neu[n] = _dt_wert_text(art, [0.0] * anz)
+    try:
+        neu['~params'] = _dt_felder_packen(op, neu)
+    except Exception:
+        return None
+    return neu
+
+
 def dt_sektion_mischen(sec, s, e, t):
     """
     Ueberblendet eine dt-Sektion zwischen zwei Keyframes.
     Rueckgabe: (Sektion oder None, [was nicht weich geht])
     """
     nah = s if t < 0.5 else e
+    if (not s or not e) and (s or e):
+        ergaenzt = dt_neutral_gegenstueck(sec, s or e)
+        if ergaenzt is not None:
+            if not s:
+                s = ergaenzt
+            else:
+                e = ergaenzt
+            nah = s if t < 0.5 else e
     if not s or not e:
         return (dict(nah) if nah else None), ["nur in einem Keyframe"]
     if s == e:

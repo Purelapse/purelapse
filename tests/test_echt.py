@@ -187,6 +187,93 @@ _basis.ANTWORTEN['QuickLookDialog'] = ohne
 fen._open_quick_dialog()
 fen.txt_art_path.setText(RT_CLI)
 
+print("=== 6b. Automatisch optimieren im Dialog ===")
+def auto_bedienen(dlg):
+    def knoepfe_an(kid):
+        return all(w.isEnabled() for w in (dlg.regler[kid][1],) + tuple(dlg._knoepfe[kid]))
+    # Vorher von Hand verstellt: Saettigung und Entrauschen Farbe am Anschlag
+    for kid, wert in (('saturation', 100), ('denoise_c', 100)):
+        chk, sl, lbl, d = dlg.regler[kid]; chk.setChecked(True); sl.setValue(wert)
+    vorher_aus = [k for k, (c, *_r) in dlg.regler.items() if not c.isChecked()]
+    dlg._automatisch()
+    for kid, (chk, sl, lbl, d) in dlg.regler.items():
+        if chk.isChecked():
+            pruef(knoepfe_an(kid), f"{kid}: angehakt, aber Schieber oder -/+/neutral gesperrt")
+        else:
+            pruef(not any(w.isEnabled() for w in dlg._knoepfe[kid]), f"{kid}: nicht angehakt, Knoepfe frei")
+    pruef(any(k in vorher_aus and dlg.regler[k][0].isChecked() for k in dlg.regler),
+          "die Automatik hat keinen bisher freien Regler gesetzt")
+    w1 = {k: dlg.regler[k][1].value() for k in dlg.regler if dlg.regler[k][0].isChecked()}
+    pruef(w1.get('saturation') == 0, f"Saettigung bleibt nach der Automatik auf {w1.get('saturation')}")
+    pruef(w1.get('denoise_c') == 15, f"Entrauschen Farbe bleibt nach der Automatik auf {w1.get('denoise_c')}")
+    pruef("neutral" in dlg.lbl_vorschau_hinweis.text(), f"Hinweis nennt das Zuruecksetzen nicht: {dlg.lbl_vorschau_hinweis.text()}")
+    pruef(any("neutral" in x for x in dlg.begruendung()), "Begruendung nennt das Zuruecksetzen nicht")
+    # Zweimal hintereinander: dasselbe Ergebnis
+    chk, sl, lbl, d = dlg.regler['contrast']; chk.setChecked(True); sl.setValue(-80)
+    dlg._automatisch()
+    w2 = {k: dlg.regler[k][1].value() for k in dlg.regler if dlg.regler[k][0].isChecked()}
+    pruef(w2 == w1, f"zweimal optimieren ergibt Verschiedenes: {w1} / {w2}")
+    # Zuruecksetzen schaltet die Knoepfe passend zum Haekchen
+    dlg._auf_ursprung()
+    for kid, (chk, sl, lbl, d) in dlg.regler.items():
+        pruef(all(w.isEnabled() == chk.isChecked() for w in (sl,) + tuple(dlg._knoepfe[kid])),
+              f"{kid}: nach Zuruecksetzen passen Knoepfe und Haekchen nicht zusammen")
+    dlg._echt_beenden()
+    return 0
+_basis.ANTWORTEN['QuickLookDialog'] = auto_bedienen
+fen._open_quick_dialog()
+
+print("=== 6c. Weissabgleich der Kamera, Automatik am Bild der Engine ===")
+sc15 = pe.sidecar(dg[15])
+prof15 = pe.read_arp_dict(sc15)
+pruef(prof15['White Balance'].get('Setting') == 'Camera', f"Ausgang: {prof15['White Balance']}")
+prof15['White Balance']['Temperature'] = '6504'       # Platzhalter wie bei RawTherapee
+prof15['Exposure']['Compensation'] = '-2.000'         # das Bild der Engine ist viel dunkler
+for k in ('Brightness', 'Contrast', 'Saturation'):
+    prof15['Exposure'][k] = '0'
+pe.write_arp_dict(sc15, prof15)
+gemessen = {}
+def wb_und_auto(dlg):
+    chk, sl, lbl, d = dlg.regler['wb_temp']
+    pruef(not chk.isChecked(), "Kamera-Weissabgleich: Farbtemperatur darf nicht angehakt sein")
+    kt = pm.kamera_temperatur(dg[15])
+    pruef(kt is not None and sl.value() == kt, f"Ausgangswert soll die Kameratemperatur sein: {sl.value()} / {kt}")
+    pruef("aus dem\nRAW berechnet" in chk.toolTip() or "RAW berechnet" in chk.toolTip(),
+          f"Tooltip nennt die Kameratemperatur nicht: {chk.toolTip()}")
+    pruef(not dlg.regler['wb_green'][0].isChecked(), "Gruenabgleich angehakt")
+    pruef('White Balance' not in [s for s, k, v in pe.schnell_profil(dlg._profil0, dlg.werte(), dlg.hl_wert())[1]],
+          "ohne Haken wird der Weissabgleich trotzdem geschrieben")
+    dlg._automatisch()
+    gemessen['engine'] = dict((k, dlg.regler[k][1].value()) for k in dlg.regler)
+    gemessen['grund_e'] = dlg.begruendung()
+    dlg.chk_echt.setChecked(False)
+    dlg._automatisch()
+    gemessen['basis'] = dict((k, dlg.regler[k][1].value()) for k in dlg.regler)
+    gemessen['grund_b'] = dlg.begruendung()
+    pruef(dlg.btn_auto.isEnabled(), "der Optimieren-Knopf bleibt gesperrt")
+    dlg._echt_beenden()
+    return 0
+_basis.ANTWORTEN['QuickLookDialog'] = wb_und_auto
+fen._open_quick_dialog()
+pruef(gemessen and "RawTherapee" in gemessen['grund_e'][0], f"Quelle der Messung: {gemessen.get('grund_e', [''])[:1]}")
+pruef(gemessen and "Näherung" in gemessen['grund_b'][0], f"Quelle ohne Engine: {gemessen.get('grund_b', [''])[:1]}")
+pruef(gemessen and gemessen['engine']['brightness'] > gemessen['basis']['brightness'],
+      f"am viel dunkleren Bild der Engine muss die Helligkeit hoeher ausfallen: "
+      f"{gemessen.get('engine', {}).get('brightness')} gegen {gemessen.get('basis', {}).get('brightness')}")
+# Nikon D750 (Farbmatrix aus dcraw): typische Faktoren fuer Tageslicht und Gluehlampe
+d750 = np.array([[9020, -2890, -715], [-4535, 12436, 2348], [-934, 1919, 7086]]) / 10000.0
+tag = pm.temperatur_aus_kamera([2.07, 1.0, 1.37], d750)
+kunst = pm.temperatur_aus_kamera([1.30, 1.0, 2.45], d750)
+pruef(tag and 5000 <= tag <= 6000, f"Tageslicht: {tag} K")
+pruef(kunst and 2600 <= kunst <= 3300, f"Gluehlampe: {kunst} K")
+for k in (3000, 4500, 7000):
+    x, y = pm.planck_xy(k)
+    f = 1.0 / d750.dot([x / y, 1.0, (1.0 - x - y) / y]); f /= f[1]
+    pruef(abs(pm.temperatur_aus_kamera(f, d750) - k) <= 50, f"Rueckrechnung {k} K")
+pruef(pm.temperatur_aus_kamera([0, 1, 1], d750) is None, "ungueltige Faktoren")
+pruef(pm.temperatur_aus_kamera([2, 1, 1.5], np.zeros((4, 3))) is None, "ohne Farbmatrix")
+pruef(pm.kamera_temperatur("/gibt/es/nicht.NEF") is None, "fehlende Datei")
+
 print("=== 7. Lichterwarnung nur bei echten ausgebrannten Lichtern ===")
 dunkel, pegel_d = pm.vorschau_basis_pegel(dg[N - 1])
 pruef(dunkel is not None and pegel_d < pm.HL_PEGEL_SCHWELLE, f"Pegel des dunklen Bildes: {pegel_d:.2f}")

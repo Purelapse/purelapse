@@ -16,6 +16,10 @@ TRANSLATIONS = {
     "Zeitraffer-Ordner": "Timelapse folder",
     "Format": "Format",
     "Helligkeit und Deflicker": "Brightness and deflicker",
+    "Entflackern": "Deflicker",
+    "Nacht entfernen": "Remove night",
+    "Zu dunkle Bilder auslassen": "Leave out frames that are too dark",
+    "Dunkler als:": "Darker than:",
     "Engine und Leistung": "Engine and performance",
     "Video": "Video",
     "Bild und Effekte": "Image and effects",
@@ -273,6 +277,8 @@ TRANSLATIONS = {
     "TT_QRUN": "Arbeitet alle offenen Auftraege nacheinander ab.\nAbbrechen haelt den Stapel an; beim naechsten Start geht es an\nderselben Stelle weiter, bereits entwickelte Bilder bleiben erhalten.",
     "TT_PREVIEW": "Entwickelt fuenf ueber die Sequenz verteilte Bilder mit den\naktuellen Einstellungen und zeigt sie an. Bei RAW laeuft dafuer\ndie Engine, deshalb muss Pass 1 vorher gelaufen sein.\nSpart einen kompletten Fehldurchlauf.",
     "TT_OPENDIR": "Oeffnet den Ordner, in dem das fertige Video liegt,\nim Dateimanager des Systems.",
+    "TT_ENTFLACKERN": "Grundschalter fuer den Helligkeitsausgleich.\nOhne Haken baut Purelapse den Zeitraffer mit der Helligkeit, die die\nKamera aufgenommen hat. Keyframes, Kamerafahrt, Telemetrie und Effekte\nwirken trotzdem. Bei RAW bereitet Pass 1 dann nur die Profile vor.",
+    "TT_NACHT": "Laesst die Nacht eines 24-Stunden-Zeitraffers aus dem Video.\nGemessen wird die Helligkeit der Szene (Bild und Belichtung aus den\nEXIF-Daten) in Blenden unter dem Tageslicht der Serie. Die Grenze\nsteht auch als gestrichelte Linie im Diagramm und laesst sich dort\nverschieben. Entflackert wird weiter die ganze Serie, damit die\nDaemmerung stimmt.",
     "TT_COMPARE": "Stellt zwei fertige Videos gegenueber - nebeneinander oder\nals geteiltes Bild mit Schnitt durch die Mitte.",
     "TT_SUN": "Breiten- und Laengengrad des Aufnahmeortes plus Zeitzonen-Offset\n"
               "zur Aufnahmezeit (z.B. 2 fuer MESZ). Zeigt den Sonnenstand als\n"
@@ -281,6 +287,8 @@ TRANSLATIONS = {
               "Hat keinen Einfluss auf die Deflicker-Berechnung selbst.",
 }
 TRANSLATIONS_TT_EN = {
+    "TT_ENTFLACKERN": "Master switch for the brightness correction.\nUnticked, Purelapse builds the timelapse with the brightness the\ncamera recorded. Keyframes, camera move, telemetry and effects still\nwork. For RAW, pass 1 then only prepares the profiles.",
+    "TT_NACHT": "Leaves the night of a 24-hour timelapse out of the video.\nMeasured is the brightness of the scene (image and exposure from the\nEXIF data) in stops below the daylight of the series. The threshold\nis also shown as a dashed line in the chart and can be dragged there.\nThe whole series is still deflickered so the twilight is right.",
     "TT_SETTINGS": "Engine, CPU cores, recalibration, theme and language.",
     "TT_QOPEN": "Shows the queued jobs and runs them as a batch.",
     "TT_LOG": "Shows or hides the program's detailed messages.\nThe log opens by itself when an error occurs.",

@@ -73,13 +73,21 @@ pruef(abs(w_p.get('brightness', 0)) < ns["AUTO_HELLIGKEIT_MAX"],
 print("=== 3. Kontrast ===")
 flach = testbild(mittel=0.25, spanne=0.06)
 weit = testbild(mittel=0.3, spanne=1.4)
-w_f, g_f = auto(flach, iso=100)
-w_w, g_w = auto(weit, iso=100)
+# Ohne Tiefen und Lichter allein nach dem Umfang des Histogramms
+nur_ton = {'brightness', 'contrast', 'saturation', 'sharpen'}
+w_f, g_f = auto(flach, iso=100, erlaubt=nur_ton)
+w_w, g_w = auto(weit, iso=100, erlaubt=nur_ton)
 pruef(w_f.get('contrast', 0) > 0, f"flaches Bild braucht Kontrast: {w_f}")
 pruef(w_w.get('contrast', 0) == 0,
       f"ein voll ausgenutztes Histogramm darf nicht gestreckt werden: {w_w}")
-pruef(auto(testbild(mittel=0.3, spanne=3.0), iso=100)[0].get('contrast', 0) == 0,
+pruef(auto(testbild(mittel=0.3, spanne=3.0), iso=100, erlaubt=nur_ton)[0].get('contrast', 0) == 0,
       "ein randvolles Histogramm erst recht nicht")
+# Mit Tiefen und Lichtern: hoechstens der Ausgleich fuer den Mittelton
+w_w2, g_w2 = auto(weit, iso=100)
+pruef(w_w2.get('contrast', 0) <= ns["AUTO_KONTRAST_AUSGLEICH"],
+      f"volles Histogramm: mehr als der Ausgleich: {w_w2}")
+if w_w2.get('contrast', 0):
+    pruef(any("Biss" in x for x in g_w2), f"Begruendung fehlt: {g_w2}")
 pruef(any("Histogramm" in x for x in g_w), "die Begruendung nennt den Grund nicht")
 for probe in (0.02, 0.1, 0.3, 0.8, 2.0):
     w_x, _ = auto(testbild(mittel=0.3, spanne=probe), iso=100)
@@ -89,17 +97,33 @@ for probe in (0.02, 0.1, 0.3, 0.8, 2.0):
 print("=== 4. Saettigung: nicht altbacken ===")
 grau = testbild(mittel=0.3, spanne=0.3, buntheit=0.0)
 bunt = testbild(mittel=0.3, spanne=0.3, buntheit=0.55)
+# Gibt es die Dynamik, uebernimmt sie die Farbe; die Saettigung bleibt.
 w_g, _ = auto(grau, iso=100)
 w_b, gb = auto(bunt, iso=100)
+pruef(w_g.get('vibrance', 0) > 0, f"graues Bild braucht Dynamik: {w_g}")
+pruef('saturation' not in w_g and 'saturation' not in w_b,
+      f"neben der Dynamik darf die Saettigung nicht mitlaufen: {w_g} {w_b}")
+pruef(w_b['vibrance'] < w_g['vibrance'],
+      "ein farbkraeftiges Bild darf nicht genauso viel Dynamik bekommen")
+for probe in (0.0, 0.2, 0.5, 0.9):
+    w_x, _ = auto(testbild(mittel=0.3, spanne=0.3, buntheit=probe), iso=100)
+    pruef(ns["AUTO_DYNAMIK_MIN"] * 0.5 <= w_x.get('vibrance', 0) <= ns["AUTO_DYNAMIK_MAX"],
+          f"Dynamik ausserhalb der Grenze bei Buntheit {probe}: {w_x}")
+# Ohne Dynamik im Profil wie bisher ueber die Saettigung
+ohne_dyn = {'brightness', 'contrast', 'saturation', 'sharpen', 'denoise_l', 'denoise_c'}
+w_g, _ = auto(grau, iso=100, erlaubt=ohne_dyn)
+w_b, gb = auto(bunt, iso=100, erlaubt=ohne_dyn)
 pruef(w_g.get('saturation', 0) > 0, f"graues Bild braucht Farbe: {w_g}")
 pruef(w_b.get('saturation', 0) <= w_g.get('saturation', 0),
       "ein farbkraeftiges Bild darf nicht genauso aufgedreht werden")
 for probe in (0.0, 0.2, 0.5, 0.9):
-    w_x, _ = auto(testbild(mittel=0.3, spanne=0.3, buntheit=probe), iso=100)
+    w_x, _ = auto(testbild(mittel=0.3, spanne=0.3, buntheit=probe), iso=100,
+                  erlaubt=ohne_dyn)
     pruef(0 <= w_x.get('saturation', 0) <= ns["AUTO_SAETTIGUNG_MAX"],
           f"Saettigung ausserhalb der Grenze bei Buntheit {probe}")
 # Kontrast und Saettigung duerfen nicht beide voll aufdrehen
-w_k, _ = auto(testbild(mittel=0.25, spanne=0.05, buntheit=0.0), iso=100)
+w_k, _ = auto(testbild(mittel=0.25, spanne=0.05, buntheit=0.0), iso=100,
+              erlaubt=ohne_dyn)
 pruef(not (w_k.get('contrast', 0) >= ns["AUTO_KONTRAST_MAX"]
            and w_k.get('saturation', 0) >= ns["AUTO_SAETTIGUNG_MAX"]),
       "Kontrast und Saettigung gleichzeitig am Anschlag - genau das sieht alt aus")

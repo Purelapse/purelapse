@@ -126,9 +126,9 @@ pruef("'CustomTemp' if force_custom" not in eng_src,
       "fest verdrahtetes CustomTemp noch in der Interpolation")
 pruef("eng('wb_custom')" in eng_src, "Interpolation fragt die Engine nicht")
 
-pruef(len(pe.QUICK_CONTROLS) == 8, "acht Regler erwartet")
+pruef(len(pe.QUICK_CONTROLS) == 11, "elf Regler erwartet")
 ids = [c['id'] for c in pe.QUICK_CONTROLS]
-pruef(len(set(ids)) == 8, "Regler-Kennungen nicht eindeutig")
+pruef(len(set(ids)) == 11, "Regler-Kennungen nicht eindeutig")
 for gewuenscht in ('wb_temp', 'brightness', 'saturation', 'sharpen',
                    'denoise_l', 'contrast'):
     pruef(gewuenscht in ids, f"Regler {gewuenscht} fehlt")
@@ -138,7 +138,7 @@ pruef('exposure' not in ids and 'compensation' not in ids,
 for e in ('art', 'rt'):
     pe.set_engine(e)
     defs = pe.quick_defs()
-    pruef(len(defs) == 8, f"{e}: nicht alle Regler zugeordnet")
+    pruef(len(defs) == 11, f"{e}: nicht alle Regler zugeordnet")
     for d in defs:
         pruef(d['min'] < d['max'], f"{e}/{d['id']}: Bereich verdreht")
         pruef(d['min'] <= d['neutral'] <= d['max'],
@@ -161,8 +161,9 @@ pruef(r['denoise_l'] == ('Directional Pyramid Denoising', 'Luma'),
 pruef(a['contrast'] == ('Luminance Curve', 'Contrast'), f"ART Kontrast: {a['contrast']}")
 pruef(r['contrast'] == ('Exposure', 'Contrast'), f"RT Kontrast: {r['contrast']}")
 pe.set_engine('dt')
-pruef(sorted(d['id'] for d in pe.quick_defs()) == ['brightness', 'contrast', 'saturation', 'sharpen'],
-      "Darktable: Helligkeit, Kontrast, Saettigung, Schaerfe erwartet")
+pruef(sorted(d['id'] for d in pe.quick_defs()) == ['brightness', 'contrast', 'highlights',
+                                                    'saturation', 'shadows', 'sharpen', 'vibrance'],
+      "Darktable: alle Regler ausser Weissabgleich und Entrauschen erwartet")
 
 # ============================================================== 4. Lesen/Schreiben
 print("=== 4. Schnelleinstellungen: Lesen und Schreiben ===")
@@ -181,10 +182,12 @@ art_profil = {
     'Sharpening': {'Enabled': 'false', 'Amount': '200', 'Radius': '0.5',
                    'Threshold': '20;80;2000;1200'},
     'Denoise': {'Enabled': 'false', 'Luminance': '0', 'Chrominance': '15'},
+    'ToneEqualizer': {'Enabled': 'false', 'Band0': '0', 'Band1': '0', 'Band2': '0',
+                      'Band3': '0', 'Band4': '0', 'Regularization': '4', 'Pivot': '0'},
     'Channel Mixer': {'Green': '0;1000;0'},
 }
 vorh, fehlt = pe.quick_available(art_profil)
-pruef(len(vorh) == 8 and not fehlt, f"vollstaendiges ART-Profil: {len(vorh)}/{len(fehlt)}")
+pruef(len(vorh) == 11 and not fehlt, f"vollstaendiges ART-Profil: {len(vorh)}/{len(fehlt)}")
 w = pe.quick_read(art_profil)
 pruef(w['wb_temp'] == 5200.0, f"Temperatur gelesen: {w['wb_temp']}")
 pruef(w['denoise_c'] == 15.0, f"Chrominanz gelesen: {w['denoise_c']}")
@@ -193,8 +196,8 @@ pruef(w['sharpen'] == 200.0, f"Schaerfe gelesen: {w['sharpen']}")
 # Fehlende Sektion -> Regler gesperrt, nicht stillschweigend geschrieben
 duenn = {k: v for k, v in art_profil.items() if k not in ('Denoise', 'Saturation')}
 vorh2, fehlt2 = pe.quick_available(duenn)
-pruef(len(fehlt2) == 3, f"drei Regler muessten fehlen, nicht {len(fehlt2)}")
-pruef({d['id'] for d in fehlt2} == {'saturation', 'denoise_l', 'denoise_c'},
+pruef(len(fehlt2) == 4, f"vier Regler muessten fehlen, nicht {len(fehlt2)}")
+pruef({d['id'] for d in fehlt2} == {'saturation', 'vibrance', 'denoise_l', 'denoise_c'},
       f"falsche Regler gesperrt: {[d['id'] for d in fehlt2]}")
 
 # Schreiben

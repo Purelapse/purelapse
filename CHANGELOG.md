@@ -3,6 +3,53 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [2.45.0-beta] – 2026-11-25
+
+„Automatisch optimieren“ liefert jetzt ein gefälliges, fertiges Bild – mit wenigen Reglern, in allen drei Engines gleich. Dazu: Entflackern lässt sich abschalten, und bei 24-Stunden-Zeitraffern fällt die Nacht auf Wunsch aus dem Video.
+
+**Hinweis:** Wer mit einer älteren Version einen Keyframe über die Schnelleinstellungen gespeichert hat, dessen Profil auf dem Weißabgleich der Kamera stand, hat dabei 6504 K als eigenen Weißabgleich gespeichert (siehe „Behoben“). Wurde das Bild dadurch orange oder blau: in der Engine für diesen Keyframe den Weißabgleich wieder auf „Kamera“ stellen – oder im Dialog eine passende Temperatur wählen.
+
+### Neu
+- **Grundschalter „Entflackern“ (Standard: an).** Ohne Haken baut Purelapse den Zeitraffer mit der Helligkeit, die die Kamera aufgenommen hat – Keyframes, Kamerafahrt, Stabilisierung, Telemetrie, Bewegungsunschärfe und Blenden wirken wie gewohnt.
+  - JPG: kein Messen, kein Ausgleich.
+  - RAW: Pass 1 heißt dann „Profile vorbereiten“ und misst nichts – jedes Bild bekommt sein vollständiges Profil mit Belichtung 0. Keyframes behalten, was an ihnen eingestellt ist; was ein früherer Pass 1 und die Nachkalibrierung beigesteuert hatten, wird herausgerechnet. Pass 2 entwickelt mit überblendeten Keyframes, ohne Nachkalibrierung, und kommt notfalls ohne Pass 1 aus.
+  - Der Schalter wird je Ordner gemerkt. Pass 1 vermerkt, wie er lief (`Purelapse/purelapse_modus.json`): Der Schritt gilt nur als erledigt, wenn das zum Schalter passt, und ein Pass 2 mit Entflackern auf Profilen ohne bricht mit klarer Meldung ab, statt ein halb entflackertes Video zu liefern.
+- **Nacht entfernen.** Für 24-Stunden-Zeitraffer: Bilder unterhalb einer einstellbaren Helligkeit kommen nicht ins Video.
+  - Gemessen wird die Helligkeit der **Szene**: Bildhelligkeit verrechnet mit der Belichtung aus den EXIF-Daten (Zeit, Blende, ISO), in Blenden unter dem Tageslicht der Serie. So wird die Nacht auch erkannt, wenn die Kamera nachts länger belichtet hat und die Bilder kaum dunkler aussehen.
+  - Im Diagramm stehen die Szenenhelligkeit und die Grenze als gestrichelte Linie, die sich mit der Maus verschieben lässt; die Nachtstrecken sind grau hinterlegt, ihre Kacheln in der Bildleiste abgeblendet. Unter dem Regler steht, wie viele Bilder wegfallen und wie lang das Video danach ist.
+  - Damit es je Nacht genau einen Schnitt gibt, wird die Kurve vorher geglättet; kurze Ausreißer – ein Scheinwerfer in der Nacht, eine Wolke am Tag – gehen in ihrer Umgebung auf.
+  - Mit Entflackern wird weiter die ganze Serie gemessen und entwickelt, damit der Verlauf in der Dämmerung stimmt; nur ins Video kommt die Nacht nicht. Ohne Entflackern wird die Nacht gar nicht erst entwickelt. Schnellvorschau, 5-Bilder-Vorschau und Rohfassung lassen sie ebenfalls aus.
+  - Die Grenze wird je Ordner gemerkt.
+- **Drei neue Schnelleinstellungen: „Lichter abdunkeln“, „Tiefen aufhellen“ und „Dynamik“.** Lichter und Tiefen wirken lokal: Ein heller Himmel bekommt wieder Zeichnung, ein dunkler Vordergrund öffnet sich, ohne dass der Kontrast im Kleinen verloren geht. Die Dynamik hebt blasse Farben stärker als satte und lässt Hauttöne und kräftige Farben nicht ins Grelle kippen. Jede Engine bekommt ihr eigenes Werkzeug:
+  - ART: Tonwert-Equalizer (`[ToneEqualizer]`) und Dynamik in `[Saturation]`,
+  - RawTherapee: `[Shadows & Highlights]` und `[Vibrance]`,
+  - darktable: Modul „Schatten und Lichter“ (wird bei Bedarf angelegt, ohne eigene Wirkung, solange der Regler nicht bewegt ist) und die Dynamik der Farbbalance RGB.
+  Die Werkzeuge packen verschieden stark zu; Purelapse rechnet die Reglerwerte je Engine so um, dass „Tiefen aufhellen 40“ überall ungefähr dasselbe bedeutet. Die Umrechnung stammt aus den Quelltexten der Programme.
+- **Die Vorschau zeigt die neuen Regler sofort,** auch bevor die Engine ihr Bild geliefert hat. Die Näherung arbeitet wie die Engines mit einer kantenerhaltenden Maske – an harten Kanten (Zaunpfosten vor hellem Himmel) entstehen keine Höfe.
+
+### Geändert
+- **„Automatisch optimieren“ zielt auf ein gefälliges Ergebnis:** Erst werden die Lichter heruntergeholt und die Tiefen aufgehellt, dann bekommt der Mittelton mit etwas Kontrast wieder Biss, die Farbe kommt über die Dynamik statt über die Sättigung. Gemessen wird jeder Schritt an dem Bild, wie es nach den vorigen aussieht. Sicherungen für den Zeitraffer:
+  - **Nachtszenen bleiben dunkel:** Ist der größte Teil des Bildes dunkel, hellt die Automatik die Tiefen nur wenig auf und nimmt den Kontrast zurück – ein Nachthimmel wird sonst grau und rauscht.
+  - **Hohe ISO:** Ab ISO 1600 werden die Tiefen weniger aufgehellt, ab 3200 nur noch halb so stark.
+  - Die Automatik rechnet einmal am Keyframe und schreibt feste Zahlen; zwischen den Keyframes wird überblendet. Nichts davon rechnet die Engine Bild für Bild neu – das würde flackern.
+  - Der Weißabgleich bleibt wie bisher unberührt.
+  Jede Entscheidung steht mit ihrer Messzahl im Tooltip des Hinweises.
+- **darktable: Module, die nur in einem Keyframe stehen, werden weich überblendet.** Fehlte „Schatten und Lichter“ oder die Farbbalance RGB im Nachbar-Keyframe, schaltete das Modul bisher in der Mitte hart um – ein sichtbarer Sprung. Diese beiden Module lassen sich ohne Wirkung stellen; Purelapse blendet jetzt von dieser Nullstellung aus über. Die Warnung „nicht weich überblendbar“ entfällt dafür.
+
+### Behoben
+- **Echte Vorschau tieforange, Näherung normal – Weißabgleich der Kamera wurde überschrieben:** Steht im Profil der Weißabgleich der Kamera, ist die Temperatur in der Datei nur ein Platzhalter – RawTherapee schreibt dort immer 6504 K. Die Schnelleinstellungen hielten diesen Wert für eingestellt, weil er von 5500 K abweicht, hakten „Farbtemperatur“ an und schrieben ihn als eigenen Weißabgleich ins Profil. Ein Kunstlichtbild (rund 3000 K) wurde dadurch wie Tageslicht behandelt und tieforange, während die Näherung den Kamera-Weißabgleich zeigte. Jetzt ist der Weißabgleich nur angehakt, wenn das Profil wirklich einen eigenen hat. Ausgangswert des Reglers ist die Temperatur, die die Kamera eingestellt hatte: berechnet aus den Kanalfaktoren und der Farbmatrix im RAW, so wie die Engines es tun (Gegenprobe mit der Matrix der Nikon D750: Tageslicht 5500 K, Glühlampe 2900 K).
+- **„Automatisch optimieren“ maß am falschen Bild:** Die Vorschläge wurden an der Näherung aus dem RAW gemessen. Die kennt weder die Belichtung aus dem Deflicker noch Tonkurve und Farben der Engine – im echten Bild gerieten die Vorschläge deshalb oft zu hell oder zu dunkel. Mit eingeschalteter echter Vorschau lässt die Automatik die Engine jetzt zuerst das Ausgangsbild entwickeln (ihre Regler auf neutral, Weißabgleich und Lichter-Rekonstruktion wie eingestellt) und misst daran. Ohne Engine bleibt es bei der Näherung. Die erste Zeile der Begründung nennt, woran gemessen wurde.
+- **−, + und „neutral“ blieben grau:** Setzte „Automatisch optimieren“, „Von anderem Keyframe übernehmen“ oder „Zurücksetzen“ einen Regler, wurde zwar das Häkchen gesetzt und der Schieber frei, die drei Knöpfe daneben blieben aber gesperrt. Jetzt folgen Schieber und Knöpfe immer dem Häkchen.
+- **„Automatisch optimieren“ hing vom vorigen Stand ab:** Regler, die die Automatik beurteilt, aber nicht verstellt – etwa die Sättigung neben der Dynamik –, blieben auf dem Wert stehen, den man vorher von Hand eingestellt hatte. Eine Sättigung von +100 blieb so neben dem Vorschlag stehen. Jetzt stellt die Automatik solche Regler auf neutral und sagt das im Hinweis; zweimal optimieren ergibt dasselbe. Weißabgleich und Grünabgleich bleiben wie bisher unberührt.
+
+### Intern
+- Neue Prüfreihe `test_nacht_entflackern.py`: Szenenhelligkeit mit fester Belichtung und mit Belichtungsautomatik, Nachtmaske samt Ausreißern; JPG ohne Entflackern (Flackern bleibt) und mit Nacht (fehlt im Video, Rest entflackert); RAW: Pass 1 ohne Entflackern (Keyframe behält seine eigene Belichtung, zweiter Lauf ändert nichts mehr), Pass 2 mit Entflackern auf Profilen ohne bricht ab, Pass 2 ohne entwickelt die Nacht nicht und läuft auch ohne Pass 1; Oberfläche: Schalter je Ordner, Schrittleiste, abgeblendete Kacheln, Grenzlinie und Regler gekoppelt.
+- `test_echt.py`: Kamera-Weißabgleich bleibt unangehakt, Ausgangswert aus dem RAW; Temperatur aus Kanalfaktoren und Farbmatrix (Tageslicht, Glühlampe, Rückrechnung); Automatik misst am Bild der Engine – bei viel dunklerem Engine-Bild fällt die Helligkeit höher aus als an der Näherung.
+- `test_echt.py`: Automatik im Dialog – Knöpfe passend zum Häkchen, von Hand verstellte Regler auf neutral, zweimal optimieren ergibt dasselbe, Zurücksetzen. Mit dem alten Stand schlagen 9 Prüfungen fehl.
+- Neue Prüfreihe `test_tiefen_lichter.py`: Schlüssel und Umrechnung je Engine samt Rücklesen, die Nullstellung des neu angelegten darktable-Moduls Byte für Byte, weiches Überblenden eines Moduls, das nur in einem Keyframe steht, Richtung und Hoffreiheit der Näherung, Dynamik (blasse Farben gewinnen mehr als satte, Grau bleibt grau) und die Automatik (Nacht, hohe ISO, Grenzen, gesperrte Regler).
+- `test_auto.py`, `test_keyframe.py`, `test_dt_b5.py`, `test_ablauf.py` auf die elf Regler umgestellt.
+- Die nachgebauten Engines schreiben die neuen Sektionen wie die echten (ART 1.26, RawTherapee 5.10). Der Prüfstand verwirft beim Start Basisprofile früherer Läufe, damit nicht gegen einen alten Stand der nachgebauten Engine geprüft wird.
+
 ## [2.44.1-beta] – 2026-11-25
 
 Korrektur zu 2.44.0: Die Entflackerung bleibt auch bei viel Ausgebranntem stabil – etwa bei Kerzenlicht oder Lampen im Bild, zumal mit Kamerafahrt.

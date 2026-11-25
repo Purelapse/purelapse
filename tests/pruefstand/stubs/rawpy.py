@@ -26,6 +26,12 @@ class _Raw:
         except Exception as e:
             raise LibRawError(str(e))
         self.camera_whitebalance = [2.0, 1.0, 1.5, 0.0]
+        # Farbmatrix XYZ -> Kamera-RGB (libraw cam_xyz, 4x3): die "Kamera"
+        # sieht wie sRGB. Mit den Faktoren oben ergibt das Kunstlicht.
+        self.rgb_xyz_matrix = np.array([[3.2404542, -1.5371385, -0.4985314],
+                                        [-0.9692660, 1.8760108, 0.0415560],
+                                        [0.0556434, -0.2040259, 1.0572252],
+                                        [0.0, 0.0, 0.0]])
 
     white_level = 65535
 

@@ -22,6 +22,26 @@ os.makedirs(HEIM, exist_ok=True)
 import site
 os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
 os.environ["HOME"] = HEIM
+# Basisprofile frueherer Laeufe weg: sie stammen von der nachgebauten
+# Engine, wie sie DAMALS war. Kennt die heutige ein Werkzeug mehr, fehlte
+# es sonst im Profil, und die Pruefung liefe gegen einen alten Stand.
+import glob as _glob, json as _json
+for _alt in _glob.glob(os.path.join(HEIM, ".local", "share", "purelapse", "basis_*")):
+    try:
+        os.remove(_alt)
+    except OSError:
+        pass
+_konf = os.path.join(HEIM, ".config", "purelapse", "purelapse.json")
+try:
+    with open(_konf, encoding="utf-8") as _f:
+        _k = _json.load(_f)
+    for _e in (_k.get("engines") or {}).values():
+        if isinstance(_e, dict):
+            _e.pop("profil", None)
+    with open(_konf, "w", encoding="utf-8") as _f:
+        _json.dump(_k, _f)
+except (OSError, ValueError):
+    pass
 # Eigener Ordner fuer Zwischendateien: ein gleichzeitig offenes Purelapse
 # legt seine Vorschau-Ordner sonst ins selbe /tmp und stoert die Zaehlung.
 import tempfile

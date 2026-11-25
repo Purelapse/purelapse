@@ -167,7 +167,8 @@ pe.set_engine('art')
 e = lauf(parameter(ol, dl, raw_mode='pass1', make_video=False, art_cli_path=ART_CLI, engine='art', diag=True))
 pruef(e.ok(), f"ART Pass 1: {meld(e)[:100]}")
 d = pe.read_arp_dict(pe.sidecar(dl[25])); d.setdefault('General', {})['Rank'] = '5'
-pruef(len(pe.quick_available(d)[0]) == 8 and pe.hl_verfuegbar(d), "ART-Profil: Regler fehlen")
+pruef(len(pe.quick_available(d)[0]) == len(pe.QUICK_CONTROLS) and pe.hl_verfuegbar(d),
+      f"ART-Profil: Regler fehlen: {[x['id'] for x in pe.quick_available(d)[1]]}")
 pe.quick_apply(d, {'saturation': 18, 'wb_temp': 6200}); pe.hl_schreiben(d, "Color")
 pe.write_arp_dict(pe.sidecar(dl[25]), d)
 e = lauf(parameter(ol, dl, raw_mode='pass2', art_cli_path=ART_CLI, engine='art', procs=3, cores=8, diag=True))
@@ -239,7 +240,8 @@ pruef(any("freiwillig" in x for a, t, x in _basis.PROTOKOLL[n0:]), "Abschlussmel
 f._set_folder(os_); f.list_widget.setCurrentRow(20)
 pruef(f.btn_kf_edit.isEnabled(), "'Keyframe einstellen' ist gesperrt")
 def bedienen(dlg):
-    pruef(len(dlg.regler) == 8 and dlg.cmb_hl is not None, "Dialog unvollstaendig")
+    pruef(len(dlg.regler) == len(pe.QUICK_CONTROLS) and dlg.cmb_hl is not None,
+          f"Dialog unvollstaendig: {sorted(dlg.regler)}")
     for kid, wert in (('saturation', 22), ('wb_temp', 6400)):
         chk, sl, lbl, d = dlg.regler[kid]; chk.setChecked(True); sl.setValue(wert)
     dlg.chk_hl.setChecked(True)

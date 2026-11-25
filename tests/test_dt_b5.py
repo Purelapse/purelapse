@@ -41,9 +41,12 @@ print("=== Schnelleinstellungen ===")
 k = os.path.join(o, "K.NEF"); open(k, "wb").write(b"x"); open(k + ".xmp", "w").write(KF)
 prof = pe.read_arp_dict(k + ".xmp")
 vorh, fehl = pe.quick_available(prof)
-pruef(sorted(x['id'] for x in vorh) == ['brightness', 'contrast', 'saturation', 'sharpen'] and not fehl, f"{[x['id'] for x in vorh]}")
+pruef(sorted(x['id'] for x in vorh) == ['brightness', 'contrast', 'highlights', 'saturation',
+                                         'shadows', 'sharpen', 'vibrance'] and not fehl,
+      f"{[x['id'] for x in vorh]}")
 w0 = pe.quick_read(prof)
-pruef(w0 == {'brightness': 0.0, 'contrast': 0.0, 'saturation': 0.0, 'sharpen': 200.0}, f"Ausgangswerte: {w0}")
+pruef(w0 == {'brightness': 0.0, 'contrast': 0.0, 'highlights': 0.0, 'shadows': 0.0,
+             'vibrance': 0.0, 'saturation': 0.0, 'sharpen': 200.0}, f"Ausgangswerte: {w0}")
 neu, geschrieben, _ = pe.schnell_profil(prof, {'brightness': 20, 'contrast': -10, 'saturation': 35, 'sharpen': 300})
 pruef(len(geschrieben) == 4, f"{geschrieben}")
 pruef(abs(float(neu['dt:colorbalancergb#0']['saturation_global']) - 0.35) < 1e-6, "Saettigung")

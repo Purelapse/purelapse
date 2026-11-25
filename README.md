@@ -56,7 +56,7 @@ JPG-Serien laufen in einem einzigen Durchgang, ohne externe Engine.
 | Bereich | Funktionen |
 |---|---|
 | **Deflicker** | Messung in linearem Licht (16 Bit) ohne ausgebrannte Flächen, zweistufige Glättung, Nachkalibrierung bis unter 0,008 EV Restflackern, Messbereich (ROI), Lichtverlauf Sonnenaufgang/-untergang/gleichbleibend |
-| **Holy Grail** | Belichtungs- und ISO-Sprünge werden ausgeglichen, wechselndes Intervall wird erkannt, EXIF-Belichtung und Sonnenstand als Kurven |
+| **Holy Grail** | Belichtungs- und ISO-Sprünge werden ausgeglichen, wechselndes Intervall wird erkannt, EXIF-Belichtung und Sonnenstand als Kurven, Nacht entfernen bei 24-Stunden-Zeitraffern |
 | **RAW-Entwicklung** | ART, RawTherapee, Darktable; Formate NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
 | **Keyframes** | Weiche Überblendung zwischen Keyframes (bei Darktable der komplette Modulstapel), Schnelleinstellungen mit echter Engine-Vorschau, automatisch optimieren, Lichter-Rekonstruktion |
 | **Video** | 720p bis 8K, 23,976 bis 120 fps, H.264, H.265 (auch 10 Bit), ProRes 422 HQ, Farbraum BT.709, optional 16-Bit-Zwischenbilder, CPU oder NVIDIA, Intel QuickSync, VAAPI, vier Qualitätsstufen |
@@ -96,6 +96,10 @@ JPG-Serien laufen in einem einzigen Durchgang, ohne externe Engine.
   erhalten, der übrige Verlauf unangetastet.
 - **JPG-Workflow.** JPG-Serien werden direkt und ohne Engine entflackert, auf
   Wunsch auch nur als Einzelbilder ohne Video.
+- **Abschaltbar.** Ohne den Haken *Entflackern* entsteht der Zeitraffer mit der
+  Helligkeit, die die Kamera aufgenommen hat – Keyframes, Kamerafahrt,
+  Telemetrie und Effekte wirken trotzdem. Bei RAW bereitet Pass 1 dann nur die
+  Profile vor. Der Schalter wird je Ordner gemerkt.
 
 ## Holy Grail: Tag-Nacht-Übergänge
 
@@ -113,6 +117,13 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
   Purelapse den Sonnenstand als Kurve und markiert die Grenzen der
   bürgerlichen, nautischen und astronomischen Dämmerung – ideal, um dort
   Keyframes zu setzen.
+- **Nacht entfernen.** Bei 24-Stunden-Zeitraffern fallen Bilder unterhalb einer
+  einstellbaren Szenenhelligkeit aus dem Video. Gemessen wird Bild und
+  Belichtung aus den EXIF-Daten zusammen, in Blenden unter dem Tageslicht –
+  die Nacht wird also auch erkannt, wenn die Kamera nachts länger belichtet hat.
+  Die Grenze steht als Linie im Diagramm und lässt sich dort verschieben;
+  einzelne Ausreißer (Scheinwerfer, Wolke) zerstückeln die Nacht nicht.
+  Entflackert wird weiter die ganze Serie, damit die Dämmerung stimmt.
 
 ## Keyframes und Schnelleinstellungen
 
@@ -124,27 +135,34 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
   Schärfe, Farbbalance RGB, Filmic, Sigmoid, Tonwert-Equalizer und rund 60
   weitere – werden weich überblendet, Farbtöne auf dem kürzeren Weg um den
   Farbkreis. Schalter, Masken und Module, die nur in einem Keyframe vorkommen,
-  kommen vom näheren Keyframe; Purelapse meldet sie vorher.
-- **Schnelleinstellungen** (ART und RawTherapee; bei Darktable Helligkeit,
-  Kontrast, Sättigung und Schärfe) direkt in Purelapse über
+  kommen vom näheren Keyframe; Purelapse meldet sie vorher. Ausnahme:
+  „Schatten und Lichter“ und Farbbalance RGB werden auch dann weich von
+  ihrer Nullstellung aus überblendet.
+- **Schnelleinstellungen** (ART und RawTherapee; bei Darktable alle außer
+  Weißabgleich und Entrauschen) direkt in Purelapse über
   *Keyframe einstellen…*, ohne die Engine zu öffnen:
 
   | Regler | Bereich |
   |---|---|
   | Farbtemperatur | 2000 – 12000 K |
   | Grünabgleich | 0,6 – 1,8 |
-  | Helligkeit, Kontrast, Sättigung | −100 – +100 |
+  | Helligkeit, Kontrast, Dynamik, Sättigung | −100 – +100 |
+  | Lichter abdunkeln, Tiefen aufhellen | 0 – 100 |
   | Schärfe | 1 – 1000 |
   | Entrauschen Helligkeit / Farbe | 0 – 100 |
 
   Jeder Regler hat ein eigenes Häkchen: Was nicht angehakt ist, bleibt im
   Profil unverändert. Die Belichtung bleibt ausgenommen – die gehört dem
-  Deflicker.
+  Deflicker. Lichter und Tiefen wirken lokal (ART: Tonwert-Equalizer,
+  RawTherapee: Schatten/Lichter, Darktable: Schatten und Lichter); Purelapse
+  rechnet die Werte je Engine so um, dass derselbe Regler überall ungefähr
+  dasselbe bewirkt.
 - **Echte Vorschau.** Die Engine entwickelt das Bild mit den gewählten Werten,
   mit Histogramm und *Vorher zeigen*.
-- **Automatisch optimieren.** Misst das Bild und schlägt Helligkeit, Kontrast,
-  Sättigung, Schärfe und Entrauschen (passend zum ISO-Wert) vor – jeweils mit
-  Begründung, worauf der Wert beruht.
+- **Automatisch optimieren.** Misst das Bild und macht es gefällig: holt die
+  Lichter herunter, hellt die Tiefen auf, gibt dem Mittelton Biss und den
+  Farben Dynamik; dazu Schärfe und Entrauschen passend zum ISO-Wert. Nachtszenen
+  bleiben dunkel. Jeder Wert mit Begründung, worauf er beruht.
 - **Von anderem Keyframe übernehmen.** Einstellungen eines Keyframes auf einen
   anderen kopieren.
 - **Lichter-Rekonstruktion.** Gegen den rosa Sonnenball: rechnet ausgebrannte

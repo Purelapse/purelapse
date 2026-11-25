@@ -46,7 +46,7 @@ import datetime
 import cv2
 import numpy as np
 import rawpy
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d, median_filter
 import exifread
 import pyqtgraph as pg
 # pyqtgraph zeichnet ohne Antialiasing, dadurch bekommen schraege Linien
@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.44.1-beta"
+VERSION = "2.45.0-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -102,6 +102,164 @@ def bereich_anwenden(files, start_name, end_name):
         a, b = 0, n - 1
     return list(files[a:b + 1]), a, b
 
+
+# ==========================================================================
+#  EINSTELLUNGEN JE ORDNER: Entflackern an/aus, Nacht entfernen
+#
+#  Beides gehoert zur Aufnahme, nicht zum Programm: ein 24-Stunden-Zeitraffer
+#  will die Nacht los sein, der Sonnenuntergang daneben nicht.
+# ==========================================================================
+def ordner_optionen(ordner):
+    """{'entflackern': bool, 'nacht': Grenze in EV oder None} fuer einen Ordner."""
+    alle = konfig_lesen('ordner_optionen', standard={})
+    d = alle.get(ordner) if isinstance(alle, dict) else None
+    d = d if isinstance(d, dict) else {}
+    nacht = d.get('nacht')
+    try:
+        nacht = None if nacht is None else float(nacht)
+    except (TypeError, ValueError):
+        nacht = None
+    return {'entflackern': bool(d.get('entflackern', True)), 'nacht': nacht}
+
+
+def ordner_optionen_setzen(ordner, entflackern=True, nacht=None):
+    """Merkt sich die Einstellungen; Standardwerte werden nicht gespeichert."""
+    if not ordner:
+        return
+    alle = konfig_lesen('ordner_optionen', standard={})
+    alle = dict(alle) if isinstance(alle, dict) else {}
+    if entflackern and nacht is None:
+        alle.pop(ordner, None)
+    else:
+        alle[ordner] = {'entflackern': bool(entflackern),
+                        'nacht': None if nacht is None else round(float(nacht), 2)}
+    konfig_setzen('ordner_optionen', alle)
+
+
+def modus_lesen(target_dir):
+    """Lief Pass 1 mit Entflackern? Ohne Vermerk: ja (Laeufe vor 2.45)."""
+    try:
+        with open(pl_datei(target_dir, MODUS_DB), encoding="utf-8") as f:
+            return bool(json.load(f).get('entflackern', True))
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def modus_schreiben(target_dir, entflackern):
+    datei_atomar(pl_datei(target_dir, MODUS_DB, anlegen=True),
+                 json.dumps({'entflackern': bool(entflackern)}))
+
+
+# --------------------------------------------------------------------------
+#  Nacht entfernen
+#
+#  Gemessen wird die Helligkeit der SZENE, nicht die des Bildes: eine Kamera
+#  mit Belichtungsautomatik belichtet nachts so lange, dass das Bild kaum
+#  dunkler aussieht. Szene = Bildhelligkeit x Belichtung, in Blenden:
+#      log2(Bildhelligkeit linear) + EV100 aus Zeit, Blende und ISO.
+#  Null ist das Tageslicht der Serie (95. Perzentil); die Nacht liegt zehn
+#  und mehr Blenden darunter, die Daemmerung dazwischen.
+#
+#  Damit in der Daemmerung keine einzelnen Bilder hin und her kippen, wird
+#  die Kurve vorher ueber einige Bilder geglaettet, und kurze Inseln - ein
+#  paar helle Bilder mitten in der Nacht (Scheinwerfer), ein paar dunkle am
+#  Tag (Wolke) - gehen in ihrer Umgebung auf. Im Video gibt es dann genau
+#  einen Schnitt je Nacht.
+# --------------------------------------------------------------------------
+NACHT_STANDARD = -7.0           # Grenze in Blenden unter Tageslicht
+NACHT_BEREICH = (-14.0, -1.0)   # was der Regler anbietet
+NACHT_GLAETTEN = 9              # Bilder im gleitenden Median
+NACHT_INSEL = 6                 # kuerzere Strecken gehen in der Umgebung auf
+
+
+def szenen_helligkeit(luma, ev):
+    """
+    Relative Helligkeit der Szene je Bild, in Blenden; 0 = Tageslicht.
+
+    luma  mittlerer Tonwert des Vorschaubildes, 0..255 (sRGB)
+    ev    EV100 aus den EXIF-Daten; fehlt er (nan), wird er aus den
+          Nachbarn ergaenzt - ohne jeden EXIF-Wert zaehlt nur das Bild
+    """
+    lum = np.asarray(luma, dtype=np.float64)
+    n = lum.size
+    if n == 0:
+        return np.zeros(0)
+    x = np.clip(lum / 255.0, 0.0, 1.0)
+    linear = np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+    s = np.log2(np.maximum(linear, 2.0 ** -16))
+    e = np.full(n, np.nan)
+    roh = np.asarray(list(ev)[:n], dtype=np.float64) if ev is not None else np.zeros(0)
+    e[:roh.size] = roh
+    gut = np.isfinite(e)
+    if gut.any():
+        if not gut.all():
+            idx = np.arange(n)
+            e = np.interp(idx, idx[gut], e[gut])
+        s = s + e
+    return s - float(np.percentile(s, 95))
+
+
+def _kurze_strecken(maske, wert, laenge):
+    """Strecken mit dem Wert 'wert', kuerzer als 'laenge', umkehren."""
+    m = np.asarray(maske, dtype=bool).copy()
+    n = m.size
+    i = 0
+    while i < n:
+        if m[i] != wert:
+            i += 1
+            continue
+        j = i
+        while j < n and m[j] == wert:
+            j += 1
+        # Eine Strecke am Rand der Serie hat nur einen Nachbarn; auch sie
+        # geht auf, sonst begaenne das Video mit drei Nachtbildern.
+        if j - i < laenge and not (i == 0 and j == n):
+            m[i:j] = not wert
+        i = j
+    return m
+
+
+def nacht_maske(szene, grenze, glaetten=NACHT_GLAETTEN, insel=NACHT_INSEL):
+    """True fuer jedes Bild, das als Nacht aus dem Video faellt."""
+    s = np.asarray(szene, dtype=np.float64)
+    if s.size == 0 or grenze is None:
+        return np.zeros(s.size, dtype=bool)
+    if s.size >= 3 and glaetten > 1:
+        s = median_filter(s, size=min(int(glaetten), s.size), mode='nearest')
+    dunkel = s < float(grenze)
+    dunkel = _kurze_strecken(dunkel, True, insel)     # Wolke am Tag bleibt drin
+    dunkel = _kurze_strecken(dunkel, False, insel)    # Scheinwerfer bei Nacht faellt
+    return dunkel
+
+
+def nacht_strecken(maske):
+    """[(erstes, letztes)] der zusammenhaengenden Nachtstrecken."""
+    m = np.asarray(maske, dtype=bool)
+    out, i, n = [], 0, m.size
+    while i < n:
+        if not m[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and m[j + 1]:
+            j += 1
+        out.append((i, j))
+        i = j + 1
+    return out
+
+
+def datei_stamm(pfad):
+    """Dateiname ohne Ordner und Endung - verbindet RAW, Sidecar und JPG."""
+    return os.path.splitext(os.path.basename(str(pfad)))[0]
+
+
+def ohne_nacht(files, auslassen):
+    """Die Dateien ohne die als Nacht markierten (nach Dateistamm)."""
+    weg = set(auslassen or ())
+    if not weg:
+        return list(files)
+    return [f for f in files if datei_stamm(f) not in weg]
+
 # ==========================================================================
 #  RAW-FORMATE
 #
@@ -135,6 +293,8 @@ DEFLICKER_DB = "purelapse_deflicker.json"
 CALIB_DB = "purelapse_calib.json"
 DEV_INDEX = ".purelapse_developed.json"
 RESULT_DB = "purelapse_result.json"
+# Ob Pass 1 mit oder ohne Entflackern lief. Ohne die Datei: mit (alte Laeufe).
+MODUS_DB = "purelapse_modus.json"
 # Alles, was Purelapse in einem Bilderordner anlegt - Videos, entwickelte
 # Bilder, Messwerte, Protokolle -, liegt im Unterordner "Purelapse". Nur die
 # Begleitdateien der Engines (.arp/.pp3/.xmp) bleiben neben den Bildern,
@@ -322,11 +482,170 @@ def wb_faktoren(kelvin, gruen=1.0):
     return f / f[1] if f[1] > 0 else f
 
 
+def temperatur_aus_kamera(faktoren, kamera_xyz):
+    """
+    Farbtemperatur, die die Kamera fuer die Aufnahme eingestellt hatte.
+
+    faktoren    Kanalfaktoren der Aufnahme (R, G, B), wie im RAW gespeichert
+    kamera_xyz  Farbmatrix der Kamera, XYZ -> Kamera-RGB (aus libraw)
+
+    So rechnen auch die Engines: fuer jede Temperatur das Licht eines
+    schwarzen Strahlers durch die Matrix der Kamera schicken, daraus die
+    Faktoren bilden, die es grau machen, und die Temperatur nehmen, deren
+    Faktoren denen der Aufnahme am naechsten kommen. Ueber die Farben der
+    Anzeige statt der Kamera gerechnet, laege Kunstlicht rund 1000 K daneben.
+    Rueckgabe: Kelvin (auf 50 gerundet) oder None.
+    """
+    try:
+        m = np.asarray(list(faktoren)[:3], dtype=np.float64)
+        matrix = np.asarray(kamera_xyz, dtype=np.float64)[:3, :3]
+    except (TypeError, ValueError, IndexError):
+        return None
+    if m.size != 3 or not np.all(np.isfinite(m)) or m.min() <= 0 \
+            or not np.all(np.isfinite(matrix)) or not np.any(matrix):
+        return None
+    m = m / m[1]
+    beste, abstand = None, None
+    for kelvin in range(2000, 12001, 25):
+        x, y = planck_xy(kelvin)
+        kamera = matrix.dot(np.array([x / y, 1.0, (1.0 - x - y) / y]))
+        if kamera.min() <= 0:
+            continue
+        f = 1.0 / kamera
+        f = f / f[1]
+        d = math.log(f[0] / m[0]) ** 2 + math.log(f[2] / m[2]) ** 2
+        if abstand is None or d < abstand:
+            beste, abstand = kelvin, d
+    if beste is None or beste in (2000, 12000):
+        return None
+    return int(round(beste / 50.0) * 50)
+
+
+def kamera_temperatur(pfad):
+    """Farbtemperatur der Aufnahme, aus dem RAW berechnet; sonst None."""
+    if not pfad or not is_raw_file(pfad):
+        return None
+    try:
+        with rawpy.imread(pfad) as raw:
+            return temperatur_aus_kamera(raw.camera_whitebalance,
+                                         raw.rgb_xyz_matrix)
+    except Exception:
+        return None
+
+
 def srgb_kodieren(linear):
     """Lineares Licht in die sRGB-Kennlinie, zum Anzeigen."""
     c = np.clip(linear, 0.0, 1.0)
     return np.where(c <= 0.0031308, 12.92 * c,
                     1.055 * np.power(c, 1.0 / 2.4) - 0.055)
+
+
+# --------------------------------------------------------------------------
+#  Tiefen und Lichter fuer die Naeherung
+#
+#  Nachgebaut ist der Tonwert-Equalizer von ART (src/engine/
+#  iptoneequalizer.cc): zwoelf Glockenkurven im Abstand von zwei Blenden,
+#  jede mit dem Faktor ihres Bandes. Die Regler bedeuten in allen drei
+#  Engines ungefaehr dasselbe (siehe QUICK_KEYS), deshalb taugt diese eine
+#  Rechnung als Naeherung fuer alle.
+#
+#  Die Maske ist die weichgezeichnete Helligkeit - ohne sie wuerde aus dem
+#  Aufhellen eine flache Tonkurve, die jeden Kontrast im Schatten
+#  zusammendrueckt. Weichgezeichnet wird kantenerhaltend wie in den
+#  Engines, sonst entstehen an harten Kanten helle Hoefe.
+# --------------------------------------------------------------------------
+TE_MITTEN = tuple(float(c) for c in range(-16, 7, 2))
+TE_BAND = (0, 0, 0, 0, 0, 1, 2, 3, 4, 4, 4, 4)
+# (Band, Anteil) je Regler - dieselben Zahlen wie QUICK_KEYS['art']
+TE_TIEFEN = ((1, 0.6), (0, 0.35), (2, 0.2))
+TE_LICHTER = ((4, -0.5), (3, -0.2))
+
+
+def _te_band_faktor(band, wert):
+    """Verstaerkung eines Bandes - die Umrechnung aus ART."""
+    if band <= 1:
+        tief, hoch = 2.0, 3.0
+    elif band == 2:
+        tief, hoch = 2.5, 2.5
+    else:
+        tief, hoch = 3.0, 2.0
+    return 2.0 ** (float(wert) / 100.0 * (tief if wert < 0 else hoch))
+
+
+def tonwert_kennlinie(tiefen, lichter, stuetzen=None):
+    """
+    Verstaerkung je Helligkeit, in Blenden unter Weiss.
+
+    Rueckgabe: (Stuetzstellen in Blenden, Faktor je Stuetzstelle)
+    """
+    baender = [0.0] * 5
+    for band, anteil in TE_TIEFEN:
+        baender[band] += anteil * float(tiefen)
+    for band, anteil in TE_LICHTER:
+        baender[band] += anteil * float(lichter)
+    faktoren = np.array([_te_band_faktor(b, baender[b]) for b in TE_BAND])
+    mitten = np.array(TE_MITTEN)
+    if stuetzen is None:
+        stuetzen = np.linspace(-14.0, 4.0, 181)
+    l = np.asarray(stuetzen, dtype=np.float64)
+    glocke = np.exp(-((l[:, None] - mitten[None, :]) ** 2) / 4.0)
+    summe = float(np.exp(-(mitten ** 2) / 4.0).sum())
+    return l, (glocke * faktoren[None, :]).sum(axis=1) / summe
+
+
+def maske_weich(ev, radius, eps=0.25):
+    """
+    Weichgezeichnete Helligkeit, die an Kanten haelt (gefuehrter Filter
+    nach He, Sun und Tang, mit dem Bild als eigener Fuehrung).
+
+    Eine gewoehnliche Glocke wuerde ueber die Kante zwischen hellem Himmel
+    und dunklem Zaunpfosten hinweg mitteln - der Pfosten bekaeme einen
+    hellen Hof. Die Engines vermeiden das mit demselben Prinzip; ohne es
+    zeigte die Naeherung Hoefe, die im fertigen Bild gar nicht da sind.
+
+    ev      Helligkeit in Blenden (float32)
+    radius  Fenster in Pixeln
+    eps     ab welcher Streuung (in Blenden zum Quadrat) eine Kante gilt
+    """
+    k = (2 * int(radius) + 1, 2 * int(radius) + 1)
+    mittel = cv2.boxFilter(ev, -1, k)
+    quadrat = cv2.boxFilter(ev * ev, -1, k)
+    streuung = np.maximum(quadrat - mittel * mittel, 0.0)
+    a = streuung / (streuung + np.float32(eps))
+    b = mittel - a * mittel
+    return (cv2.boxFilter(a, -1, k) * ev
+            + cv2.boxFilter(b, -1, k)).astype(np.float32)
+
+
+def tiefen_lichter(linear, tiefen=0.0, lichter=0.0):
+    """Hellt Tiefen auf und dunkelt Lichter ab - lokal, ueber eine Maske."""
+    b = np.asarray(linear, dtype=np.float32)
+    if not tiefen and not lichter:
+        return b
+    y = b[..., 0] * 0.2126 + b[..., 1] * 0.7152 + b[..., 2] * 0.0722
+    ev = np.log2(np.maximum(y, 2.0 ** -14)).astype(np.float32)
+    ev = maske_weich(ev, max(2, int(round(b.shape[1] * 0.02))))
+    stuetzen, faktor = tonwert_kennlinie(tiefen, lichter)
+    g = np.interp(np.clip(ev, -14.0, 4.0), stuetzen, faktor).astype(np.float32)
+    return b * g[..., None]
+
+
+def dynamik(linear, wert):
+    """
+    Dynamik wie in ART: der Abstand jeder Farbe zum Grau wird mit
+    1 - Wert/1000 potenziert. Kleine Abstaende - blasse Farben - wachsen
+    dadurch staerker als grosse; satte Farben kippen nicht ins Grelle.
+    """
+    b = np.asarray(linear, dtype=np.float32)
+    if not wert:
+        return b
+    hoch = np.float32(max(0.05, 1.0 - float(wert) / 1000.0))
+    y = (b[..., 0] * 0.2126 + b[..., 1] * 0.7152
+         + b[..., 2] * 0.0722)[..., None]
+    d = b - y
+    a = np.abs(d)
+    neu = np.where(a > 2.0 ** -16, np.sign(d) * np.power(a, hoch), d)
+    return np.maximum(y + neu, 0.0).astype(np.float32)
 
 
 def vorschau_rechnen(basis_linear, basis_temp, basis_gruen, werte):
@@ -357,11 +676,20 @@ def vorschau_rechnen(basis_linear, basis_temp, basis_gruen, werte):
         faktor = (wb_faktoren(temp, gruen) / wb_faktoren(basis_temp, basis_gruen))
         bild = bild * faktor.astype(np.float32).reshape(1, 1, 3)
 
+    tiefen = float(werte.get('shadows', 0.0))
+    lichter = float(werte.get('highlights', 0.0))
+    if tiefen or lichter:
+        bild = tiefen_lichter(bild, tiefen, lichter)
+
     hell = float(werte.get('brightness', 0.0))
     if hell:
         # +-100 entsprechen rund +-1,5 Blendenstufen - in der Groessen-
         # ordnung dessen, was die Engines bei Vollausschlag tun.
         bild = bild * np.float32(2.0 ** (hell / 66.0))
+
+    vib = float(werte.get('vibrance', 0.0))
+    if vib:
+        bild = dynamik(bild, vib)
 
     anzeige = srgb_kodieren(bild).astype(np.float32)
 
@@ -590,15 +918,28 @@ def histogramm_bild(rgb, breite, hoehe, hintergrund=(26, 29, 35),
 #  AUTOMATISCH OPTIMIEREN
 #
 #  Schlaegt Reglerwerte vor, gemessen am Bild - nicht geraten. Zielbild
-#  ist ein knackiges, heutiges Ergebnis: offene Tiefen, Zeichnung in den
-#  Lichtern, kraeftige aber nicht grelle Farben, sichtbare Schaerfe ohne
-#  Saeume.
+#  ist ein gefaelliges, heutiges Ergebnis, wie man es von einer guten
+#  Entwicklungsautomatik kennt: offene Tiefen, Zeichnung in den Lichtern,
+#  ein satter Mittelton, lebendige aber natuerliche Farben, sichtbare
+#  Schaerfe ohne Saeume.
+#
+#  Der Weg dorthin ist nicht ein steiler Kontrast, sondern das Gegenteil
+#  mit anschliessendem Ausgleich:
+#    1. die Lichter lokal herunterholen und die Tiefen lokal aufhellen -
+#       das Bild bekommt seinen ganzen Tonumfang in den sichtbaren Bereich,
+#       ohne dass der Kontrast im Kleinen verloren geht;
+#    2. danach so viel Kontrast, dass der Mittelton wieder Biss hat;
+#    3. Farbe ueber die Dynamik statt ueber die Saettigung - blasse Toene
+#       gewinnen, satte kippen nicht ins Grelle.
 #
 #  Was dieses Ziel AUSSCHLIESST, ist genauso wichtig: ein kraeftiger
 #  globaler Kontrast, der die Tiefen zudrueckt, und eine hochgezogene
 #  Saettigung obendrauf - diese Kombination ist das, was alt aussieht.
-#  Deshalb sind beide gedeckelt, und die Saettigung wird zurueckgenommen,
-#  wenn schon viel Kontrast dazukommt.
+#
+#  Fuer den Zeitraffer entscheidend: die Automatik rechnet EINMAL am
+#  Keyframe und schreibt feste Zahlen. Zwischen den Keyframes werden sie
+#  ueberblendet. Eine Automatik, die die Engine fuer jedes Bild neu
+#  rechnen liesse, wuerde flackern.
 #
 #  Der Weissabgleich bleibt mit Absicht unberuehrt. Ob ein warmes Bild ein
 #  Sonnenuntergang oder ein Fehlgriff der Automatik ist, laesst sich aus
@@ -613,6 +954,21 @@ AUTO_SPANNE_ZIEL = 0.92         # darauf wird gestreckt, wenn Luft ist
 AUTO_SAETTIGUNG_MAX = 25
 AUTO_SCHAERFE_GLATT = 240       # ruhiges Motiv: weniger, sonst Saeume
 AUTO_SCHAERFE_DETAIL = 380      # viel Struktur: vertraegt mehr
+AUTO_LICHTER_MAX = 70           # Lichter abdunkeln, hoechstens
+AUTO_LICHTER_HELL = 0.80        # ab hier zaehlt ein Bildpunkt als hell
+AUTO_TIEFEN_MAX = 60            # Tiefen aufhellen, hoechstens
+AUTO_TIEFEN_DUNKEL = 0.18       # bis hier zaehlt ein Bildpunkt als dunkel
+AUTO_NACHT_ANTEIL = 0.65        # so viel Dunkles: eine Nachtszene
+AUTO_KONTRAST_NACH_TL = 18      # Kontrast, wenn Tiefen/Lichter mitlaufen
+AUTO_KONTRAST_NACHT = 10        # Kontrast in einer Nachtszene
+AUTO_KONTRAST_AUSGLEICH = 15    # Biss zurueck nach Tiefen und Lichtern
+# Regler, ueber die die Automatik entscheidet - auch wenn sie sie nicht
+# verstellt. Weissabgleich und Gruen gehoeren nicht dazu: die bleiben mit
+# Absicht, wie sie sind.
+AUTO_BEURTEILT = ('brightness', 'contrast', 'highlights', 'shadows',
+                  'vibrance', 'saturation', 'sharpen', 'denoise_l', 'denoise_c')
+AUTO_DYNAMIK_MIN = 10
+AUTO_DYNAMIK_MAX = 40
 
 
 def _luma_anzeige(basis_linear):
@@ -658,6 +1014,10 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None, lang='de'):
     Jeder Wert kommt aus einer Messung, und jede Messung steht in der
     Begruendung mit ihrer Zahl. Wer das Ergebnis nicht mag, soll sehen
     koennen, worauf es beruht.
+
+    Die Schritte bauen aufeinander auf: Tiefen, Lichter, Kontrast und
+    Farbe werden am Bild gemessen, wie es NACH den vorigen Schritten
+    aussieht - die Naeherung der Vorschau rechnet es dafuer vor.
     """
     if basis_linear is None:
         return {}, []
@@ -666,12 +1026,18 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None, lang='de'):
     def darf(kid):
         return erlaubt is None or kid in erlaubt
 
-    luma, anzeige = _luma_anzeige(basis_linear)
+    basis = np.asarray(basis_linear, dtype=np.float32)
+    luma, anzeige = _luma_anzeige(basis)
     werte, grund = {}, []
     en = (lang == 'en')
 
     def sag(de, en_text):
         grund.append(en_text if en else de)
+
+    try:
+        iso_zahl = float(iso)
+    except (TypeError, ValueError):
+        iso_zahl = 100.0
 
     # ---- Helligkeit: Mittelwert auf einen brauchbaren Mittelton -------
     mittel = float(np.median(luma))
@@ -689,28 +1055,147 @@ def auto_optimieren(basis_linear, iso=100, erlaubt=None, lang='de'):
             sag(f"Helligkeit unveraendert: Mittelton {mittel:.2f} passt bereits",
                 f"Brightness unchanged: midtone {mittel:.2f} already fits")
 
+    def jetzt():
+        """Das Bild mit allem, was bis hierher vorgeschlagen ist."""
+        b = basis
+        if werte.get('shadows') or werte.get('highlights'):
+            b = tiefen_lichter(b, werte.get('shadows', 0),
+                               werte.get('highlights', 0))
+        if werte.get('brightness'):
+            b = b * np.float32(2.0 ** (werte['brightness'] / 66.0))
+        return _luma_anzeige(b)
+
+    luma1, _ = jetzt()
+
+    # ---- Lichter: Zeichnung in den hellen Flaechen --------------------
+    if darf('highlights'):
+        hell_anteil = float((luma1 >= AUTO_LICHTER_HELL).mean())
+        p99 = float(np.percentile(luma1, 99.0))
+        lichter = AUTO_LICHTER_MAX * min(1.0, hell_anteil / 0.20)
+        if p99 >= 0.97:
+            # Es reicht bis an den Anschlag: dort braucht es Zeichnung,
+            # auch wenn die Flaeche klein ist.
+            lichter = max(lichter, 20.0)
+        # Was die Helligkeit nach oben schiebt, muss oben wieder Platz
+        # bekommen.
+        lichter += 0.4 * max(0.0, float(werte.get('brightness', 0)))
+        lichter = min(AUTO_LICHTER_MAX, lichter)
+        if lichter >= 5.0:
+            werte['highlights'] = round(lichter)
+            sag(f"Lichter abdunkeln {werte['highlights']:.0f}: "
+                f"{100 * hell_anteil:.0f} % des Bildes sind hell, "
+                f"die hellsten Stellen bei {p99:.2f}",
+                f"Recover highlights {werte['highlights']:.0f}: "
+                f"{100 * hell_anteil:.0f} % of the image is bright, "
+                f"brightest areas at {p99:.2f}")
+        else:
+            sag(f"Lichter unveraendert: nur {100 * hell_anteil:.0f} % "
+                "des Bildes sind hell",
+                f"Highlights unchanged: only {100 * hell_anteil:.0f} % "
+                "of the image is bright")
+
+    # ---- Tiefen: offene Schatten, aber keine graue Nacht --------------
+    dunkel_anteil = float((luma1 <= AUTO_TIEFEN_DUNKEL).mean())
+    nacht = dunkel_anteil >= AUTO_NACHT_ANTEIL
+    if darf('shadows'):
+        tiefen = AUTO_TIEFEN_MAX * min(1.0, dunkel_anteil / 0.30)
+        if nacht:
+            # Ein Nachthimmel ist dunkel, weil er dunkel IST. Aufgehellt
+            # wird er grau und rauscht.
+            tiefen = min(tiefen, 15.0)
+        if iso_zahl >= 3200:
+            tiefen *= 0.5
+        elif iso_zahl >= 1600:
+            tiefen *= 0.7
+        if tiefen >= 5.0:
+            werte['shadows'] = round(tiefen)
+            zusatz_de = zusatz_en = ""
+            if nacht:
+                zusatz_de, zusatz_en = " (Nachtszene, zurueckhaltend)", \
+                    " (night scene, restrained)"
+            elif iso_zahl >= 1600:
+                zusatz_de = f" (wegen ISO {iso_zahl:.0f} gedaempft)"
+                zusatz_en = f" (damped because of ISO {iso_zahl:.0f})"
+            sag(f"Tiefen aufhellen {werte['shadows']:.0f}: "
+                f"{100 * dunkel_anteil:.0f} % des Bildes sind dunkel" + zusatz_de,
+                f"Lift shadows {werte['shadows']:.0f}: "
+                f"{100 * dunkel_anteil:.0f} % of the image is dark" + zusatz_en)
+        else:
+            sag(f"Tiefen unveraendert: nur {100 * dunkel_anteil:.0f} % "
+                "des Bildes sind dunkel",
+                f"Shadows unchanged: only {100 * dunkel_anteil:.0f} % "
+                "of the image is dark")
+
+    luma2, anzeige2 = jetzt()
+
     # ---- Kontrast: nur so viel, wie Luft im Histogramm ist ------------
+    # Gemessen am Ausgangsbild: Tiefen und Lichter stauchen den Umfang mit
+    # Absicht, und ein Bild, das ihn schon fuellte, soll danach nicht
+    # wieder bis an die Raender gestreckt werden. Was sie dem Mittelton
+    # nehmen, gibt der Ausgleich unten zurueck.
     p2, p98 = (float(x) for x in np.percentile(luma, (2.0, 98.0)))
     spanne = max(1e-3, p98 - p2)
     if darf('contrast'):
-        if spanne >= AUTO_SPANNE_GENUG:
-            sag(f"Kontrast unveraendert: Histogramm nutzt schon {spanne:.2f} der Skala",
-                f"Contrast unchanged: histogram already uses {spanne:.2f} of the range")
-        else:
+        kontrast = 0.0
+        if spanne < AUTO_SPANNE_GENUG:
             k = min(1.45, AUTO_SPANNE_ZIEL / spanne)
             kontrast = max(0.0, min(AUTO_KONTRAST_MAX, 100.0 * math.log2(k)))
-            # Unter fuenf Punkten sieht man den Unterschied nicht; so ein
-            # Vorschlag setzt nur ein Haekchen ohne Wirkung.
-            if kontrast >= 5.0:
-                werte['contrast'] = round(kontrast)
+        # Tiefen und Lichter nehmen dem Mittelton etwas Biss; ein wenig
+        # Kontrast gibt ihn zurueck.
+        ausgleich = min(AUTO_KONTRAST_AUSGLEICH,
+                        0.15 * (werte.get('shadows', 0)
+                                + werte.get('highlights', 0)))
+        # Kontrast dreht um die Bildmitte: was darunter liegt, wird
+        # dunkler. Nach dem Aufhellen der Tiefen wuerde voller Kontrast das
+        # gerade Gewonnene wieder zudruecken, und in einem ueberwiegend
+        # dunklen Bild versaenke er alles.
+        decke = AUTO_KONTRAST_MAX
+        if werte.get('shadows') or werte.get('highlights'):
+            decke = min(decke, AUTO_KONTRAST_NACH_TL)
+        if nacht:
+            decke = min(decke, AUTO_KONTRAST_NACHT)
+        gedeckelt = kontrast > decke
+        kontrast = min(kontrast, decke)
+        ausgeglichen = ausgleich > kontrast
+        kontrast = min(decke, max(kontrast, ausgleich))
+        # Unter fuenf Punkten sieht man den Unterschied nicht; so ein
+        # Vorschlag setzt nur ein Haekchen ohne Wirkung.
+        if kontrast >= 5.0:
+            werte['contrast'] = round(kontrast)
+            if ausgeglichen:
+                sag(f"Kontrast {werte['contrast']:+.0f}: gibt dem Mittelton "
+                    "nach Tiefen und Lichtern wieder Biss",
+                    f"Contrast {werte['contrast']:+.0f}: restores midtone "
+                    "punch after shadows and highlights")
+            else:
                 sag(f"Kontrast {werte['contrast']:+.0f}: Histogramm "
-                    f"nutzt nur {spanne:.2f} der Skala",
+                    f"nutzt nur {spanne:.2f} der Skala"
+                    + (" (gedeckelt, damit die Tiefen offen bleiben)"
+                       if gedeckelt else ""),
                     f"Contrast {werte['contrast']:+.0f}: histogram "
-                    f"uses only {spanne:.2f} of the range")
+                    f"uses only {spanne:.2f} of the range"
+                    + (" (capped so the shadows stay open)"
+                       if gedeckelt else ""))
+        else:
+            sag(f"Kontrast unveraendert: Histogramm nutzt schon {spanne:.2f} der Skala",
+                f"Contrast unchanged: histogram already uses {spanne:.2f} of the range")
 
-    # ---- Saettigung: was fehlt, nicht was moeglich ist ----------------
-    if darf('saturation'):
-        bunt = float(np.mean(anzeige.max(axis=2) - anzeige.min(axis=2)))
+    # ---- Farbe: Dynamik vor Saettigung --------------------------------
+    bunt = float(np.mean(anzeige2.max(axis=2) - anzeige2.min(axis=2)))
+    if darf('vibrance'):
+        anteil = min(1.0, max(0.0, (0.28 - bunt) / 0.28))
+        vib = AUTO_DYNAMIK_MIN + (AUTO_DYNAMIK_MAX - AUTO_DYNAMIK_MIN) * anteil
+        # Kontrast hebt die Farbigkeit mit an.
+        vib *= max(0.5, 1.0 - werte.get('contrast', 0) / 60.0)
+        werte['vibrance'] = round(vib)
+        sag(f"Dynamik {werte['vibrance']:+.0f}: Farbabstand liegt bei {bunt:.2f}",
+            f"Vibrance {werte['vibrance']:+.0f}: colour spread is {bunt:.2f}")
+        if darf('saturation'):
+            sag("Saettigung unveraendert - die Dynamik hebt blasse Farben, "
+                "ohne satte ins Grelle zu treiben",
+                "Saturation unchanged - vibrance lifts muted colours "
+                "without pushing saturated ones into garishness")
+    elif darf('saturation'):
         if bunt >= 0.28:
             sag(f"Saettigung unveraendert: Bild ist mit {bunt:.2f} schon farbkraeftig",
                 f"Saturation unchanged: at {bunt:.2f} the image is already colourful")
@@ -989,18 +1474,19 @@ def ablauf_plan(params):
     if modus == 'preview':
         return []
     video = bool(p.get('make_video', True))
+    entflackern = bool(p.get('entflackern', True))
     if p.get('format') != 'raw':
-        plan = ['lesen']
+        plan = ['lesen'] if entflackern else []
         if video and p.get('stabilize'):
             plan.append('stab')
         if video:
             plan.append('video')
         return plan
     if p.get('raw_mode') == 'pass1':
-        return ['analyse', 'schreiben']
-    plan = ['entwicklung', 'messung']
+        return ['analyse', 'schreiben'] if entflackern else ['schreiben']
+    plan = ['entwicklung', 'messung'] if entflackern else ['entwicklung']
     try:
-        if int(p.get('calib_rounds', 2)) > 0:
+        if entflackern and int(p.get('calib_rounds', 2)) > 0:
             plan.append('kalib')
     except (TypeError, ValueError):
         pass
@@ -3825,8 +4311,22 @@ class QuickLookDialog(QtWidgets.QDialog):
         self.resize(940, 860)
         self.regler = {}          # id -> (QCheckBox, QSlider, QLabel, def)
         self._ursprung = {}       # id -> (Reglerstellung, Haken) beim Oeffnen
+        self._knoepfe = {}        # id -> (-, +, neutral) neben dem Schieber
         vorhanden, fehlend = quick_available(profil)
         werte = quick_read(profil)
+        # Steht der Weissabgleich auf "Kamera", ist die Temperatur in der
+        # Datei nur ein Platzhalter (RawTherapee schreibt dort immer 6504).
+        # Den als eigenen Weissabgleich zu uebernehmen, faerbte ein
+        # Kunstlichtbild tieforange. Ausgangswert ist dann die Temperatur,
+        # die die Kamera eingestellt hatte - aus dem RAW berechnet.
+        self._wb_eigen = ((profil or {}).get('White Balance', {}).get('Setting')
+                          == eng('wb_custom'))
+        self._wb_geschaetzt = None
+        if not self._wb_eigen and 'wb_temp' in werte:
+            self._wb_geschaetzt = kamera_temperatur(self.bild_pfad)
+            if self._wb_geschaetzt:
+                werte['wb_temp'] = float(self._wb_geschaetzt)
+            werte['wb_green'] = 1.0
 
         aussen = QtWidgets.QVBoxLayout(self)
         kopf = QtWidgets.QLabel(self._t(
@@ -4038,12 +4538,31 @@ class QuickLookDialog(QtWidgets.QDialog):
             # abweicht - dort ist bereits etwas eingestellt.
             abweichung = abs(werte[d['id']] - float(d['neutral']))
             toleranz = max(1e-6, abs(float(d['neutral'])) * 1e-6, 10 ** -(d['dezimal'] + 1))
-            chk.setChecked(abweichung > toleranz)
-            chk.setToolTip(self._t(
-                f"Schreibt [{d['sec']}] {d['key']} in das Profil.\n"
-                "Ohne Haekchen bleibt der vorhandene Wert unberuehrt.",
-                f"Writes [{d['sec']}] {d['key']} into the profile.\n"
-                "Without the tick the existing value stays untouched."))
+            if d['id'] in ('wb_temp', 'wb_green'):
+                # Weissabgleich: angehakt nur, wenn das Profil wirklich einen
+                # eigenen hat - nicht, weil der Platzhalter von 5500 abweicht.
+                chk.setChecked(self._wb_eigen)
+            else:
+                chk.setChecked(abweichung > toleranz)
+            schl = ", ".join([d['key']] + [k for k, _f in d.get('mehr', ())])
+            tipp_de = (f"Schreibt [{d['sec']}] {schl} in das Profil.\n"
+                       "Ohne Haekchen bleibt der vorhandene Wert unberuehrt.")
+            tipp_en = (f"Writes [{d['sec']}] {schl} into the profile.\n"
+                       "Without the tick the existing value stays untouched.")
+            if d['id'] == 'wb_temp' and not self._wb_eigen:
+                if self._wb_geschaetzt:
+                    tipp_de += (f"\n\nIm Profil steht der Weissabgleich der Kamera. "
+                                f"Ausgangswert: ca. {self._wb_geschaetzt} K, aus dem "
+                                "RAW berechnet - mit Haekchen wird daraus ein eigener.")
+                    tipp_en += (f"\n\nThe profile uses the camera white balance. "
+                                f"Starting value: approx. {self._wb_geschaetzt} K, "
+                                "computed from the RAW - ticked, it becomes a custom one.")
+                else:
+                    tipp_de += ("\n\nIm Profil steht der Weissabgleich der Kamera; "
+                                "deren Temperatur liess sich nicht ermitteln.")
+                    tipp_en += ("\n\nThe profile uses the camera white balance; its "
+                                "temperature could not be determined.")
+            chk.setToolTip(self._t(tipp_de, tipp_en))
             faktor = 10 ** d['dezimal']
             sl = QtWidgets.QSlider(QtCore.Qt.Horizontal)
             sl.setMinimum(int(round(d['ui_min'] * faktor)))
@@ -4116,6 +4635,7 @@ class QuickLookDialog(QtWidgets.QDialog):
             gitter.addWidget(btn_plus, zeile, 4)
             gitter.addWidget(btn_neutral, zeile, 5)
             self.regler[d['id']] = (chk, sl, lbl, d)
+            self._knoepfe[d['id']] = (btn_minus, btn_plus, btn_neutral)
             self._ursprung[d['id']] = (sl.value(), chk.isChecked())
             zeile += 1
         aussen.addLayout(gitter)
@@ -4203,6 +4723,19 @@ class QuickLookDialog(QtWidgets.QDialog):
     def _t(self, de, en):
         return de if self._de else en
 
+    def _freigeben(self, kid, an):
+        """
+        Schieber und Knoepfe eines Reglers so schalten wie sein Haekchen.
+
+        Normalerweise erledigt das das Signal des Haekchens. Wo es
+        angehalten wird - damit die Vorschau nicht bei jedem Regler neu
+        rechnet -, muss es hier nachgeholt werden; sonst bleiben -, + und
+        "neutral" grau, obwohl der Regler angehakt ist.
+        """
+        _chk, sl, _lbl, _d = self.regler[kid]
+        for w in (sl,) + tuple(self._knoepfe.get(kid, ())):
+            w.setEnabled(bool(an))
+
     def _auf_ursprung(self):
         """
         Alle Regler auf den Stand beim Oeffnen.
@@ -4219,7 +4752,7 @@ class QuickLookDialog(QtWidgets.QDialog):
             sl.setValue(wert)
             for w in (chk, sl):
                 w.blockSignals(False)
-            sl.setEnabled(haken)
+            self._freigeben(kid, haken)
         if self.cmb_hl is not None:
             haken, idx = getattr(self, '_hl_ursprung', (False, 0))
             for w in (self.chk_hl, self.cmb_hl):
@@ -4326,7 +4859,7 @@ class QuickLookDialog(QtWidgets.QDialog):
             chk.setChecked(True)
             for w in (chk, sl):
                 w.blockSignals(False)
-            sl.setEnabled(True)
+            self._freigeben(kid, True)
             lbl.setText(f"{sl.value() / float(faktor):.{d['dezimal']}f}"
                         f"{d['einheit']}")
             gesetzt.append(self._t(d['de'], d['en']))
@@ -4341,29 +4874,115 @@ class QuickLookDialog(QtWidgets.QDialog):
         self._vorschau_zeichnen()
 
     def _automatisch(self):
-        """Misst das Bild und setzt die vorgeschlagenen Werte."""
+        """
+        Misst das Bild und setzt die vorgeschlagenen Werte.
+
+        Gemessen wird nach Moeglichkeit am Bild der Engine - mit allem, was
+        sie ohnehin tut (Belichtung aus dem Deflicker, Tonkurve, Farben),
+        aber mit den Reglern der Automatik auf neutral. Die Naeherung aus
+        dem RAW kennt davon nichts; an ihr gemessen, gerieten die
+        Vorschlaege im echten Bild zu hell oder zu dunkel.
+        """
         if self._basis is None:
             return
+        if self._echt_an():
+            profil = self._auto_ausgangsprofil()
+            kennung = profil_kennung(profil)
+            rgb = self._echt_merker.get(kennung)
+            if rgb is not None:
+                self._auto_anwenden(self._lin_aus_bild(rgb), True)
+                return
+            if kennung not in self._echt_fehlschlag:
+                faden = EngineVorschau(self._cli, self.bild_pfad, profil, kennung,
+                                       kante=ECHT_KANTE)
+                self._echt_alle.append(faden)
+                faden.fertig.connect(self._auto_engine_fertig)
+                self.btn_auto.setEnabled(False)
+                self.lbl_vorschau_hinweis.setText(self._t(
+                    f"Automatik: {eng('label')} entwickelt das Ausgangsbild …",
+                    f"Auto: {eng('label')} is developing the starting image …"))
+                faden.start()
+                return
+        self._auto_anwenden(self._basis, False)
+
+    def _auto_ausgangsprofil(self):
+        """Das Profil, an dem die Automatik misst: ihre Regler auf neutral,
+        Weissabgleich und Lichter-Rekonstruktion wie eingestellt."""
+        werte = {k: v for k, v in self.werte().items() if k in ('wb_temp', 'wb_green')}
+        for kid in AUTO_BEURTEILT:
+            if kid in self.regler:
+                werte[kid] = float(self.regler[kid][3]['neutral'])
+        hl = self.hl_wert() if self.cmb_hl is not None else None
+        return schnell_profil(self._profil0, werte, hl)[0]
+
+    def _lin_aus_bild(self, rgb):
+        """Bild der Engine (8 Bit) als lineares Bild in Messgroesse."""
+        bild = np.asarray(rgb)
+        h, w = bild.shape[:2]
+        if w > VORSCHAU_BREITE:
+            bild = cv2.resize(bild, (VORSCHAU_BREITE, max(1, int(round(h * VORSCHAU_BREITE / float(w))))),
+                              interpolation=cv2.INTER_AREA)
+        return np.asarray(srgb_to_linear(bild), dtype=np.float32)
+
+    def _auto_engine_fertig(self, erg):
+        """Das Ausgangsbild fuer die Automatik ist da (oder nicht)."""
+        if self._zu:
+            return
+        self.btn_auto.setEnabled(True)
+        if erg.get('abgebrochen'):
+            return
+        kennung = erg.get('kennung')
+        rgb = erg.get('rgb')
+        if rgb is None:
+            self._echt_fehlschlag.add(kennung)
+            self._auto_anwenden(self._basis, False)
+            return
+        while len(self._echt_merker) >= ECHT_MERKER_MAX:
+            self._echt_merker.pop(next(iter(self._echt_merker)))
+        self._echt_merker[kennung] = rgb
+        self._auto_anwenden(self._lin_aus_bild(rgb), True)
+
+    def _auto_anwenden(self, basis_linear, von_engine):
+        """Rechnet den Vorschlag und setzt ihn in die Regler."""
         vorschlag, begruendung = auto_optimieren(
-            self._basis, iso=self._iso, erlaubt=set(self.regler.keys()),
+            basis_linear, iso=self._iso, erlaubt=set(self.regler.keys()),
             lang=self.lang)
+        begruendung = [self._t(
+            f"Gemessen am Bild von {eng('label')}, Regler auf neutral"
+            if von_engine else "Gemessen an der Näherung aus dem RAW",
+            f"Measured on the {eng('label')} image, sliders at neutral"
+            if von_engine else "Measured on the approximation from the RAW")] + begruendung
         if not vorschlag:
             self.lbl_vorschau_hinweis.setText(self._t(
                 "Nichts zu verbessern gefunden.", "Nothing found to improve."))
             return
+        # Was die Automatik beurteilt, aber nicht verstellt, kommt auf den
+        # Neutralwert. Sie misst das unbearbeitete Bild; ein Wert, der von
+        # Hand oder aus dem Profil noch dasteht, gehoerte nicht zu ihrem
+        # Vorschlag - und das Ergebnis hinge davon ab, was vorher eingestellt
+        # war. Zweimal "Automatisch optimieren" muss dasselbe ergeben.
+        ziel = dict(vorschlag)
+        zurueck = []
+        for kid in AUTO_BEURTEILT:
+            if kid in ziel or kid not in self.regler:
+                continue
+            chk, sl, _lbl, d = self.regler[kid]
+            faktor = 10 ** d['dezimal']
+            if abs(sl.value() / float(faktor) - float(d['neutral'])) > 0.5 / faktor:
+                ziel[kid] = float(d['neutral'])
+                zurueck.append(self._t(d['de'], d['en']))
         for kid, (chk, sl, lbl, d) in self.regler.items():
-            if kid not in vorschlag:
+            if kid not in ziel:
                 continue
             faktor = 10 ** d['dezimal']
-            wert = max(d['ui_min'], min(d['ui_max'], float(vorschlag[kid])))
+            wert = max(d['ui_min'], min(d['ui_max'], float(ziel[kid])))
             for w in (chk, sl):
                 w.blockSignals(True)
             sl.setValue(int(round(wert * faktor)))
             chk.setChecked(True)
             for w in (chk, sl):
                 w.blockSignals(False)
-            for w in (sl,):
-                w.setEnabled(True)
+            self._freigeben(kid, True)
             lbl.setText(f"{sl.value() / float(faktor):.{d['dezimal']}f}"
                         f"{d['einheit']}")
         if vorschlag.get('_hl') and self.cmb_hl is not None:
@@ -4376,10 +4995,18 @@ class QuickLookDialog(QtWidgets.QDialog):
                 self.cmb_hl.blockSignals(True)
                 self.cmb_hl.setCurrentIndex(idx)
                 self.cmb_hl.blockSignals(False)
+        if zurueck:
+            begruendung = begruendung + [self._t(
+                "Auf neutral gestellt: " + ", ".join(zurueck)
+                + " - gehoert nicht zum Vorschlag",
+                "Set to neutral: " + ", ".join(zurueck)
+                + " - not part of the proposal")]
         self._letzte_begruendung = begruendung
+        kurz = "; ".join(b.split(":")[0] for b in begruendung[1:5])
+        if zurueck:
+            kurz += self._t("; neutral: ", "; neutral: ") + ", ".join(zurueck)
         self.lbl_vorschau_hinweis.setText(
-            self._t("Vorschlag gesetzt: ", "Proposal applied: ")
-            + "; ".join(b.split(":")[0] for b in begruendung[:4]))
+            self._t("Vorschlag gesetzt: ", "Proposal applied: ") + kurz)
         self.lbl_vorschau_hinweis.setToolTip("\n".join(begruendung))
         self._vorschau_zeichnen()
 
@@ -4501,7 +5128,8 @@ class QuickLookDialog(QtWidgets.QDialog):
             self._echt_lin = np.asarray(srgb_to_linear(klein),
                                         dtype=np.float32)
         delta = {}
-        for k in ('brightness', 'contrast', 'saturation'):
+        for k in ('brightness', 'contrast', 'saturation', 'shadows',
+                  'highlights', 'vibrance'):
             d = float(neu.get(k, 0.0)) - float(alt.get(k, 0.0))
             if d:
                 delta[k] = d
@@ -5095,13 +5723,35 @@ class Worker(QtCore.QThread):
                 return None
         return cv2.imdecode(np.fromfile(filepath, dtype=np.uint8), cv2.IMREAD_COLOR)
 
+    def _ohne_nacht(self, files):
+        """Die Dateien ohne die Nacht - und einmal ins Protokoll, wie viele."""
+        auslassen = self.p.get('nacht_auslassen') or ()
+        rest = ohne_nacht(files, auslassen)
+        weg = len(files) - len(rest)
+        if weg:
+            self.log.emit(self._t(
+                f"> Nacht entfernt: {weg} von {len(files)} Bildern kommen nicht ins Video.",
+                f"> Night removed: {weg} of {len(files)} frames are left out of the video."))
+            if len(rest) < 2:
+                raise RuntimeError(self._t(
+                    "Nach dem Entfernen der Nacht bleibt kein Video uebrig. "
+                    "Bitte die Grenze fuer \u201eNacht entfernen\u201c niedriger setzen.",
+                    "After removing the night no video is left. Please set the "
+                    "\u201cRemove night\u201d threshold lower."))
+        return rest
+
     def _run_preview(self):
         """Entwickelt einige ueber die Sequenz verteilte Bilder mit den aktuellen Einstellungen."""
         p = self.p
         files = p['files']
-        count = min(p.get('preview_count', 5), len(files))
-        picks = [int(round(i * (len(files) - 1) / max(1, count - 1))) for i in range(count)]
-        picks = sorted(set(picks))
+        # Verteilt ueber das, was ins Video kommt - ohne die Nacht.
+        weg = set(p.get('nacht_auslassen') or ())
+        im_video = [i for i, f in enumerate(files) if datei_stamm(f) not in weg] \
+            or list(range(len(files)))
+        count = min(p.get('preview_count', 5), len(im_video))
+        picks = sorted({im_video[int(round(k * (len(im_video) - 1) / max(1, count - 1)))]
+                        for k in range(count)})
+        rang = {i: r for r, i in enumerate(im_video)}
         out_dir = tempfile.mkdtemp(prefix="purelapse_preview_")
         width = p['width']
         calc_height = int(width * 9 / 16)
@@ -5130,7 +5780,7 @@ class Worker(QtCore.QThread):
         else:
             lum = np.asarray(p.get('luma_curve') or [], dtype=np.float64)
             gains = None
-            if lum.size == len(files):
+            if lum.size == len(files) and p.get('entflackern', True):
                 lum = np.maximum(lum, 1e-3)
                 tgt = two_pass_smooth(lum, p['scene_int'], p['smooth_val']) * (2 ** p['ev_val'])
                 gains = np.clip(tgt / lum, 0.125, 8.0)
@@ -5152,12 +5802,12 @@ class Worker(QtCore.QThread):
             raise RuntimeError(self._t("Es konnte kein Vorschaubild erzeugt werden.",
                                        "No preview image could be created."))
         final = []
-        total = len(files)
+        total = len(im_video)
         for idx, q in results:
             img = cv2.imread(q, cv2.IMREAD_COLOR)
             if img is None:
                 continue
-            img = self._apply_camera_move(img, idx, total, width, calc_height)
+            img = self._apply_camera_move(img, rang.get(idx, idx), total, width, calc_height)
             img = self._fade(img, idx, total)
             out = os.path.join(out_dir, f"final_{idx:05d}.jpg")
             cv2.imwrite(out, img, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
@@ -5167,7 +5817,7 @@ class Worker(QtCore.QThread):
     def _run_plain(self):
         """Erzeugt den Zeitraffer ohne Deflicker, ohne Keyframes, ohne Effekte."""
         p = self.p
-        files = p['files']
+        files = self._ohne_nacht(p['files'])
         width = p['width']
         calc_height = int(width * 9 / 16)
         self.log.emit(self._t(f"> Rohfassung ohne Bearbeitung ({len(files)} Bilder).",
@@ -5228,7 +5878,7 @@ class Worker(QtCore.QThread):
         Schnelleinstellungen, keine Effekte - nur zum ersten Eindruck.
         """
         p = self.p
-        files = p['files']
+        files = self._ohne_nacht(p['files'])
         width = int(min(int(p['width']), SCHNELL_BREITE_MAX))
         width -= width % 2
         calc_height = int(width * 9 / 16)
@@ -5249,9 +5899,12 @@ class Worker(QtCore.QThread):
                                        "Too few readable images for a quick preview."))
         self._schritt_fertig("Vorschaubilder gelesen", len(bilder), start)
         luma = np.asarray([l for _b, l in bilder], dtype=np.float64)
-        ziel = two_pass_smooth(luma, p['scene_int'], p['smooth_val'])
-        ziel = ziel * (2 ** p['ev_val'])
-        faktoren = np.clip(ziel / np.maximum(luma, 1e-6), 0.125, 8.0)
+        if p.get('entflackern', True):
+            ziel = two_pass_smooth(luma, p['scene_int'], p['smooth_val'])
+            ziel = ziel * (2 ** p['ev_val'])
+            faktoren = np.clip(ziel / np.maximum(luma, 1e-6), 0.125, 8.0)
+        else:
+            faktoren = np.ones(luma.size)
         p['name_suffix'] = '_Schnellvorschau'
         p['versioning'] = False
         out_video = os.path.splitext(self._get_output_video_path())[0] + ".mp4"
@@ -5323,11 +5976,18 @@ class Worker(QtCore.QThread):
         abs_target_dir = p['target_dir']
         files = p['files']
         roi = p.get('roi_rel')
-        self.log.emit(self._t(f"> Starte JPG-Deflicker Workflow ({len(files)} Bilder).",
-                f"> Starting JPG deflicker workflow ({len(files)} images)."))
+        entflackern = bool(p.get('entflackern', True))
+        if entflackern:
+            self.log.emit(self._t(f"> Starte JPG-Deflicker Workflow ({len(files)} Bilder).",
+                    f"> Starting JPG deflicker workflow ({len(files)} images)."))
+        else:
+            self.log.emit(self._t(f"> JPG-Zeitraffer OHNE Entflackern ({len(files)} Bilder): "
+                                  "die Helligkeit bleibt, wie sie ist.",
+                                  f"> JPG timelapse WITHOUT deflickering ({len(files)} images): "
+                                  "the brightness stays as it is."))
         luma_vals, b_vals, g_vals, r_vals, valid_files = [], [], [], [], []
         start_time = time.time()
-        for i, f in enumerate(files):
+        for i, f in enumerate(files if entflackern else ()):
             self._check_abort()
             res = get_brightness_jpg(f, roi)
             if res:
@@ -5338,21 +5998,29 @@ class Worker(QtCore.QThread):
                 valid_files.append(f)
             self._fortschritt("Lese Daten", i + 1, len(files), start_time,
                               zusatz=os.path.basename(f))
-        if len(valid_files) < 3:
-            raise RuntimeError(self._t("Zu wenige lesbare JPG-Dateien für die Analyse.",
-                                       "Too few readable JPG files for the analysis."))
-        a_luma = np.maximum(np.asarray(luma_vals, dtype=np.float64), 1e-3)
-        t_luma = two_pass_smooth(a_luma, p['scene_int'], p['smooth_val'])
-        t_luma = t_luma * (2 ** p['ev_val'])
+        if not entflackern:
+            valid_files = list(files)
+            fac_b = fac_g = fac_r = np.ones(len(valid_files))
+        else:
+            if len(valid_files) < 3:
+                raise RuntimeError(self._t("Zu wenige lesbare JPG-Dateien für die Analyse.",
+                                           "Too few readable JPG files for the analysis."))
+            a_luma = np.maximum(np.asarray(luma_vals, dtype=np.float64), 1e-3)
+            t_luma = two_pass_smooth(a_luma, p['scene_int'], p['smooth_val'])
+            t_luma = t_luma * (2 ** p['ev_val'])
 
-        def _channel_gain(values):
-            a_c = np.maximum(np.asarray(values, dtype=np.float64), 1e-3)
-            ratio = two_pass_smooth(a_c / a_luma, 0, p['smooth_val'])
-            return np.clip((t_luma * ratio) / a_c, 0.125, 8.0)
+            def _channel_gain(values):
+                a_c = np.maximum(np.asarray(values, dtype=np.float64), 1e-3)
+                ratio = two_pass_smooth(a_c / a_luma, 0, p['smooth_val'])
+                return np.clip((t_luma * ratio) / a_c, 0.125, 8.0)
 
-        fac_b = _channel_gain(b_vals)
-        fac_g = _channel_gain(g_vals)
-        fac_r = _channel_gain(r_vals)
+            fac_b = _channel_gain(b_vals)
+            fac_g = _channel_gain(g_vals)
+            fac_r = _channel_gain(r_vals)
+        # Gemessen und geglaettet wird ueber die ganze Serie - auch ueber die
+        # Nacht, damit der Verlauf in der Daemmerung stimmt. Ins Video kommt
+        # sie nicht.
+        video_files = self._ohne_nacht(valid_files)
         hot_idx = None
         if p.get('hotpixel'):
             self.log.emit(self._t("> Suche defekte Sensorpixel ueber die gesamte Sequenz...",
@@ -5368,11 +6036,11 @@ class Worker(QtCore.QThread):
         if p['make_video'] and p['stabilize']:
             self.log.emit(self._t("> Führe Optische Stabilisierung durch...",
                 "> Running optical stabilisation..."))
-            stab_diffs = calculate_stabilization(valid_files, self.status, self.progress, self._check_abort)
+            stab_diffs = calculate_stabilization(video_files, self.status, self.progress, self._check_abort)
         out_dir = zwischen_ordner(abs_target_dir)
         os.makedirs(out_dir, exist_ok=True)
         ffmpeg_proc, out_video = None, None
-        render_sequence = list(valid_files)
+        render_sequence = list(video_files)
         if p['reverse_play']:
             render_sequence.reverse()
         verstaerkung = {f: (fb, fg, fr) for f, fb, fg, fr
@@ -5507,47 +6175,20 @@ class Worker(QtCore.QThread):
             "B) In Purelapse unter Einstellungen als Engine ART oder RawTherapee "
             "waehlen - die legen ihre Profile selbst an.")
 
-    def _run_raw_pass1(self):
+    def _basisprofil(self, abs_target_dir, files, probe):
+        """
+        Das Basisprofil der Engine, aus dem fehlende Begleitdateien entstehen:
+        aus dem Ordner, aus den Einstellungen oder einmalig von der Engine
+        erzeugt. Ohne eines bricht der Lauf ab - siehe Meldung.
+        """
         p = self.p
-        abs_target_dir = p['target_dir']
-        files = p['files']
-        roi = p.get('roi_rel')
-        luma_vals, valid_files, meas = [], [], []
-        self.log.emit(self._t("> Starte RAW Pass 1 (Analyse)...",
-                "> Starting RAW pass 1 (analysis)..."))
-        if eng('kind') == 'darktable':
-            self._pruefe_darktable_xmp(files)
-        start_time = time.time()
-        threads = mess_threads(p.get('cores', 1))
-        if threads > 1:
-            self.log.emit(self._t(f"> Vermesse {threads} Bilder gleichzeitig.",
-                f"> Measuring {threads} images at once."))
-        gemessen = parallel_messen(
-            measure_nef, [(f, roi) for f in files], threads, self._check_abort,
-            lambda fertig, gesamt: self._fortschritt(
-                "Analysiere RAWs", fertig, gesamt, start_time,
-                zusatz=os.path.basename(files[fertig - 1])))
-        for f, m in zip(files, gemessen):
-            if m is not None and m['luma'] > 0:
-                luma_vals.append(m['luma'])
-                valid_files.append(f)
-                meas.append(m)
-        self._schritt_fertig("Analyse der RAWs", len(files), start_time)
-        # Ausgefressene Lichter aus den Sensordaten - belastbarer als die
-        # vorlaeufige Angabe aus den Vorschaubildern beim Einlesen.
-        c_anzahl, c_gesamt, c_schlimmste = lichter_auswerten(
-            [m['clip'] for m in meas], CLIP_SCHWELLE_RAW)
-        self.clip_report.emit(c_anzahl, c_gesamt, list(c_schlimmste))
-        if len(valid_files) < 3:
-            raise RuntimeError(self._t("Zu wenige lesbare RAW-Dateien für die Analyse.",
-                                       "Too few readable RAW files for the analysis."))
         template, tpl_src = find_arp_template(abs_target_dir, files)
         if template is None and p.get('art_cli_path'):
             self.log.emit(self._t(f"> Kein {eng('label')}-Basisprofil vorhanden. "
                           f"Lasse {eng('label')} einmalig eines erzeugen...",
                 f"> No {eng('label')} base profile available. Letting {eng('label')} create one once..."))
             self.status.emit("Erzeuge einmalig ein Basisprofil...")
-            template, tpl_src = bootstrap_arp_template(p['art_cli_path'], valid_files[0])
+            template, tpl_src = bootstrap_arp_template(p['art_cli_path'], probe)
             if template is not None:
                 self.log.emit(self._t("> Basisprofil erzeugt und dauerhaft gespeichert. "
                               "Dieser Schritt entfällt künftig.",
@@ -5579,6 +6220,113 @@ class Worker(QtCore.QThread):
             )
         self.log.emit(self._t(f"> Basisprofil: {tpl_src}",
                 f"> Base profile: {tpl_src}"))
+        return template
+
+    def _profile_ohne_entflackern(self, files):
+        """
+        Bereitet die Profile fuer einen Lauf OHNE Entflackern vor.
+
+        Jedes Bild bekommt sein vollstaendiges Profil mit Belichtung 0 - die
+        Helligkeit bleibt, wie die Kamera sie aufgenommen hat. Keyframes
+        behalten, was der Nutzer an ihnen eingestellt hat: von ihrer
+        Belichtung wird abgezogen, was ein frueherer Pass 1 und die
+        Nachkalibrierung beigesteuert hatten.
+
+        Mehrfach aufgerufen aendert sich nichts mehr - Pass 2 ruft das
+        deshalb selbst noch einmal auf und braucht keinen Pass 1.
+        """
+        p = self.p
+        d = p['target_dir']
+        if eng('kind') == 'darktable':
+            self._pruefe_darktable_xmp(files)
+        template = self._basisprofil(d, files, files[0])
+        alt_basis = load_base_ev(d)
+        alt_kalib = load_calib(d)
+        neu_basis = {}
+        geaendert = 0
+        for i, f in enumerate(files):
+            self._check_abort()
+            name = os.path.basename(f)
+            arp_path = sidecar(f)
+            vorher = read_arp_dict(arp_path)
+            belichtung = 0.0
+            if check_is_keyframe(arp_path):
+                exp = vorher.get('Exposure', {})
+                if 'Compensation' in exp:
+                    try:
+                        belichtung = (float(exp.get('Compensation', 0.0))
+                                      - float(alt_basis.get(name, 0.0))
+                                      - float(alt_kalib.get(name, 0.0)))
+                    except (TypeError, ValueError):
+                        belichtung = 0.0
+            write_arp_file(f, belichtung, template, hotpixel=p.get('hotpixel', False))
+            if read_arp_dict(arp_path) != vorher:
+                geaendert += 1
+            neu_basis[name] = 0.0
+            self.status.emit(f"Schreibe Sidecar: {name}")
+            self.progress.emit(i + 1, len(files))
+        save_base_ev(d, neu_basis)
+        modus_schreiben(d, False)
+        try:
+            os.remove(pl_datei(d, CALIB_DB))
+        except OSError:
+            pass
+        self.log.emit(self._t(
+            f"> Profile ohne Entflackern: {len(files)} Bilder, {geaendert} davon angepasst.",
+            f"> Profiles without deflickering: {len(files)} frames, {geaendert} of them adjusted."))
+
+    def _run_raw_pass1(self):
+        p = self.p
+        abs_target_dir = p['target_dir']
+        files = p['files']
+        roi = p.get('roi_rel')
+        luma_vals, valid_files, meas = [], [], []
+        if not p.get('entflackern', True):
+            self.log.emit(self._t(
+                "> Pass 1 OHNE Entflackern: nichts wird vermessen, die Profile "
+                "werden nur vorbereitet.",
+                "> Pass 1 WITHOUT deflickering: nothing is measured, the "
+                "profiles are only prepared."))
+            self._profile_ohne_entflackern(files)
+            self.finished_ok.emit(self._t(
+                "Pass 1 abgeschlossen - ohne Entflackern. Die Profile sind "
+                "vorbereitet, die Helligkeit bleibt, wie die Kamera sie "
+                "aufgenommen hat.\n\nWeiter mit Pass 2 (Video rendern). "
+                "Keyframes werden wie gewohnt ueberblendet.",
+                "Pass 1 complete - without deflickering. The profiles are "
+                "prepared, the brightness stays as the camera recorded it."
+                "\n\nNext: pass 2 (render video). Keyframes are blended as "
+                "usual."))
+            return
+        self.log.emit(self._t("> Starte RAW Pass 1 (Analyse)...",
+                "> Starting RAW pass 1 (analysis)..."))
+        if eng('kind') == 'darktable':
+            self._pruefe_darktable_xmp(files)
+        start_time = time.time()
+        threads = mess_threads(p.get('cores', 1))
+        if threads > 1:
+            self.log.emit(self._t(f"> Vermesse {threads} Bilder gleichzeitig.",
+                f"> Measuring {threads} images at once."))
+        gemessen = parallel_messen(
+            measure_nef, [(f, roi) for f in files], threads, self._check_abort,
+            lambda fertig, gesamt: self._fortschritt(
+                "Analysiere RAWs", fertig, gesamt, start_time,
+                zusatz=os.path.basename(files[fertig - 1])))
+        for f, m in zip(files, gemessen):
+            if m is not None and m['luma'] > 0:
+                luma_vals.append(m['luma'])
+                valid_files.append(f)
+                meas.append(m)
+        self._schritt_fertig("Analyse der RAWs", len(files), start_time)
+        # Ausgefressene Lichter aus den Sensordaten - belastbarer als die
+        # vorlaeufige Angabe aus den Vorschaubildern beim Einlesen.
+        c_anzahl, c_gesamt, c_schlimmste = lichter_auswerten(
+            [m['clip'] for m in meas], CLIP_SCHWELLE_RAW)
+        self.clip_report.emit(c_anzahl, c_gesamt, list(c_schlimmste))
+        if len(valid_files) < 3:
+            raise RuntimeError(self._t("Zu wenige lesbare RAW-Dateien für die Analyse.",
+                                       "Too few readable RAW files for the analysis."))
+        template = self._basisprofil(abs_target_dir, files, valid_files[0])
         self.log.emit(self._t("> Berechne geglättete Luma-Zielkurve und schreibe Sidecar-Dateien.",
                 "> Computing the smoothed luma target curve and writing sidecar files."))
         a_luma = np.array(luma_vals)
@@ -5656,6 +6404,7 @@ class Worker(QtCore.QThread):
             self.status.emit(f"Schreibe Sidecar: {name}")
             self.progress.emit(i + 1, len(valid_files))
         save_base_ev(abs_target_dir, new_base)
+        modus_schreiben(abs_target_dir, True)
         # Die Nachkalibrierung von Pass 2 korrigiert die Abweichung zu DIESEN
         # Basiswerten. Nach einer neuen Messung gelten die alten Korrekturen
         # nicht mehr - sie wuerden sonst in jeden weiteren Lauf eingerechnet.
@@ -6655,8 +7404,28 @@ class Worker(QtCore.QThread):
         abs_target_dir = p['target_dir']
         files = p['files']
         max_blur, min_blur = p['max_blur'], p['min_blur']
+        entflackern = bool(p.get('entflackern', True))
         self.log.emit(self._t("> Starte RAW Pass 2 (Rendern)...",
                 "> Starting RAW pass 2 (rendering)..."))
+        if entflackern and not modus_lesen(abs_target_dir):
+            raise RuntimeError(self._t(
+                "Pass 1 lief ohne Entflackern - die Profile enthalten keinen "
+                "Helligkeitsausgleich.\n\nBitte Pass 1 mit eingeschaltetem "
+                "\u201eEntflackern\u201c erneut laufen lassen, oder Pass 2 "
+                "ohne Entflackern starten.",
+                "Pass 1 ran without deflickering - the profiles contain no "
+                "brightness correction.\n\nPlease run pass 1 again with "
+                "\u201cDeflicker\u201d switched on, or start pass 2 without "
+                "deflickering."))
+        if not entflackern:
+            self.log.emit(self._t(
+                "> OHNE Entflackern: Belichtung bleibt, wie aufgenommen; keine "
+                "Nachkalibrierung. Keyframes werden ueberblendet.",
+                "> WITHOUT deflickering: exposure stays as recorded; no "
+                "recalibration. Keyframes are blended."))
+            # Ohne Messung braucht es die Nacht auch nicht zu entwickeln.
+            files = self._ohne_nacht(files)
+            self._profile_ohne_entflackern(files)
         # Zuerst: sind die Profile ueberhaupt da, und gehoeren sie zur
         # eingestellten Engine? Die Pruefung auf Vollstaendigkeit darunter
         # hielt fehlende Profile bisher fuer "unvollstaendig" und riet zu
@@ -6694,6 +7463,8 @@ class Worker(QtCore.QThread):
         tief = bool(p.get('tiff16'))
         self._zw_tief = tief
         max_rounds = 1 + max(0, int(p.get('calib_rounds', 2)))
+        if not entflackern:
+            max_rounds = 1
         processed_jpgs = []
         report_rows = []
         todo = pending_development(files, out_dir, tief)
@@ -6718,8 +7489,9 @@ class Worker(QtCore.QThread):
                         pass
             if not todo:
                 processed_jpgs = self._alle_entwickelt(files, out_dir)
-                residual, report_rows, _ = self._measure_and_correct(
-                    processed_jpgs, files, apply_correction=False)
+                if entflackern:
+                    residual, report_rows, _ = self._measure_and_correct(
+                        processed_jpgs, files, apply_correction=False)
                 break
             label = "Entwicklung" if rnd == 0 else f"Nachkalibrierung {rnd}"
             try:
@@ -6729,6 +7501,8 @@ class Worker(QtCore.QThread):
                 raise
             mark_developed(todo, out_dir, tief)
             processed_jpgs = self._alle_entwickelt(files, out_dir)
+            if not entflackern:
+                break
             residual, rows, changed = self._measure_and_correct(
                 processed_jpgs, files, apply_correction=(rnd < max_rounds - 1))
             report_rows = rows
@@ -6746,8 +7520,16 @@ class Worker(QtCore.QThread):
                 "> No significant adjustment needed any more."))
                     break
                 todo = changed
-        self._save_report("purelapse_pass2.csv", report_rows)
-        file_list_for_video = processed_jpgs
+        if report_rows:
+            self._save_report("purelapse_pass2.csv", report_rows)
+        if not entflackern:
+            # Kein Restflackern zu zeigen - die Werte eines frueheren Laufs
+            # mit Entflackern gelten fuer diese Bilder nicht mehr.
+            save_residuals(abs_target_dir, {})
+        # Mit Entflackern ist die ganze Serie entwickelt und vermessen - auch
+        # die Nacht, damit die Daemmerung stimmt; ins Video kommt sie nicht.
+        file_list_for_video = (self._ohne_nacht(processed_jpgs) if entflackern
+                               else processed_jpgs)
         stab_diffs = None
         if p['make_video'] and p['stabilize']:
             self.log.emit(self._t("\n> Führe Optische Stabilisierung durch...",
@@ -7507,6 +8289,8 @@ class MainWindow(QtWidgets.QWidget):
         self.lbl_bereich.setVisible(False)
         left_layout.addWidget(self.lbl_bereich)
         self._bereich = (None, None)
+        self._nacht_staemme = set()   # Dateistaemme, die als Nacht wegfallen
+        self._optionen_laden = False  # beim Einlesen nichts zurueckschreiben
         left_layout.addWidget(self.list_widget)
         self.splitter.addWidget(left_container)
         right_container = QtWidgets.QWidget()
@@ -7564,6 +8348,26 @@ class MainWindow(QtWidgets.QWidget):
         except Exception:
             self.plot_wb = None
             self.vb_wb = None
+        # Nacht entfernen: Szenenhelligkeit auf der rechten Achse, die
+        # Grenze als verschiebbare waagrechte Linie, die Nacht grau hinterlegt.
+        self.plot_szene = None
+        self.nacht_linie = None
+        self._nacht_baender = []
+        if getattr(self, 'vb_wb', None) is not None:
+            try:
+                self.plot_szene = pg.PlotCurveItem(pen=stift('#9a8cff', 2))
+                self.vb_wb.addItem(self.plot_szene)
+                self.nacht_linie = pg.InfiniteLine(
+                    pos=NACHT_STANDARD, angle=0, movable=True,
+                    pen=stift('#9a8cff', 2, QtCore.Qt.DashLine),
+                    label="Nacht", labelOpts={'position': 0.04, 'color': '#9a8cff',
+                                              'fill': (0, 0, 0, 0), 'movable': False})
+                self.nacht_linie.setVisible(False)
+                self.nacht_linie.sigPositionChangeFinished.connect(self._nacht_linie_gezogen)
+                self.vb_wb.addItem(self.nacht_linie)
+            except Exception:
+                self.plot_szene = None
+                self.nacht_linie = None
         self.kf_marker = []
         # Senkrechte Linie am in der Bildleiste gewaehlten Bild
         self.sel_marker = pg.InfiniteLine(pos=0, angle=90, pen=stift('#4a9eff', 2))
@@ -7699,6 +8503,13 @@ class MainWindow(QtWidgets.QWidget):
         # --------------------------------------------------------------
         # Schritt "Helligkeit glaetten": Deflicker
         # --------------------------------------------------------------
+        # Grundschalter: ohne Haken baut Purelapse den Zeitraffer, ohne die
+        # Helligkeit anzufassen - Bewegung, Telemetrie und Effekte bleiben.
+        self.chk_entflackern = QtWidgets.QCheckBox("Entflackern")
+        self.chk_entflackern.setChecked(True)
+        self.chk_entflackern.setObjectName("entflackern")
+        self.chk_entflackern.toggled.connect(self._on_entflackern_changed)
+        smooth_col.addWidget(self.chk_entflackern)
         self.box_deflicker = QtWidgets.QGroupBox("Helligkeit und Deflicker")
         gd = QtWidgets.QGridLayout(self.box_deflicker)
         gd.addWidget(QtWidgets.QLabel("Lichtverlauf:"), 0, 0)
@@ -7728,6 +8539,31 @@ class MainWindow(QtWidgets.QWidget):
         self.btn_roi.clicked.connect(self._select_roi)
         gd.addWidget(self.btn_roi, 3, 0, 1, 3)
         smooth_col.addWidget(self.box_deflicker)
+
+        # Nacht entfernen: zu dunkle Bilder kommen nicht ins Video
+        self.box_nacht = QtWidgets.QGroupBox("Nacht entfernen")
+        gn = QtWidgets.QGridLayout(self.box_nacht)
+        self.chk_nacht = QtWidgets.QCheckBox("Zu dunkle Bilder auslassen")
+        self.chk_nacht.toggled.connect(self._on_nacht_changed)
+        gn.addWidget(self.chk_nacht, 0, 0, 1, 3)
+        gn.addWidget(QtWidgets.QLabel("Dunkler als:"), 1, 0)
+        self.slider_nacht = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.slider_nacht.setRange(int(NACHT_BEREICH[0] * 10), int(NACHT_BEREICH[1] * 10))
+        self.slider_nacht.setSingleStep(5)
+        self.slider_nacht.setPageStep(10)
+        self.slider_nacht.setValue(int(NACHT_STANDARD * 10))
+        self.slider_nacht.valueChanged.connect(self._on_nacht_changed)
+        gn.addWidget(self.slider_nacht, 1, 1)
+        self.lbl_nacht_val = QtWidgets.QLabel()
+        self.lbl_nacht_val.setMinimumWidth(150)
+        gn.addWidget(self.lbl_nacht_val, 1, 2)
+        self.lbl_nacht_info = QtWidgets.QLabel()
+        self.lbl_nacht_info.setObjectName("hint")
+        self.lbl_nacht_info.setWordWrap(True)
+        gn.addWidget(self.lbl_nacht_info, 2, 0, 1, 3)
+        for w in (self.slider_nacht, self.lbl_nacht_val):
+            w.setEnabled(False)
+        smooth_col.addWidget(self.box_nacht)
         smooth_col.addStretch()
 
         # --------------------------------------------------------------
@@ -8269,7 +9105,10 @@ class MainWindow(QtWidgets.QWidget):
         if not files or not self.target_dir:
             return False
         if key == 'smooth':
-            return is_raw and os.path.exists(pl_datei(self.target_dir, DEFLICKER_DB))
+            # Erledigt nur, wenn Pass 1 so lief, wie es jetzt eingestellt ist:
+            # mit oder ohne Entflackern.
+            return (is_raw and os.path.exists(pl_datei(self.target_dir, DEFLICKER_DB))
+                    and modus_lesen(self.target_dir) == self._entflackern_an())
         if key == 'keys':
             return self._kf_count > 0
         return os.path.exists(pl_datei(self.target_dir, RESULT_DB))
@@ -8281,8 +9120,13 @@ class MainWindow(QtWidgets.QWidget):
         engine = eng('label')
         titel = {
             'load': self._t("Bilder laden", "Load images"),
-            'smooth': (self._t("Helligkeit glätten (Pass 1)", "Smooth brightness (pass 1)")
-                       if is_raw else self._t("Helligkeit glätten", "Smooth brightness")),
+            'smooth': ((self._t("Helligkeit glätten (Pass 1)", "Smooth brightness (pass 1)")
+                        if self._entflackern_an() else
+                        self._t("Profile vorbereiten (Pass 1)", "Prepare profiles (pass 1)"))
+                       if is_raw else
+                       (self._t("Helligkeit glätten", "Smooth brightness")
+                        if self._entflackern_an() else
+                        self._t("Helligkeit (Entflackern aus)", "Brightness (deflicker off)"))),
             'keys': self._t("Keyframes bearbeiten", "Edit keyframes"),
             'render': (self._t("Video rendern (Pass 2)", "Render video (pass 2)")
                        if is_raw else self._t("Video rendern", "Render video")),
@@ -8353,6 +9197,19 @@ class MainWindow(QtWidgets.QWidget):
                 "Lege Format, Effekte und Speicherort des Videos fest.",
                 "Set the format, effects and location of the video.")),
         }
+        if not self._entflackern_an():
+            hints['smooth'] = (self._t(
+                "Entflackern ist aus: Pass 1 misst nichts, sondern bereitet nur die "
+                f"{engine}-Profile vor. Die Helligkeit bleibt, wie die Kamera sie "
+                "aufgenommen hat; Keyframes, Bewegung, Telemetrie und Effekte wirken "
+                "wie gewohnt.",
+                "Deflickering is off: pass 1 measures nothing, it only prepares the "
+                f"{engine} profiles. The brightness stays as the camera recorded it; "
+                "keyframes, motion, telemetry and effects work as usual.") if is_raw else self._t(
+                "Entflackern ist aus: Die Bilder kommen mit ihrer Helligkeit ins Video. "
+                "Bewegung, Telemetrie und Effekte wirken wie gewohnt.",
+                "Deflickering is off: the frames go into the video with their own "
+                "brightness. Motion, telemetry and effects work as usual."))
         if eng('kind') == 'darktable':
             hints['keys'] += ("\n\n" + DT_KEYFRAME_HINWEIS['en' if self.lang == 'en' else 'de']
                               + "\n\n" + DT_STERNE_HINWEIS['en' if self.lang == 'en' else 'de'])
@@ -8498,6 +9355,10 @@ class MainWindow(QtWidgets.QWidget):
         elif self.step == 'load':
             text = self._t(f"{n} {'RAW' if is_raw else 'JPG'}-Bilder geladen.",
                            f"{n} {'RAW' if is_raw else 'JPG'} images loaded.")
+        elif is_raw and self.step == 'smooth' and not self._entflackern_an():
+            text = self._t(
+                f"Pass 1 ohne Entflackern: {n} {engine}-Profile vorbereiten, nichts messen. Kein Video.",
+                f"Pass 1 without deflickering: prepare {n} {engine} profiles, measure nothing. No video.")
         elif is_raw and self.step == 'smooth':
             text = self._t(
                 f"Pass 1: {n} Bilder messen, Korrektur in die {engine}-Begleitdateien schreiben. Kein Video.",
@@ -8505,6 +9366,9 @@ class MainWindow(QtWidgets.QWidget):
         elif self.step == 'keys':
             text = self._t(f"{self._kf_count} Keyframes markiert.",
                            f"{self._kf_count} keyframes marked.")
+        elif not is_raw and self.step == 'smooth' and not self._entflackern_an():
+            text = self._t(f"{n} Bilder, Entflackern aus. Weiter zu Format und Effekten.",
+                           f"{n} images, deflickering off. Continue to format and effects.")
         elif not is_raw and self.step == 'smooth':
             text = self._t(f"{n} Bilder. Glättung einstellen, dann weiter zu Format und Effekten.",
                            f"{n} images. Set the smoothing, then continue to format and effects.")
@@ -8512,12 +9376,13 @@ class MainWindow(QtWidgets.QWidget):
             text = self._t(f"{n} Bilder entflackern, kein Video.",
                            f"Deflicker {n} images, no video.")
         else:
+            n_video = len(self._videodateien(is_raw))
             try:
-                dauer = n / float(self.cmb_fps.currentText())
+                dauer = n_video / float(self.cmb_fps.currentText())
             except ValueError:
                 dauer = 0.0
             _, res_name = self.res_map[self.cmb_res.currentIndex()]
-            teile = [self._t(f"{n} Bilder", f"{n} images")
+            teile = [self._t(f"{n_video} Bilder", f"{n_video} images")
                      + f" → {res_name} @ {self.cmb_fps.currentText()} fps ({dauer:.0f} s)",
                      self.cmb_codec.currentText(), self.cmb_quality.currentText()]
             if is_raw:
@@ -8532,8 +9397,13 @@ class MainWindow(QtWidgets.QWidget):
                     zeile2.append(chk.text())
             if not is_raw and self.chk_denoise.isChecked():
                 zeile2.append(self.chk_denoise.text())
-            if self.roi_rel:
+            if self.roi_rel and self._entflackern_an():
                 zeile2.append(self._t("Messbereich aktiv", "Measuring area active"))
+            if not self._entflackern_an():
+                zeile2.append(self._t("ohne Entflackern", "without deflickering"))
+            if n_video < n:
+                zeile2.append(self._t(f"Nacht entfernt ({n - n_video} Bilder)",
+                                      f"night removed ({n - n_video} frames)"))
             zeile2.append(self._t("Ziel: ", "To: ") + (self._current_target_label()))
             text = "  ·  ".join(teile) + "\n" + "  ·  ".join(zeile2)
         self.lbl_summary.setText(text)
@@ -8901,6 +9771,8 @@ class MainWindow(QtWidgets.QWidget):
             'btn_start_hier': 'TT_STARTBILD', 'btn_ende_hier': 'TT_ENDBILD',
             'txt_arp_template': 'TT_ARPTPL', 'chk_diag': 'TT_DIAG',
             'chk_tiff16': 'TT_TIFF16', 'btn_schnell': 'TT_SCHNELL',
+            'chk_entflackern': 'TT_ENTFLACKERN', 'chk_nacht': 'TT_NACHT',
+            'slider_nacht': 'TT_NACHT',
         }
         table = TRANSLATIONS_TT_EN if self.lang == 'en' else TRANSLATIONS
         for attr, key in mapping.items():
@@ -9024,6 +9896,8 @@ class MainWindow(QtWidgets.QWidget):
         save_last_path(self.target_dir)
         b_alt = lade_bereiche().get(self.target_dir) or ["", ""]
         self._bereich = (b_alt[0] or None, (b_alt[1] if len(b_alt) > 1 else "") or None)
+        self._nacht_staemme = set()
+        self._optionen_anwenden()
         # Der Ablauf des letzten Laufs gehoert zum alten Ordner.
         if not self._is_busy():
             self._ablauf = None
@@ -9452,6 +10326,162 @@ class MainWindow(QtWidgets.QWidget):
         start, ende = getattr(self, '_bereich', (None, None))
         return bereich_anwenden(files, start, ende)[0]
 
+    def _videodateien(self, is_raw=None):
+        """Was ins Video kommt: der Arbeitsbereich ohne die Nacht."""
+        return ohne_nacht(self._arbeitsdateien(is_raw), self._nacht_auslassen())
+
+    def _nacht_auslassen(self):
+        """Dateistaemme, die als Nacht aus dem Video fallen (leer, wenn aus)."""
+        if not getattr(self, 'chk_nacht', None) or not self.chk_nacht.isChecked():
+            return set()
+        return set(self._nacht_staemme)
+
+    def _entflackern_an(self):
+        return not hasattr(self, 'chk_entflackern') or self.chk_entflackern.isChecked()
+
+    def _optionen_merken(self):
+        if self._optionen_laden or not self.target_dir:
+            return
+        ordner_optionen_setzen(
+            self.target_dir, self._entflackern_an(),
+            self.slider_nacht.value() / 10.0 if self.chk_nacht.isChecked() else None)
+
+    def _optionen_anwenden(self):
+        """Die gemerkten Einstellungen des Ordners in die Oberflaeche."""
+        o = ordner_optionen(self.target_dir)
+        self._optionen_laden = True
+        try:
+            self.chk_entflackern.setChecked(o['entflackern'])
+            self.chk_nacht.setChecked(o['nacht'] is not None)
+            self.slider_nacht.setValue(int(round(
+                (o['nacht'] if o['nacht'] is not None else NACHT_STANDARD) * 10)))
+            self._on_entflackern_changed()
+            self._on_nacht_changed()
+        finally:
+            self._optionen_laden = False
+
+    def _on_entflackern_changed(self, *_):
+        """Grundschalter: ohne Entflackern bleibt die Helligkeit, wie sie ist."""
+        an = self._entflackern_an()
+        for w in (self.box_deflicker, self.cmb_calib):
+            w.setEnabled(an)
+        if getattr(self, 'plot_smooth', None) is not None:
+            self.plot_smooth.setVisible(an)
+        self._optionen_merken()
+        if hasattr(self, 'btn_start'):
+            self._update_steps()
+            self._update_summary()
+
+    def _on_nacht_changed(self, *_):
+        an = self.chk_nacht.isChecked()
+        for w in (self.slider_nacht, self.lbl_nacht_val):
+            w.setEnabled(an)
+        grenze = self.slider_nacht.value() / 10.0
+        self.lbl_nacht_val.setText(self._t(
+            f"{abs(grenze):.1f} EV unter Tageslicht".replace(".", ","),
+            f"{abs(grenze):.1f} EV below daylight"))
+        self._optionen_merken()
+        self._nacht_aktualisieren()
+
+    def _nacht_linie_gezogen(self, *_):
+        """Die Grenzlinie im Diagramm wurde verschoben."""
+        if self.nacht_linie is None:
+            return
+        try:
+            wert = float(self.nacht_linie.value())
+        except (TypeError, ValueError):
+            return
+        lo, hi = NACHT_BEREICH
+        self.slider_nacht.setValue(int(round(max(lo, min(hi, wert)) * 10)))
+
+    def _nacht_aktualisieren(self):
+        """
+        Rechnet aus, welche Bilder als Nacht wegfallen, und zeigt es:
+        Szenenkurve und Grenze im Diagramm, Nachtstrecken grau, die Kacheln
+        abgeblendet, dazu Anzahl und Videolaenge.
+        """
+        if not hasattr(self, 'chk_nacht'):
+            return
+        an = self.chk_nacht.isChecked()
+        grenze = self.slider_nacht.value() / 10.0
+        n = min(len(self.tiles), len(self.luma_history))
+        szene = None
+        maske = np.zeros(n, dtype=bool)
+        if an and n >= 3:
+            szene = szenen_helligkeit(self.luma_history[:n], self.curves.get('ev'))
+            maske = nacht_maske(szene, grenze)
+        self._nacht_staemme = {datei_stamm(self.tiles[i]['name'])
+                               for i in np.flatnonzero(maske)}
+        # Diagramm
+        if self.plot_szene is not None:
+            if szene is not None:
+                self.plot_szene.setData(np.asarray(self.frames_x[:n], dtype=np.float64), szene)
+            else:
+                self.plot_szene.setData([], [])
+        if self.nacht_linie is not None:
+            self.nacht_linie.setVisible(an)
+            self.nacht_linie.setPos(grenze)
+            try:
+                self.nacht_linie.label.setFormat(self._t("Nacht", "Night"))
+            except Exception:
+                pass
+        for band in self._nacht_baender:
+            try:
+                self.graph.removeItem(band)
+            except Exception:
+                pass
+        self._nacht_baender = []
+        for a, b in nacht_strecken(maske):
+            try:
+                band = pg.LinearRegionItem(values=(a - 0.5, b + 0.5), movable=False)
+                band.setBrush(pg.mkBrush(120, 120, 120, 70))
+                band.setZValue(-15)
+                self.graph.addItem(band, ignoreBounds=True)
+                self._nacht_baender.append(band)
+            except Exception:
+                pass
+        # Zahlen
+        if not an:
+            self.lbl_nacht_info.setText(self._t(
+                "Fuer 24-Stunden-Zeitraffer: die Nacht faellt aus dem Video, "
+                "der Tag bleibt. Gemessen wird die Helligkeit der Szene - auch "
+                "wenn die Kamera nachts laenger belichtet hat.",
+                "For 24-hour timelapses: the night drops out of the video, the "
+                "day stays. Measured is the brightness of the scene - even if "
+                "the camera exposed longer at night."))
+        elif n < 3:
+            self.lbl_nacht_info.setText(self._t("Noch keine Bilder geladen.",
+                                                "No images loaded yet."))
+        else:
+            alle = self._arbeitsdateien()
+            rest = ohne_nacht(alle, self._nacht_staemme)
+            weg = len(alle) - len(rest)
+            try:
+                fps = float(self.cmb_fps.currentText())
+            except (ValueError, AttributeError):
+                fps = 25.0
+            strecken = len(nacht_strecken(maske))
+            if weg:
+                self.lbl_nacht_info.setText(self._t(
+                    f"{weg} von {len(alle)} Bildern fallen weg ({strecken} "
+                    f"Nachtstrecke{'n' if strecken != 1 else ''}). Video "
+                    f"{videolaenge_text(len(rest) / fps)} statt "
+                    f"{videolaenge_text(len(alle) / fps)}. Die Grenze laesst "
+                    "sich auch im Diagramm verschieben.",
+                    f"{weg} of {len(alle)} frames drop out ({strecken} night "
+                    f"stretch{'es' if strecken != 1 else ''}). Video "
+                    f"{videolaenge_text(len(rest) / fps, 'en')} instead of "
+                    f"{videolaenge_text(len(alle) / fps, 'en')}. The threshold "
+                    "can also be dragged in the chart."))
+            else:
+                self.lbl_nacht_info.setText(self._t(
+                    "Kein Bild liegt unter der Grenze - es faellt nichts weg.",
+                    "No frame lies below the threshold - nothing drops out."))
+        self._bereich_zeigen()
+        self._update_filesize_estimate()
+        if hasattr(self, 'btn_start'):
+            self._update_summary()
+
     def _setze_bereich(self, welches):
         """Macht das gewaehlte Bild zum Start- oder Endbild."""
         zeile = self.list_widget.currentRow()
@@ -9491,8 +10521,9 @@ class MainWindow(QtWidgets.QWidget):
         b = namen.index(ende) if ende in namen else len(namen) - 1
         if a > b:
             a, b = 0, len(namen) - 1
+        nacht = self._nacht_auslassen()
         for i, t in enumerate(self.tiles):
-            draussen = i < a or i > b
+            draussen = i < a or i > b or datei_stamm(t['name']) in nacht
             if draussen == bool(t.get('draussen', False)):
                 continue
             t['draussen'] = draussen
@@ -10066,6 +11097,7 @@ class MainWindow(QtWidgets.QWidget):
         smoothed = smoothed * (2 ** ev_val)
         self.plot_smooth.setData(self.frames_x, smoothed)
         self._draw_extra_curves()
+        self._nacht_aktualisieren()
 
     def _kf_linie(self, index):
         """
@@ -10316,8 +11348,8 @@ class MainWindow(QtWidgets.QWidget):
         return True
 
     def _update_filesize_estimate(self):
-        # Gezaehlt wird, was ins Video kommt: Startbild bis Endbild.
-        num_frames = len(self._arbeitsdateien())
+        # Gezaehlt wird, was ins Video kommt: Startbild bis Endbild, ohne Nacht.
+        num_frames = len(self._videodateien())
         if num_frames == 0 or not self.chk_video.isChecked():
             self.lbl_size_est.setText(self._t("Geschätzte Dateigröße: -- MB",
                                               "Estimated file size: -- MB"))
@@ -10404,7 +11436,12 @@ class MainWindow(QtWidgets.QWidget):
             'tiff16': self.chk_tiff16.isChecked(),
             'out_dir_mode': self.cmb_export_dir.currentIndex(),
             'custom_out_dir': self.custom_out_dir,
-            'versioning': self.cmb_versioning.currentIndex() == 0
+            'versioning': self.cmb_versioning.currentIndex() == 0,
+            'entflackern': self._entflackern_an(),
+            # Nur Staemme aus dem Arbeitsbereich - die Liste reist mit dem
+            # Auftrag in die Warteschlange.
+            'nacht_auslassen': sorted(self._nacht_auslassen()
+                                      & {datei_stamm(f) for f in files}),
         }
         if is_raw:
             p['raw_mode'] = 'pass1' if self.cmb_rawmode.currentIndex() == 0 else 'pass2'
@@ -10528,6 +11565,8 @@ class MainWindow(QtWidgets.QWidget):
             'versioning': self.cmb_versioning.currentIndex() == 0,
             'name_suffix': '_Original',
             'cam_keyframes': None, 'diag': False,
+            'nacht_auslassen': sorted(self._nacht_auslassen()
+                                      & {datei_stamm(f) for f in files}),
         }
         self.lbl_summary.setText(
             f"Rohfassung: {len(files)} Bilder | {res_name} @ {p['fps']} fps\n"
