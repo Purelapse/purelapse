@@ -402,4 +402,7 @@ Purelapse calls ART, RawTherapee, Darktable and FFmpeg as separate programs;
 their own licenses apply to them. The AppImage contains an FFmpeg build from
 the `imageio-ffmpeg` package.
 
+Lightroom is a trademark of Adobe Inc. in the United States and/or other
+countries. Purelapse is an independent project and is not affiliated with Adobe.
+
 Copyright (C) 2026 slvobng

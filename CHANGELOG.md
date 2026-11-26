@@ -3,6 +3,11 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+### Webseite
+- Markenhinweis zu Lightroom in der Fußzeile der Webseite und in den READMEs.
+
 ## [2.46.0-beta] – 2026-11-26
 
 Purelapse läuft jetzt auch unter **Windows** – als einzelne `.exe`, ohne Installation. Dazu kommt **Lightroom Classic** als vierte Engine (über die XMP-Dateien), und unter Linux werden Engines aus **Flatpak** erkannt. darktable 5.x wird vollständig unterstützt.
