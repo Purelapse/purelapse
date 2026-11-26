@@ -176,9 +176,11 @@ print("=== A6 Schreibfehler ===")
 pe.set_engine('art')
 nur = os.path.join(o, "nurlesen"); os.makedirs(nur, exist_ok=True)
 ziel = os.path.join(nur, "x.arp"); open(ziel, "w").write("[Version]\n")
-os.chmod(nur, 0o500); os.chmod(ziel, 0o400)
+if not WINDOWS:
+    os.chmod(nur, 0o500); os.chmod(ziel, 0o400)
 try:
-    if os.geteuid() == 0:
+    if WINDOWS or os.geteuid() == 0:
+        # Windows kennt keinen Schreibschutz fuer Ordner, und
         # als root greift der Schreibschutz nicht - Pfad in nicht vorhandenen Ordner
         ziel = os.path.join(o, "gibtsnicht", "x.arp")
     try:
@@ -215,7 +217,7 @@ try:
 finally:
     if lock: os.remove(lock)
 ''')
-os.chmod(fake, 0o755)
+fake = ausfuehrbar(fake)
 src_dt = os.path.join(ARBEIT, "heim", ".config", "darktable"); os.makedirs(src_dt, exist_ok=True)
 open(os.path.join(src_dt, "darktablerc"), "w").write("opencl=TRUE\n")
 open(os.path.join(src_dt, "data.db"), "wb").write(b"SQLite")
@@ -264,8 +266,8 @@ try:
 except RuntimeError as e:
     pruef("abgebrochen" in str(e).lower() or "cancel" in str(e).lower(), str(e))
 pruef(time.time() - t0 < 5, f"Abbruch dauerte {time.time() - t0:.1f} s")
-ps = subprocess.run(["pgrep", "-f", "H_._HAENGT"], capture_output=True, text=True).stdout.strip()
-pruef(ps == "", f"Prozesse laufen weiter: {ps}")
+ps = prozesse_mit("H_._HAENGT")
+pruef(not ps, f"Prozesse laufen weiter: {ps}")
 pruef(not [x for s in slots for x in os.listdir(s) if x.endswith(".lock")], "Sperrdateien bleiben liegen")
 print(f"\n{OK} Pruefungen bestanden, {FEHL} fehlgeschlagen")
 sys.exit(1 if FEHL else 0)

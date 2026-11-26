@@ -3,6 +3,53 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+Lightroom Classic als vierte Engine, Vorbereitung für Windows, Engines als Flatpak und darktable 5.
+
+### Neu
+- **Lightroom Classic (XMP) als Engine.** Lightroom hat keine Kommandozeile; Purelapse arbeitet deshalb mit den XMP-Begleitdateien (`BILD.xmp`, so wie Lightroom sie nennt):
+  1. In Lightroom alle Bilder der Serie auswählen → *Metadaten in Datei speichern* (Strg+S). Keyframes mit 5 Sternen markieren – in Lightroom oder in Purelapses Bildleiste.
+  2. **Pass 1** misst die Helligkeit aus den RAWs und schreibt den Ausgleich in `crs:Exposure2012`.
+  3. **Pass 2, erster Start:** überblendet die Keyframes in die Bilder dazwischen – alle Zahlenregler (Belichtung, Kontrast, Lichter, Tiefen, Weiß, Schwarz, Temperatur, Tönung, Dynamik, Klarheit, Dunst …) und Gradationskurven mit gleich vielen Punkten. Unterscheiden sich die Temperaturen, wird der Weißabgleich auf „Benutzerdefiniert“ gestellt. Masken, Profile und andere Auswahlwerte kommen vom näheren Keyframe (und stehen im Protokoll). Danach sagt Purelapse, was in Lightroom zu tun ist: *Metadaten aus Dateien lesen*, dann als JPG oder TIFF 16 Bit nach `Purelapse/Lightroom_Export` exportieren.
+  4. **Pass 2, zweiter Start:** findet den vollständigen Export, misst das Restflackern der exportierten Bilder und gleicht es beim Videobau als Helligkeitsfaktor aus (höchstens 0,5 EV je Bild) – dann das Video mit allen Optionen. Ohne Video landen die abgeglichenen Bilder in `Purelapse/Deflickered_JPG`.
+  - Ist der Export älter als eine XMP (Keyframe danach geändert), beginnt Pass 2 wieder mit Schritt 1. Fehlen einzelne Bilder im Export, nennt Purelapse sie, ohne etwas umzuschreiben.
+  - Geschrieben werden nur die Entwicklungseinstellungen; Bewertung, Stichwörter und alles andere in der XMP bleiben, wie sie sind. Purelapse schreibt nur in XMP-Dateien, die Lightroom mit Einstellungen angelegt hat – eine selbst erzeugte würde beim Einlesen alles aus dem Katalog (Zuschnitt, Profil, Objektivkorrektur) auf Grundwerte setzen.
+  - DNG wird abgelehnt: Lightroom speichert deren Einstellungen in der DNG-Datei selbst.
+  - Warnung, wenn ein Keyframe auf automatischem Weißabgleich steht (würde je Bild neu berechnet und flackern).
+  - Schnelleinstellungen für Lightroom-Keyframes: Farbtemperatur, Kontrast, Lichter, Tiefen, Dynamik, Sättigung, Schärfe, Rauschreduzierung. Vorschau: aus dem Export, solange der noch fehlt aus den eingebetteten Vorschaubildern.
+  - Erkennung: Liegen Lightroom-XMP im Ordner, stellt Purelapse beim Einlesen auf Lightroom um. darktable-, Lightroom- und Purelapses eigene Sterne-XMP werden jetzt am Inhalt unterschieden.
+- **Engines als Flatpak:** RawTherapee (`com.rawtherapee.RawTherapee`), ART (`us.pixls.art.ART`) und darktable (`org.darktable.Darktable`) aus Flathub werden erkannt – systemweit (`/var/lib/flatpak`) und für den Nutzer (`~/.local/share/flatpak`). Gespeichert wird der Ersatzpfad `flatpak:<App-ID>`; Purelapse startet damit `flatpak run --command=rawtherapee-cli` (bzw. `ART-cli`, `darktable-cli`). Weil die Engine in ihrer Sandbox läuft, gibt jeder Aufruf mit `--filesystem` genau die Ordner frei, die er braucht – Bilder, Ausgabe, Arbeits- und Konfigurationsordner, auch unter `/tmp` (das ART-Flatpak sieht `/tmp` sonst gar nicht). Die Zahl der Rechenkerne geht über `--env` mit. Systemordner (`/usr`, `/etc` …) werden nie freigegeben.
+  - Einstellungen: Ist die Engine als Flatpak installiert, fragt „…“ beim Programmpfad zuerst, ob das Flatpak verwendet werden soll. Fehlt ein eingetragenes Programm (z. B. nach dem Umstieg auf Flatpak), sucht Purelapse neu.
+  - Die Engine-Anzeige oben nennt „(Flatpak)“.
+- **darktable 5 (getestet gegen den Quelltext von 5.6.2):** Neuere Modulversionen werden gelesen, geschrieben und überblendet – Belichtung 7 (neu: Lichterschutz `compensate_hilite_pres`), Weißabgleich 4 (neu: `preset`), Entrauschen (Profil) 12, Dunstentfernung 3.
+
+- **Windows-Paket:** Ein neuer Ablauf bei GitHub (*Actions → Windows-Paket*) baut Purelapse auf einem Windows-Rechner von GitHub als einzelne `.exe` und startet sie zur Probe einmal. Bei einem Release wird sie automatisch angehängt. Noch nicht auf einem echten Windows-Rechner mit den Engines erprobt.
+- **Prüfungen auch unter Windows:** Bei jedem Push laufen alle Prüfungen zusätzlich auf Windows. Solange die Unterstützung im Aufbau ist, macht ein Fehlschlag dort den Push nicht rot.
+
+### Geändert
+- **Engines finden:** Unter Windows sucht Purelapse `ART-cli.exe`, `rawtherapee-cli.exe` und `darktable-cli.exe` nicht nur im Suchpfad, sondern auch in den üblichen Installationsordnern (`Program Files`, `%LOCALAPPDATA%\Programs`) – bei RawTherapee die neueste Version zuerst (5.10 vor 5.9).
+- **Lange Befehlszeilen:** Windows erlaubt höchstens 32 767 Zeichen je Aufruf. Bei 900 Bildern mit langen Pfaden käme ART/RawTherapee darüber und startete gar nicht. Purelapse teilt die Bildliste dort auf mehrere Durchgänge nacheinander; unter Linux bleibt es bei einem Aufruf.
+- **Kein Konsolenfenster:** Engines und FFmpeg starten unter Windows ohne eigenes Fenster – sonst blitzte bei jedem Aufruf eines auf.
+- **VAAPI** ist unter Windows in der Codec-Liste gesperrt; die Liste bleibt vollständig, damit gespeicherte Einstellungen ihren Codec behalten.
+- `Purelapse --version` nennt die Version und beendet sich – für die Startprobe beim Bauen.
+
+### Behoben
+- **Absturz beim Beenden (Speicherzugriffsfehler):** Wurde das Fenster geschlossen, während die Bildleiste noch Vorschaubilder las, wartete Purelapse nur eine Sekunde. Der Lader hatte aber alle Bilder schon eingereiht und las weiter, während Python schon aufräumte. Jetzt werden die noch nicht begonnenen Bilder gestrichen, und Purelapse wartet, bis die laufenden fertig sind.
+- **darktable 5: Entflackern wirkungslos bzw. Einstellungen verloren.** Purelapse kannte nur die Belichtung in Version 6. In einem XMP aus darktable 5 (Version 7) konnte es den Wert nicht lesen und schrieb das Modul mit Grundwerten neu – Schwarzwert, Belichtungsausgleich und Lichterschutz des Nutzers gingen verloren, und die Belichtung der Keyframes floss nicht in die Bilder dazwischen. Jetzt bleibt das Modul in seiner Version, nur der Belichtungswert ändert sich. Neu angelegte Einträge bleiben Version 6; darktable 5 stuft sie beim Laden selbst hoch.
+- **darktable 5: Weißabgleich sprang zwischen Keyframes.** Version 4 des Weißabgleichs war unbekannt; er schaltete deshalb in der Mitte hart um, statt weich überzublenden.
+- **Keyframes aus darktable 4 und 5 gemischt:** Haben zwei Keyframes dasselbe Modul in verschiedenen Versionen, stuft Purelapse die ältere so hoch, wie darktable es beim Laden täte, und blendet weich über (vorher harter Wechsel „Modulversion“).
+- **Jedes Bild doppelt auf Windows (und macOS):** Purelapse suchte `*.nef` und `*.NEF` getrennt. Unter Linux sind das verschiedene Dateien; Systeme, die Groß- und Kleinschreibung nicht unterscheiden, hätten für beide Muster dieselben Dateien geliefert. Die Suche führt jetzt jede Datei nur einmal.
+
+### Intern
+- Neue Prüfreihe `test_lightroom.py`: Begleitdatei und Erkennung, Lesen/Schreiben (Bewertung, Stichwörter, Kürzel bleiben), Überblenden von Zahlen, Weißabgleich, Kurven und Masken, Prüfsummen bleiben ungemischt, Schnelleinstellungen, und ein ganzer Ablauf: Pass 1 → Pass 2 Schritt 1 → nachgebauter Export mit Restflackern → Pass 2 Schritt 2 mit Video (Feinabgleich halbiert das Flackern mindestens), veralteter Export, fehlendes Bild, fehlende XMP.
+- Pass 2: der Videobau ist als `_pass2_video()` herausgelöst und wird von RAW-Pass 2 und Lightroom gemeinsam genutzt.
+- Neue Prüfreihe `test_dt5.py`: Belichtung 6/7 lesen und schreiben (Version und Nutzerfelder bleiben), Layouts der neuen Versionen, Weißabgleich 4 und gemischt 3+4 weich, Belichtung 6+7, Hochstufen der Dunstentfernung.
+- Neue Prüfreihe `test_flatpak.py`: Erkennen in nachgebauten Flatpak-Ordnern, Aufruf mit `--command`, Ordnerfreigaben (ohne Doppelte, ohne Systemordner), Umgebungsvariablen.
+- Modul-Layouts für darktable liegen jetzt je Version vor (`DT_LAYOUT_VERSIONEN`); Hochstufen nach `legacy_params()` von darktable (`DT_HOCHSTUFEN`).
+- Neue Prüfreihe `test_windows.py` (läuft auf jedem System): Dateilisten ohne Doppelte, Engines in nachgebauten Installationsordnern, Teilen langer Befehlszeilen (keine Zeile zu lang, kein Bild verloren oder doppelt), Encoder je System, jeder Programmaufruf ohne Konsolenfenster.
+- Prüfstand: Die nachgebauten Engines werden unter Windows über eine `.cmd`-Datei aufgerufen; Prüfungen, die `pgrep` oder Schreibschutz für Ordner brauchen, entfallen dort.
+
 ## [2.45.0-beta] – 2026-11-25
 
 „Automatisch optimieren“ liefert jetzt ein gefälliges, fertiges Bild – mit wenigen Reglern, in allen drei Engines gleich. Dazu: Entflackern lässt sich abschalten, und bei 24-Stunden-Zeitraffern fällt die Nacht auf Wunsch aus dem Video.

@@ -35,6 +35,11 @@ import json
 import threading
 import re
 import math
+
+# Windows: Konsolenprogramme (Engines, FFmpeg) ohne eigenes Fenster starten.
+# Ohne das blitzte bei jedem Aufruf ein schwarzes Konsolenfenster auf.
+OHNE_FENSTER = ({'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
+                if os.name == 'nt' else {})
 import xml.etree.ElementTree as ET
 
 # ==========================================================================
@@ -73,6 +78,19 @@ ENGINES = {
         'kind': 'darktable',
         'wb_custom': "",
     },
+    # Lightroom Classic: kein Programm, das Purelapse aufrufen koennte.
+    # Purelapse schreibt die XMP-Begleitdateien (BILD.xmp, ohne die Endung
+    # des RAW), Lightroom liest sie ein und exportiert die Serie; aus dem
+    # Export baut Purelapse das Video. Siehe TEIL C.
+    'lr': {
+        'label': "Lightroom",
+        'ext': ".xmp",
+        'bin': "",
+        'base': '',
+        'extra': [],
+        'kind': 'lightroom',
+        'wb_custom': "Custom",
+    },
 }
 ENGINE = 'art'
 
@@ -88,8 +106,30 @@ def eng(feld):
 
 
 def sidecar(image_path):
-    """Pfad der Begleitdatei zu einem Bild - .arp, .pp3 oder .xmp."""
+    """Pfad der Begleitdatei zu einem Bild - .arp, .pp3 oder .xmp.
+    Lightroom nennt sie nach dem Bild OHNE dessen Endung (IMG_0001.xmp),
+    alle anderen haengen ihre Endung an (IMG_0001.NEF.xmp)."""
+    if ENGINE == 'lr':
+        return os.path.splitext(image_path)[0] + eng('ext')
     return image_path + eng('ext')
+
+
+def xmp_herkunft(xmp_pfad):
+    """
+    Wer hat diese .xmp geschrieben? 'dt' (darktable), 'lr' (Lightroom bzw.
+    die Raw-Entwicklung, die dieselben Einstellungen liest) oder
+    'bewertung' (nur eine Sternebewertung, etwa von Purelapse selbst).
+    """
+    try:
+        with open(xmp_pfad, 'r', encoding='utf-8', errors='ignore') as f:
+            inhalt = f.read(262144)
+    except OSError:
+        return 'bewertung'
+    if 'darktable:' in inhalt or 'darktable.org' in inhalt:
+        return 'dt'
+    if 'ns.adobe.com/camera-raw-settings/1.0/' in inhalt:
+        return 'lr'
+    return 'bewertung'
 
 
 def ist_reine_bewertung(xmp_pfad):
@@ -104,14 +144,9 @@ def ist_reine_bewertung(xmp_pfad):
     Eine echte Darktable-Sidecar bringt den darktable-Namensraum und
     eine Liste bearbeiteter Module mit.
     """
-    try:
-        if os.path.getsize(xmp_pfad) > 8192:
-            return False
-        with open(xmp_pfad, 'r', encoding='utf-8', errors='ignore') as f:
-            inhalt = f.read()
-    except OSError:
+    if not os.path.exists(xmp_pfad):
         return False
-    return 'darktable:' not in inhalt and 'darktable.org' not in inhalt
+    return xmp_herkunft(xmp_pfad) == 'bewertung'
 
 
 def engine_key():
@@ -131,10 +166,10 @@ def detect_engine(target_dir):
         muster = cfg['ext']
         treffer = (glob.glob(os.path.join(target_dir, "*" + muster))
                    + glob.glob(os.path.join(target_dir, "*" + muster.upper())))
-        if key == 'dt':
-            # Nur echte Darktable-Sidecars zaehlen, nicht die
-            # Bewertungsdateien, die Purelapse selbst anlegt.
-            treffer = [p for p in treffer if not ist_reine_bewertung(p)]
+        if cfg['ext'] == '.xmp':
+            # .xmp schreiben darktable und Lightroom - und Purelapse selbst
+            # fuer Keyframe-Sterne. Es zaehlt, wer die Datei geschrieben hat.
+            treffer = [p for p in treffer if xmp_herkunft(p) == key]
         if treffer:
             gefunden.append(key)
     return gefunden[0] if len(gefunden) == 1 else None
@@ -316,11 +351,161 @@ def konfig_setzen(*schluessel_und_wert):
         return ok
 
 
+# Wo die Installer der Engines unter Windows ablegen - relativ zu
+# "C:\Program Files" und Co. Die Versionsordner (RawTherapee\5.10) werden
+# per Muster gefunden, die neueste zuerst.
+WINDOWS_ORTE = {
+    'art': ("ART\\ART-cli.exe", "ART*\\ART-cli.exe"),
+    'rt': ("RawTherapee\\*\\rawtherapee-cli.exe", "RawTherapee\\rawtherapee-cli.exe"),
+    'dt': ("darktable\\bin\\darktable-cli.exe",),
+}
+
+
+def _versions_schluessel(pfad):
+    """Sortiert 5.10 nach 5.9 - Zahlen als Zahlen, nicht als Text."""
+    return [int(t) if t.isdigit() else t.lower()
+            for t in re.split(r'(\d+)', pfad)]
+
+
+def engine_suchen(key=None, umgebung=None, nt=None, suchpfad=True):
+    """
+    Das Kommandozeilenprogramm einer Engine: erst im Suchpfad, unter
+    Windows dann in den ueblichen Installationsordnern.
+    suchpfad=False laesst den Suchpfad aus (fuer die Pruefungen: ein
+    installiertes RawTherapee soll sie nicht beeinflussen).
+    Rueckgabe: Pfad oder "".
+    """
+    key = key or engine_key()
+    bin_name = ENGINES[key]['bin']
+    gefunden = shutil.which(bin_name) if suchpfad else None
+    if gefunden:
+        return gefunden
+    if not (os.name == 'nt' if nt is None else nt):
+        return ""
+    env = os.environ if umgebung is None else umgebung
+    wurzeln = []
+    for name in ('ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)'):
+        w = env.get(name)
+        if w and w not in wurzeln:
+            wurzeln.append(w)
+    if env.get('LOCALAPPDATA'):
+        wurzeln.append(os.path.join(env['LOCALAPPDATA'], "Programs"))
+    for w in wurzeln:
+        for muster in WINDOWS_ORTE.get(key, ()):
+            treffer = sorted(glob.glob(os.path.join(w, *muster.split('\\'))),
+                             key=_versions_schluessel, reverse=True)
+            for t in treffer:
+                if os.path.isfile(t):
+                    return t
+    return ""
+
+
+# ==========================================================================
+#  Engines als Flatpak (Flathub)
+#
+#  Ein Flatpak legt kein Programm in den Suchpfad; die Kommandozeilen-
+#  fassung steckt im Paket und wird mit "flatpak run --command=..."
+#  gestartet. Purelapse merkt sich dafuer den Ersatzpfad "flatpak:<App-ID>".
+#  Die Engine laeuft dabei in ihrer Sandbox: jeder Ordner, den sie lesen
+#  oder beschreiben soll, wird beim Aufruf mit --filesystem freigegeben -
+#  auch Arbeitsordner unter /tmp, das in der Sandbox sonst ein eigenes ist.
+# ==========================================================================
+FLATPAK = 'flatpak:'
+FLATPAK_IDS = {
+    'art': "us.pixls.art.ART",
+    'rt': "com.rawtherapee.RawTherapee",
+    'dt': "org.darktable.Darktable",
+}
+# Ordner, die Flatpak nicht freigibt (und die eine Engine nie braucht)
+_FLATPAK_TABU = ('/usr', '/proc', '/dev', '/sys', '/etc', '/app', '/lib', '/bin')
+
+
+def flatpak_orte(home=None):
+    """Die Installationsorte von Flatpak: systemweit und fuer den Nutzer."""
+    home = home or os.path.expanduser("~")
+    return ["/var/lib/flatpak", os.path.join(home, ".local", "share", "flatpak")]
+
+
+def flatpak_installiert(app_id, orte=None):
+    for wurzel in (orte if orte is not None else flatpak_orte()):
+        if os.path.isdir(os.path.join(wurzel, "app", app_id, "current")):
+            return True
+    return False
+
+
+def ist_flatpak(pfad):
+    return bool(pfad) and str(pfad).startswith(FLATPAK)
+
+
+def flatpak_suchen(key=None, orte=None):
+    """Ersatzpfad "flatpak:<ID>", wenn die Engine als Flatpak da ist, sonst ""."""
+    key = key or engine_key()
+    app_id = FLATPAK_IDS.get(key)
+    if not app_id or os.name == 'nt':
+        return ""
+    if shutil.which("flatpak") is None and orte is None:
+        return ""
+    return FLATPAK + app_id if flatpak_installiert(app_id, orte) else ""
+
+
+def engine_vorhanden(pfad, orte=None):
+    """Gibt es das eingetragene Engine-Programm (Datei oder Flatpak)?"""
+    if not pfad:
+        return False
+    if ist_flatpak(pfad):
+        return flatpak_installiert(pfad[len(FLATPAK):], orte)
+    return os.path.isfile(pfad)
+
+
+def _flatpak_freigaben(args):
+    ordner = []
+    for a in args:
+        a = str(a)
+        if not os.path.isabs(a):
+            continue
+        if os.path.isdir(a):
+            d = a
+        elif os.path.exists(a) or os.path.splitext(a)[1]:
+            d = os.path.dirname(a)       # Datei (auch eine, die erst entsteht)
+        else:
+            d = a                         # Ordner, der noch angelegt wird
+        d = os.path.normpath(d)
+        if d in ('/', '') or any(d == t or d.startswith(t + '/') for t in _FLATPAK_TABU):
+            continue
+        if d not in ordner:
+            ordner.append(d)
+    # Unterordner eines schon freigegebenen Ordners brauchen keine eigene Freigabe
+    return [d for d in ordner
+            if not any(d != o and d.startswith(o.rstrip('/') + '/') for o in ordner)]
+
+
+def engine_befehl(cmd, env=None, key=None):
+    """
+    Der wirkliche Aufruf. Steht vorne ein Ersatzpfad "flatpak:<ID>", wird
+    daraus "flatpak run" mit dem Kommandozeilenprogramm der Engine, den
+    noetigen Ordnerfreigaben und den Umgebungsvariablen, die Purelapse
+    setzt (die Sandbox reicht sie sonst nicht sicher durch).
+    """
+    cmd = list(cmd)
+    if not cmd or not ist_flatpak(cmd[0]):
+        return cmd
+    app_id = cmd[0][len(FLATPAK):]
+    key = key or next((k for k, v in FLATPAK_IDS.items() if v == app_id), engine_key())
+    vorne = ["flatpak", "run", f"--command={ENGINES[key]['bin']}"]
+    vorne += [f"--filesystem={d}" for d in _flatpak_freigaben(cmd[1:])]
+    for name in ('OMP_NUM_THREADS',):
+        if env and env.get(name):
+            vorne.append(f"--env={name}={env[name]}")
+    return vorne + [app_id] + cmd[1:]
+
+
 def get_art_path():
     wert = konfig_lesen('engines', engine_key(), 'programm', standard="")
-    if wert:
+    if wert and engine_vorhanden(wert):
         return wert
-    return shutil.which(eng('bin')) or ""
+    # Eingetragenes Programm fehlt (deinstalliert, auf Flatpak umgestiegen):
+    # neu suchen, sonst den Eintrag zeigen, damit man sieht, was fehlt.
+    return engine_suchen() or flatpak_suchen() or wert
 
 
 def save_art_path(path):
@@ -624,6 +809,23 @@ QUICK_KEYS = {
         'highlights': ('dt:shadhi#0',          'highlights',        0,    100, 0),
         'sharpen':    ('dt:sharpen#0',         'amount',            1,    800, 200),
     },
+    # Lightroom: Werte von crs (Entwicklungsmodul "Grundeinstellungen").
+    # Helligkeit gibt es dort nicht getrennt von der Belichtung (die
+    # gehoert dem Deflicker), und der Gruenabgleich heisst "Tonung" mit
+    # eigener Skala - beide fehlen hier.
+    # Lichter: 0..100 abdunkeln = Highlights2012 0..-100.
+    # Schaerfe: Purelapse 200 = Lightroom 40 (dessen Grundwert).
+    'lr': {
+        'wb_temp':    ('crs', 'Temperature',         2000, 50000, 5500),
+        'contrast':   ('crs', 'Contrast2012',        -100, 100,   0),
+        'highlights': ('crs', 'Highlights2012',      0,    100,   0, -1.0),
+        'shadows':    ('crs', 'Shadows2012',         0,    100,   0),
+        'vibrance':   ('crs', 'Vibrance',            -100, 100,   0),
+        'saturation': ('crs', 'Saturation',          -100, 100,   0),
+        'sharpen':    ('crs', 'Sharpness',           1,    750,   200, 0.2),
+        'denoise_l':  ('crs', 'LuminanceSmoothing',  0,    100,   0),
+        'denoise_c':  ('crs', 'ColorNoiseReduction', 0,    100,   25),
+    },
 }
 # Regler -> Modulwert: Prozent wie in Darktables Oberflaeche; die Schaerfe
 # so, dass 200 (Grundwert von ART/RawTherapee) Darktables 0,5 entspricht.
@@ -673,8 +875,9 @@ HL_OPTIONEN = {
                                            "Sonnenball meist die beste "
                                            "Wahl")],
     'dt': [],
+    'lr': [],
 }
-HL_EMPFOHLEN = {'art': "Color", 'rt': "Coloropp", 'dt': ""}
+HL_EMPFOHLEN = {'art': "Color", 'rt': "Coloropp", 'dt': "", 'lr': ""}
 
 
 def hl_optionen(engine=None):
@@ -834,6 +1037,14 @@ def quick_apply(profile, werte, engine=None):
                 geschrieben.append((d['sec'], d['key'], profile[d['sec']][d['key']]))
             continue
         sek = profile.setdefault(d['sec'], {})
+        if e == 'lr':
+            for key, f in ((d['key'], d.get('faktor', 1.0)),) + tuple(d.get('mehr', ())):
+                sek[key] = lr_zahl_text(key, v * float(f), sek.get(key))
+                geschrieben.append((d['sec'], key, sek[key]))
+            if d['key'] in LR_WB:
+                sek['WhiteBalance'] = "Custom"
+                geschrieben.append((d['sec'], 'WhiteBalance', "Custom"))
+            continue
         if 'Enabled' in sek:
             sek['Enabled'] = "true"
         for key, f in ((d['key'], d.get('faktor', 1.0)),) + tuple(d.get('mehr', ())):
@@ -973,6 +1184,10 @@ def nicht_ueberblendbar(start_arp, end_arp):
                 hart = [h for h in hart if h not in ('mode', 'ein/aus')]
             harte.extend((dt_modulname(sec, s_dict or e_dict), h) for h in hart)
             continue
+        if lr_ist_sektion(sec):
+            _, hart = lr_sektion_mischen(sec, s_dict, e_dict, 0.0)
+            harte.extend((sec, h) for h in hart)
+            continue
         for k in ordered_union(s_dict, e_dict):
             if k in ('Rank', 'Rating', 'Enabled'):
                 continue
@@ -1086,6 +1301,9 @@ def interpolate_arp_dicts(start_arp, end_arp, ratio):
             if gemischt is not None:
                 out[sec] = gemischt
             continue
+        if lr_ist_sektion(sec):
+            out[sec], _ = lr_sektion_mischen(sec, s_dict, e_dict, ratio)
+            continue
         force_custom = False
         if sec == 'White Balance':
             force_custom = any(s_dict.get(k) != e_dict.get(k)
@@ -1119,6 +1337,8 @@ def set_raw_hotpixel(arp_data, enabled):
         if enabled and DT_STAPEL in arp_data:
             dt_modul_setzen(arp_data, 'hotpixels', {}, an=True)
         return
+    if ENGINE == 'lr':
+        return      # Lightroom entfernt Hotpixel selbst, ohne Einstellung
     raw = arp_data.setdefault('RAW', {})
     raw['HotDeadPixelEnabled'] = "true" if enabled else "false"
     raw['HotPixelFilter'] = "true" if enabled else "false"
@@ -1130,7 +1350,7 @@ def validate_arp(profile, reference, name, lang='de'):
     """Prueft ein geschriebenes Profil gegen ein von ART/RT stammendes Vorbild.
     Fuer Darktable nicht sinnvoll - liefert dann einfach eine leere Liste.
     Die Befunde stehen in der Sprache der Oberflaeche (lang)."""
-    if ENGINE == 'dt':
+    if ENGINE in ('dt', 'lr'):
         return []
     en = (lang == 'en')
     issues = []
@@ -1210,17 +1430,18 @@ def find_arp_template_ini(target_dir, files=None):
 
 def bootstrap_arp_template_ini(art_cli_path, sample_image):
     """Laesst ART-cli/rawtherapee-cli einmalig sein Standardprofil erzeugen."""
-    if not art_cli_path or not os.path.isfile(art_cli_path):
+    if not engine_vorhanden(art_cli_path):
         return None, ""
     if not sample_image or not os.path.isfile(sample_image):
         return None, ""
     tmp = tempfile.mkdtemp(prefix="purelapse_tpl_")
     try:
         for args in (["-O", tmp], ["-o", tmp]):
-            cmd = [art_cli_path] + args + ["-Y", "-j80"] + eng('extra') + ["-c", sample_image]
+            cmd = engine_befehl([art_cli_path] + args + ["-Y", "-j80"] + eng('extra')
+                                + ["-c", sample_image])
             try:
                 subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=300)
+                               stderr=subprocess.DEVNULL, timeout=300, **OHNE_FENSTER)
             except (OSError, subprocess.SubprocessError):
                 continue
             found = sorted(glob.glob(os.path.join(tmp, '*' + eng('ext'))) +
@@ -1264,7 +1485,7 @@ def check_is_keyframe(arp_path):
             return True
         if 'Rating="0"' in content or '<xmp:Rating>0</xmp:Rating>' in content:
             return False
-    if ENGINE != 'dt' and os.path.exists(arp_path):
+    if ENGINE not in ('dt', 'lr') and os.path.exists(arp_path):
         for keys in read_arp_dict_ini(arp_path).values():
             if keys.get('Rank') == '5' or keys.get('Rating') == '5':
                 return True
@@ -1292,28 +1513,34 @@ _EXPOSURE_V6 = struct.Struct('<i f f f f i')
 _EXPOSURE_V6_FIELDS = ('mode', 'black', 'exposure',
                         'deflicker_percentile', 'deflicker_target_level',
                         'compensate_exposure_bias')
+# darktable 5: dazu compensate_hilite_pres (gboolean)
+_EXPOSURE_V7 = struct.Struct('<i f f f f i i')
+_EXPOSURE_V7_FIELDS = _EXPOSURE_V6_FIELDS + ('compensate_hilite_pres',)
+_EXPOSURE_LAYOUT = {6: (_EXPOSURE_V6, _EXPOSURE_V6_FIELDS),
+                    7: (_EXPOSURE_V7, _EXPOSURE_V7_FIELDS)}
 _DT_NEUTRAL_BLEND = "gz11eJxjYIAACQYYOOHEgAZY0QWAgBGLGANDgz0Ej1Q+dcF/IADRAGpyHQU="
 _DT_OWN_MULTI_NAME = "purelapse deflicker"
-_KNOWN_EXPOSURE_VERSIONS = (6,)
+_KNOWN_EXPOSURE_VERSIONS = tuple(_EXPOSURE_LAYOUT)
 
 
 def _dt_decode_exposure(hex_str, modversion):
     if modversion not in _KNOWN_EXPOSURE_VERSIONS:
         return None
-    try:
-        raw = bytes.fromhex(hex_str)
-    except ValueError:
+    struktur, namen = _EXPOSURE_LAYOUT[modversion]
+    raw = dt_params_lesen(hex_str)
+    if raw is None or len(raw) != struktur.size:
         return None
-    if len(raw) != _EXPOSURE_V6.size:
-        return None
-    return dict(zip(_EXPOSURE_V6_FIELDS, _EXPOSURE_V6.unpack(raw)))
+    return dict(zip(namen, struktur.unpack(raw)))
 
 
-def _dt_encode_exposure(fields):
-    vals = (int(fields['mode']), float(fields['black']), float(fields['exposure']),
-            float(fields['deflicker_percentile']), float(fields['deflicker_target_level']),
-            int(fields['compensate_exposure_bias']))
-    return _EXPOSURE_V6.pack(*vals).hex()
+def _dt_encode_exposure(fields, modversion=6):
+    """Packt die Belichtung in genau der Version, in der sie gelesen wurde -
+    so bleibt in darktable 5 auch compensate_hilite_pres, wie es war."""
+    struktur, namen = _EXPOSURE_LAYOUT[modversion]
+    vals = [int(fields.get(n, 0)) if n in ('mode', 'compensate_exposure_bias',
+                                           'compensate_hilite_pres')
+            else float(fields[n]) for n in namen]
+    return struktur.pack(*vals).hex()
 
 
 def _dt_load(xmp_path):
@@ -1550,6 +1777,42 @@ def _dt_layouts_aufbauen():
 
 DT_LAYOUTS = _dt_layouts_aufbauen()
 
+# Neuere Modulversionen aus darktable 5.6.2 (src/iop/*.c), zusaetzlich zu
+# den Versionen von 4.6.1 oben. Ein XMP aus darktable 5 traegt diese
+# Versionen; ohne sie konnte Purelapse dort weder die Belichtung lesen noch
+# den Weissabgleich zwischen Keyframes ueberblenden.
+#   exposure 7        + compensate_hilite_pres (gboolean)
+#   temperature 4     + preset (int: -1 unbekannt, 0 wie aufgenommen, ...)
+#   denoiseprofile 12 + compensate_hilite_pres (gboolean)
+#   hazeremoval 3     + compatibility_mode, adaptive (gboolean)
+_DT_LAYOUT_NEUER = [
+    ('exposure', 7, 'mode:i black:f exposure:f deflicker_percentile:f deflicker_target_level:f compensate_exposure_bias:i compensate_hilite_pres:i'),
+    ('temperature', 4, 'red:f green:f blue:f various:f preset:i'),
+    ('denoiseprofile', 12, _DT_LAYOUT_TEXT['denoiseprofile'][1] + ' compensate_hilite_pres:i'),
+    ('hazeremoval', 3, 'strength:f distance:f compatibility_mode:i adaptive:i'),
+]
+
+
+def _dt_versionen_aufbauen():
+    """{op: {version: felder}} - alle bekannten Layouts je Modul."""
+    tabelle = {op: {version: felder} for op, (version, felder) in DT_LAYOUTS.items()}
+    for op, version, spec in _DT_LAYOUT_NEUER:
+        felder = []
+        for teil in spec.split():
+            name, art = teil.split(':')
+            m = re.match(r'(fh|f|i)(\d*)$', art)
+            felder.append((name, m.group(1), int(m.group(2) or 1)))
+        tabelle.setdefault(op, {})[version] = felder
+    return tabelle
+
+
+DT_LAYOUT_VERSIONEN = _dt_versionen_aufbauen()
+
+
+def dt_felder_fuer(op, version):
+    """Das Layout eines Moduls in genau dieser Version, sonst None."""
+    return DT_LAYOUT_VERSIONEN.get(op, {}).get(_dt_int(version, -1))
+
 # Module, deren Zahlen zwar lesbar sind, aber nicht ueberblendet werden
 # duerfen: Geometrie, Retusche, Masken - ein halber Zuschnitt oder ein
 # halb verschobener Stempel ergaebe Unsinn.
@@ -1642,7 +1905,7 @@ def dt_modul_setzen(profil, op, aenderungen=None, an=True):
         if op not in DT_STANDARD:
             return None
         version, grund = DT_STANDARD[op]
-        felder = DT_LAYOUTS[op][1]
+        felder = dt_felder_fuer(op, version)
         sek = {'~modversion': str(version), '~enabled': '1', '~multi_name': '',
                '~multi_name_hand_edited': '0', '~blendop_version': '13',
                '~blendop_params': _DT_NEUTRAL_BLEND, '~params': ''}
@@ -1653,11 +1916,11 @@ def dt_modul_setzen(profil, op, aenderungen=None, an=True):
         reihe = meta.get('reihenfolge', '').split()
         if sec not in reihe:
             meta['reihenfolge'] = ' '.join(reihe + [sec])
-    eintrag = DT_LAYOUTS.get(op)
-    if not eintrag or eintrag[0] != _dt_int(sek.get('~modversion'), -1):
+    felder = dt_felder_fuer(op, sek.get('~modversion'))
+    if felder is None:
         return None
     for name, wert in (aenderungen or {}).items():
-        art = next((a for nm, a, _n in eintrag[1] if nm == name), None)
+        art = next((a for nm, a, _n in felder if nm == name), None)
         if art is None:
             continue
         sek[name] = _dt_wert_text(art, [wert])
@@ -1698,10 +1961,9 @@ def dt_params_lesen(text):
 
 def _dt_layout(op, modversion, roh):
     """Das Layout, wenn es zu Version UND Groesse passt - sonst None."""
-    eintrag = DT_LAYOUTS.get(op)
-    if not eintrag or roh is None or eintrag[0] != _dt_int(modversion, -1):
+    felder = dt_felder_fuer(op, modversion)
+    if felder is None or roh is None:
         return None
-    felder = eintrag[1]
     if sum(4 * n for _, _, n in felder) != len(roh):
         return None
     return felder
@@ -1732,7 +1994,9 @@ def _dt_felder_lesen(op, modversion, roh):
 
 def _dt_felder_packen(op, sektion):
     """Packt die Felder einer Sektion wieder zu Darktables Hex-Text."""
-    felder = DT_LAYOUTS[op][1]
+    felder = dt_felder_fuer(op, sektion.get('~modversion'))
+    if felder is None:
+        raise ValueError(f"{op}: Version {sektion.get('~modversion')} unbekannt")
     werte = []
     for name, art, n in felder:
         teile = str(sektion[name]).split()
@@ -1838,16 +2102,19 @@ def _dt_ev_setzen(li, ev_offset):
     Nutzer sie hat; nur die Betriebsart wird "manuell" - im Modus
     "Deflicker" rechnet Darktable die Belichtung selbst aus und der
     eingetragene Wert waere wirkungslos."""
-    fields = _dt_decode_exposure(_dt_attr(li, 'params', ''),
-                                 _dt_int(_dt_attr(li, 'modversion'), 0))
+    version = _dt_int(_dt_attr(li, 'modversion'), 0)
+    fields = _dt_decode_exposure(_dt_attr(li, 'params', ''), version)
     if fields is None:
+        # Neu oder unbekannt: Version 6. darktable 5 rechnet sie beim Laden
+        # selbst auf 7 um (compensate_hilite_pres = aus, wie bisher).
+        version = 6
         fields = {'mode': 0, 'black': 0.0, 'exposure': 0.0,
                   'deflicker_percentile': 50.0, 'deflicker_target_level': -4.0,
                   'compensate_exposure_bias': 0}
     fields['mode'] = 0
     fields['exposure'] = float(ev_offset)
-    li.set(_qn(_DT, 'params'), _dt_encode_exposure(fields))
-    li.set(_qn(_DT, 'modversion'), '6')
+    li.set(_qn(_DT, 'params'), _dt_encode_exposure(fields, version))
+    li.set(_qn(_DT, 'modversion'), str(version))
     li.set(_qn(_DT, 'enabled'), '1')
 
 
@@ -2067,12 +2334,10 @@ def dt_neutral_gegenstueck(sec, vorhanden):
         return None
     op = sec[len(DT_SEK):].partition('#')[0]
     felder = DT_NULLBAR.get(op)
-    eintrag = DT_LAYOUTS.get(op)
-    if not felder or not eintrag \
-            or eintrag[0] != _dt_int(vorhanden.get('~modversion'), -1) \
-            or vorhanden.get('~enabled') != '1':
+    layout = dt_felder_fuer(op, vorhanden.get('~modversion'))
+    if not felder or layout is None or vorhanden.get('~enabled') != '1':
         return None
-    namen = {n: (art, anz) for n, art, anz in eintrag[1]}
+    namen = {n: (art, anz) for n, art, anz in layout}
     if not all(n in vorhanden for n in namen):
         return None
     neu = dict(vorhanden)
@@ -2082,6 +2347,51 @@ def dt_neutral_gegenstueck(sec, vorhanden):
     try:
         neu['~params'] = _dt_felder_packen(op, neu)
     except Exception:
+        return None
+    return neu
+
+
+# Hochstufen wie darktables legacy_params(): (Modul, von, nach) ->
+# Werte der neuen Felder. Quelle: darktable 5.6.2, src/iop/*.c.
+DT_HOCHSTUFEN = {
+    ('exposure', 6, 7): {'compensate_hilite_pres': 0},
+    # preset ist nur die Anzeige im Modul (wie aufgenommen, D65 ...), die
+    # Faktoren sind dieselben: vom anderen Keyframe uebernehmen (None), sonst
+    # schaltete der Weissabgleich nur wegen der Anzeige hart um.
+    ('temperature', 3, 4): {'preset': None},
+    ('denoiseprofile', 11, 12): {'compensate_hilite_pres': 0},
+    ('hazeremoval', 1, 3): {'compatibility_mode': 1, 'adaptive': 0},
+}
+
+
+def dt_hochstufen(op, sek, ziel_version, vorbild=None):
+    """
+    Die Sektion in der hoeheren Version 'ziel_version' - oder None, wenn sie
+    schon so neu ist oder der Weg dorthin nicht bekannt ist. Felder, die in
+    DT_HOCHSTUFEN None haben, kommen aus 'vorbild' (dem anderen Keyframe).
+    """
+    von = _dt_int((sek or {}).get('~modversion'), -1)
+    nach = _dt_int(ziel_version, -1)
+    neue = DT_HOCHSTUFEN.get((op, von, nach))
+    if neue is None or dt_felder_fuer(op, nach) is None:
+        return None
+    alt = dt_felder_fuer(op, von)
+    if alt is None or not all(n in sek for n, _, _ in alt):
+        return None
+    neu = dict(sek)
+    neu['~modversion'] = str(nach)
+    for name, art, n in dt_felder_fuer(op, nach):
+        if name not in neu:
+            wert = neue.get(name, 0)
+            if wert is None:
+                if vorbild and name in vorbild:
+                    neu[name] = vorbild[name]
+                    continue
+                wert = -1
+            neu[name] = _dt_wert_text(art, [wert] * n)
+    try:
+        neu['~params'] = _dt_felder_packen(op, neu)
+    except (ValueError, KeyError, struct.error):
         return None
     return neu
 
@@ -2116,12 +2426,22 @@ def dt_sektion_mischen(sec, s, e, t):
         if s.get(k) != e.get(k) and label not in harte:
             harte.append(label)
     op = sec[len(DT_SEK):].partition('#')[0]
+    # Keyframes aus verschiedenen darktable-Versionen: die aeltere Fassung
+    # so hochstufen, wie darktable selbst es beim Laden taete.
+    if s.get('~modversion') != e.get('~modversion'):
+        s2 = dt_hochstufen(op, s, e.get('~modversion'), e)
+        e2 = dt_hochstufen(op, e, s.get('~modversion'), s)
+        if (s2 or e2) is not None:
+            s, e = (s2 or s), (e2 or e)
+            if s.get('~modversion') == e.get('~modversion'):
+                harte = [h for h in harte if h != "Modulversion"]
+                nah = s if t < 0.5 else e
+                out = dict(nah)
     felder = None
     if s.get('~modversion') == e.get('~modversion') and op not in DT_NICHT_MISCHEN:
-        eintrag = DT_LAYOUTS.get(op)
-        if eintrag and eintrag[0] == _dt_int(s.get('~modversion'), -1) \
-                and all(n in s and n in e for n, _, _ in eintrag[1]):
-            felder = eintrag[1]
+        layout = dt_felder_fuer(op, s.get('~modversion'))
+        if layout is not None and all(n in s and n in e for n, _, _ in layout):
+            felder = layout
     if felder is None:
         if s.get('~params') != e.get('~params'):
             harte.append("Einstellungen")
@@ -2264,17 +2584,364 @@ def dt_konfig_slots(anzahl, basis):
 
 
 # ==========================================================================
+#  TEIL C: LIGHTROOM CLASSIC  (XMP mit crs:-Einstellungen)
+#
+#  Lightroom hat keine Kommandozeile. Purelapse arbeitet deshalb nur mit
+#  den Begleitdateien: Lightroom schreibt sie ("Metadaten in Datei
+#  speichern"), Purelapse traegt Belichtung und Keyframe-Ueberblendung
+#  ein, Lightroom liest sie wieder ("Metadaten aus Dateien lesen") und
+#  exportiert. Die Einstellungen stehen im Namensraum
+#  http://ns.adobe.com/camera-raw-settings/1.0/ (Kuerzel crs) - meist als
+#  Attribute von rdf:Description, Kurven und Masken als Unterelemente.
+#
+#  Profil-Dict wie bei den anderen Engines:
+#    'Version'       Platzhalter, damit das Profil als vollstaendig gilt
+#    'Exposure'      Compensation = crs:Exposure2012 (gehoert dem Deflicker)
+#    'crs'           alle einfachen Einstellungen als Text
+#    'crs~elemente'  Kurven, Masken, Look ... als XML-Text
+#  Bewertung (xmp:Rating) und alle anderen Namensraeume (Stichwoerter,
+#  EXIF ...) gehoeren dem Bild und werden nie mitkopiert.
+# ==========================================================================
+_CRS = 'http://ns.adobe.com/camera-raw-settings/1.0/'
+ET.register_namespace('crs', _CRS)
+LR_SEK = 'crs'
+LR_ELEMENTE = 'crs~elemente'
+# Nie ueberblenden: Kennungen, Versionen, Pruefsummen, Dateinamen.
+_LR_KENNUNG = ('Version', 'ProcessVersion', 'CompatibleVersion', 'RawFileName',
+               'HasSettings', 'AlreadyApplied', 'Digest', 'UUID', 'Name')
+# So schreibt Lightroom sie: mit Vorzeichen (+12, -0.35).
+LR_MIT_VORZEICHEN = {
+    'Exposure2012', 'Contrast2012', 'Highlights2012', 'Shadows2012',
+    'Whites2012', 'Blacks2012', 'Texture', 'Clarity2012', 'Dehaze',
+    'Vibrance', 'Saturation', 'Tint', 'ParametricShadows', 'ParametricDarks',
+    'ParametricLights', 'ParametricHighlights', 'PostCropVignetteAmount',
+    'PostCropVignetteFeather', 'GrainAmount', 'SplitToningBalance',
+    'ColorGradeBlending', 'ColorGradeGlobalLum', 'ColorGradeShadowLum',
+    'ColorGradeMidtoneLum', 'ColorGradeHighlightLum'}
+LR_WB = ('Temperature', 'Tint')
+
+
+def lr_ist_sektion(sec):
+    return sec in (LR_SEK, LR_ELEMENTE)
+
+
+def _lr_kennung(name):
+    return any(t in name for t in _LR_KENNUNG)
+
+
+def _lr_dezimalen(text):
+    t = str(text).strip()
+    return len(t.split('.', 1)[1]) if '.' in t else 0
+
+
+def lr_zahl_text(name, wert, vorbild=None):
+    """
+    Eine Zahl so geschrieben, wie Lightroom sie schreibt: so viele
+    Nachkommastellen wie das Vorbild (die Zahl im Keyframe), mit
+    Vorzeichen, wo Lightroom eines setzt.
+    """
+    stellen = _lr_dezimalen(vorbild) if vorbild is not None else (
+        2 if name == 'Exposure2012' else 0)
+    if name == 'Exposure2012':
+        stellen = max(stellen, 3)      # feiner als die Anzeige: fuer den Deflicker
+    vorzeichen = (name in LR_MIT_VORZEICHEN
+                  or str(vorbild or '').strip().startswith('+'))
+    w = round(float(wert), stellen)
+    if stellen == 0:
+        text = str(int(w))
+    else:
+        text = f"{w:.{stellen}f}"
+    if text.lstrip('-').strip('0.') == '':
+        text = text.lstrip('-')       # keine "-0"
+    if vorzeichen and not text.startswith('-') and text.strip('0.') != '':
+        text = '+' + text
+    return text
+
+
+def _lr_float(text):
+    try:
+        return float(str(text).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _lr_kurve(xml_text):
+    """Punkte einer Kurve (rdf:Seq aus "x, y") oder None."""
+    try:
+        el = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return None
+    seq = el.find(_qn(_RDF, 'Seq'))
+    if seq is None or len(el) != 1:
+        return None
+    punkte = []
+    for li in seq:
+        teile = [t.strip() for t in (li.text or '').split(',')]
+        if len(teile) != 2:
+            return None
+        try:
+            punkte.append((float(teile[0]), float(teile[1])))
+        except ValueError:
+            return None
+    return el, seq, punkte
+
+
+def _lr_element_mischen(s_xml, e_xml, t):
+    """Kurven mit gleich vielen Punkten weich, alles andere vom naeheren
+    Keyframe. Rueckgabe: (XML-Text, weich?)"""
+    a, b = _lr_kurve(s_xml), _lr_kurve(e_xml)
+    if a is None or b is None or len(a[2]) != len(b[2]):
+        return (s_xml if t < 0.5 else e_xml), False
+    el, seq, _ = a
+    for li, (xs, ys), (xe, ye) in zip(seq, a[2], b[2]):
+        li.text = f"{int(round(xs + (xe - xs) * t))}, {int(round(ys + (ye - ys) * t))}"
+    return ET.tostring(el, encoding='unicode'), True
+
+
+def lr_sektion_mischen(sec, s, e, t):
+    """
+    Ueberblendet eine Lightroom-Sektion zwischen zwei Keyframes.
+    Rueckgabe: (Sektion, [Schluessel, die nicht weich gehen])
+    """
+    s, e = s or {}, e or {}
+    out, harte = {}, []
+    if sec == LR_ELEMENTE:
+        for k in ordered_union(s, e):
+            if k in s and k in e:
+                if s[k] == e[k]:
+                    out[k] = s[k]
+                    continue
+                out[k], weich = _lr_element_mischen(s[k], e[k], t)
+                if not weich:
+                    harte.append(k)
+            else:
+                # nur in einem Keyframe (eine Maske, eine Kurve)
+                if (k in s) == (t < 0.5):
+                    out[k] = s.get(k, e.get(k))
+                harte.append(k)
+        return out, harte
+    wb_anders = any(_lr_float(s.get(k)) != _lr_float(e.get(k)) for k in LR_WB)
+    for k in ordered_union(s, e):
+        v_s, v_e = s.get(k), e.get(k)
+        if v_s is None or v_e is None:
+            out[k] = v_s if v_e is None else v_e
+            continue
+        if v_s == v_e:
+            out[k] = v_s
+            continue
+        if k == 'WhiteBalance':
+            continue                   # unten
+        f_s, f_e = _lr_float(v_s), _lr_float(v_e)
+        if f_s is None or f_e is None or _lr_kennung(k):
+            out[k] = v_s if t < 0.5 else v_e
+            harte.append(k)
+            continue
+        out[k] = lr_zahl_text(k, f_s + (f_e - f_s) * t, v_s)
+    if 'WhiteBalance' in s or 'WhiteBalance' in e:
+        if wb_anders:
+            # Zwischenwerte sind kein "Wie aufgenommen" mehr
+            out['WhiteBalance'] = "Custom"
+        else:
+            nah = s if t < 0.5 else e
+            out['WhiteBalance'] = nah.get('WhiteBalance', s.get('WhiteBalance', e.get('WhiteBalance')))
+            if s.get('WhiteBalance') != e.get('WhiteBalance'):
+                harte.append('WhiteBalance')
+    return out, harte
+
+
+def _lr_beschreibungen(root):
+    """Nur die obersten rdf:Description (direkt unter rdf:RDF). Darin
+    stehende - etwa im Look (crs:Look/crs:Parameters) - tragen eigene
+    crs-Werte (Name, Version, ...), die nicht die des Bildes sind."""
+    rdf_tag = _qn(_RDF, 'RDF')
+    wurzeln = [root] if root.tag == rdf_tag else list(root.iter(rdf_tag))[:1]
+    return [k for w in wurzeln for k in w if k.tag == _qn(_RDF, 'Description')]
+
+
+def _lr_namensraeume(pfad):
+    """Die Kuerzel der Datei behalten - sonst schriebe ElementTree ns0:."""
+    try:
+        for _ereignis, (kurz, uri) in ET.iterparse(pfad, events=('start-ns',)):
+            if kurz and not kurz.startswith('ns'):
+                try:
+                    ET.register_namespace(kurz, uri)
+                except ValueError:
+                    pass
+    except (ET.ParseError, OSError):
+        pass
+
+
+def _lr_einstellungen(root):
+    """Alle crs-Einstellungen: (einfach {Name: Text}, Elemente {Name: XML})."""
+    einfach, elemente = {}, {}
+    praefix = '{' + _CRS + '}'
+    for desc in _lr_beschreibungen(root):
+        for k, v in desc.attrib.items():
+            if k.startswith(praefix):
+                einfach[k[len(praefix):]] = v
+        for kind in desc:
+            if not kind.tag.startswith(praefix):
+                continue
+            name = kind.tag[len(praefix):]
+            if len(kind) == 0:
+                einfach[name] = (kind.text or '').strip()
+            else:
+                elemente[name] = ET.tostring(kind, encoding='unicode').strip()
+    return einfach, elemente
+
+
+def lr_sidecar_bereit(xmp_path):
+    """
+    Kann Purelapse in diese XMP schreiben? Nur, wenn Lightroom sie mit den
+    Entwicklungseinstellungen angelegt hat. Eine Datei mit Purelapses
+    Stern allein reicht nicht: liest Lightroom die wieder ein, stuende
+    alles, was im Katalog eingestellt ist, wieder auf Grundwerten.
+    Rueckgabe: (True, "") oder (False, Grund)
+    """
+    if not os.path.exists(xmp_path):
+        return False, "fehlt"
+    try:
+        einfach, _ = _lr_einstellungen(ET.parse(xmp_path).getroot())
+    except (ET.ParseError, OSError):
+        return False, "nicht lesbar"
+    if not einfach:
+        return False, "ohne Entwicklungseinstellungen"
+    return True, ""
+
+
+def read_arp_dict_lr(xmp_path):
+    if not os.path.exists(xmp_path):
+        return {}
+    try:
+        root = ET.parse(xmp_path).getroot()
+    except (ET.ParseError, OSError):
+        return {}
+    einfach, elemente = _lr_einstellungen(root)
+    data = {'Version': {'AppVersion': 'lightroom-passthrough'},
+            'Exposure': {'Enabled': 'true', 'Auto': 'false'}}
+    ev = _lr_float(einfach.pop('Exposure2012', None))
+    if ev is not None:
+        data['Exposure']['Compensation'] = f"{ev:.3f}"
+    if einfach:
+        data[LR_SEK] = einfach
+    if elemente:
+        data[LR_ELEMENTE] = elemente
+    return data
+
+
+_LR_GERUEST = (
+    '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Purelapse">\n'
+    ' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
+    '  <rdf:Description rdf:about=""\n'
+    '    xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/">\n'
+    '  </rdf:Description>\n'
+    ' </rdf:RDF>\n'
+    '</x:xmpmeta>\n')
+
+
+def write_arp_dict_lr(xmp_path, data):
+    """
+    Traegt das Profil-Dict in die XMP ein. Steht im Dict eine Sektion
+    'crs', gilt sie vollstaendig: Einstellungen, die dort fehlen, kommen
+    aus der Datei heraus (so wird ein Bild zur genauen Kopie des
+    Keyframes). Bewertung, Stichwoerter und alles ausserhalb von crs
+    bleiben, wie sie sind.
+    """
+    if os.path.exists(xmp_path):
+        _lr_namensraeume(xmp_path)
+        try:
+            tree = ET.parse(xmp_path)
+        except ET.ParseError as e:
+            raise OSError(f"{os.path.basename(xmp_path)} ist keine lesbare XMP: {e}") from e
+    else:
+        tree = ET.ElementTree(ET.fromstring(_LR_GERUEST))
+    root = tree.getroot()
+    beschreibungen = _lr_beschreibungen(root)
+    if not beschreibungen:
+        raise OSError(f"{os.path.basename(xmp_path)}: kein rdf:Description")
+    praefix = '{' + _CRS + '}'
+    voll = LR_SEK in data
+    einfach = dict(data.get(LR_SEK, {}))
+    comp = _lr_float(data.get('Exposure', {}).get('Compensation'))
+    if comp is not None:
+        einfach['Exposure2012'] = lr_zahl_text('Exposure2012', comp)
+    elemente = data.get(LR_ELEMENTE, {}) if voll else None
+    # vorhandene Stellen der Einstellungen
+    gesetzt = set()
+    for desc in beschreibungen:
+        for k in list(desc.attrib):
+            if not k.startswith(praefix):
+                continue
+            name = k[len(praefix):]
+            if name in einfach:
+                desc.set(k, einfach[name])
+                gesetzt.add(name)
+            elif voll:
+                del desc.attrib[k]
+        for kind in list(desc):
+            if not kind.tag.startswith(praefix):
+                continue
+            name = kind.tag[len(praefix):]
+            if len(kind) == 0:
+                if name in einfach:
+                    kind.text = einfach[name]
+                    gesetzt.add(name)
+                elif voll:
+                    desc.remove(kind)
+            elif elemente is not None:
+                desc.remove(kind)       # unten aus dem Profil neu
+    ziel = next((d for d in beschreibungen
+                 if any(k.startswith(praefix) for k in d.attrib)), beschreibungen[0])
+    for name, wert in einfach.items():
+        if name not in gesetzt:
+            ziel.set(praefix + name, str(wert))
+    if not any(praefix + 'ProcessVersion' == k for d in beschreibungen for k in d.attrib) \
+            and 'ProcessVersion' not in einfach:
+        ziel.set(praefix + 'ProcessVersion', "11.0")
+    if 'HasSettings' not in einfach and praefix + 'HasSettings' not in ziel.attrib:
+        ziel.set(praefix + 'HasSettings', "True")
+    for name in sorted(elemente or {}):
+        try:
+            ziel.append(ET.fromstring(elemente[name]))
+        except ET.ParseError:
+            continue
+    import io as _io
+    puffer = _io.BytesIO()
+    tree.write(puffer, encoding='UTF-8', xml_declaration=False)
+    try:
+        datei_atomar(xmp_path, puffer.getvalue())
+    except OSError as e:
+        raise OSError(f"{os.path.basename(xmp_path)} konnte nicht geschrieben "
+                      f"werden: {e.strerror or e}") from e
+
+
+def lr_hinweise(profil):
+    """Was in einem Lightroom-Keyframe fuer den Zeitraffer heikel ist."""
+    out = []
+    crs = (profil or {}).get(LR_SEK, {})
+    if crs.get('WhiteBalance') == 'Auto':
+        out.append('wb_auto')
+    if str(crs.get('AutoTone', '')).lower() == 'true':
+        out.append('auto_tone')
+    return out
+
+
+# ==========================================================================
 #  DISPATCHER: hier entscheidet sich, welche Implementierung laeuft
 # ==========================================================================
 def read_arp_dict(arp_path):
     if ENGINE == 'dt':
         return read_arp_dict_dt(arp_path)
+    if ENGINE == 'lr':
+        return read_arp_dict_lr(arp_path)
     return read_arp_dict_ini(arp_path)
 
 
 def write_arp_dict(arp_path, data):
     if ENGINE == 'dt':
         write_arp_dict_dt(arp_path, data)
+    elif ENGINE == 'lr':
+        write_arp_dict_lr(arp_path, data)
     else:
         write_arp_dict_ini(arp_path, data)
 
@@ -2282,11 +2949,13 @@ def write_arp_dict(arp_path, data):
 def find_arp_template(target_dir, files=None):
     if ENGINE == 'dt':
         return {}, "(Darktable: kein Basisprofil erforderlich)"
+    if ENGINE == 'lr':
+        return {}, "(Lightroom: kein Basisprofil erforderlich)"
     return find_arp_template_ini(target_dir, files)
 
 
 def bootstrap_arp_template(art_cli_path, sample_image):
-    if ENGINE == 'dt':
+    if ENGINE in ('dt', 'lr'):
         return None, ""
     return bootstrap_arp_template_ini(art_cli_path, sample_image)
 
@@ -2306,6 +2975,6 @@ def write_arp_file(filepath, ev_offset, template=None, hotpixel=False):
     exp['Auto'] = "false"
     exp['Compensation'] = f"{ev_offset:.3f}"
     set_raw_hotpixel(data, hotpixel)
-    if ENGINE != 'dt':
+    if eng('kind') == 'ini':
         automatik_einfrieren(data)
     write_arp_dict(arp_path, data)

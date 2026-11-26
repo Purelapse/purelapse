@@ -28,10 +28,13 @@ pe.set_engine('rt')
 pruef(pm.get_lang() == "en" and pm.get_theme() == "light" and pm.get_last_path() == "/bilder/zeitraffer", "Grundwerte")
 pruef(pm.load_queue() == [{"name": "a"}] and pm.lade_bereiche() == {"/x": ["A.NEF", ""]}, "Warteschlange/Bereiche")
 pruef(pm.telegram_laden() == {'an': True, 'token': 'T:1', 'chat': '9'}, "Telegram")
-pruef(pe.get_art_path() == "/usr/bin/rawtherapee-cli", "Engine-Pfad")
+# Uebernommen wird der eingetragene Pfad. get_art_path() sucht neu, wenn das
+# Programm dort fehlt (z. B. auf Flatpak umgestiegen) - das haengt vom
+# Rechner ab und gehoert nicht in diese Pruefung.
+pruef(pe.konfig_lesen('engines', 'rt', 'programm') == "/usr/bin/rawtherapee-cli", "Engine-Pfad")
 neu_basis = os.path.join(pe.daten_ordner(), "basis_rt.pp3")
 pruef(pe.get_arp_template_path() == neu_basis and os.path.isfile(neu_basis), f"Basisprofil: {pe.get_arp_template_path()}")
-pe.set_engine('dt'); pruef(pe.get_art_path() == "/usr/bin/darktable-cli", "Darktable-Pfad"); pe.set_engine('rt')
+pruef(pe.konfig_lesen('engines', 'dt', 'programm') == "/usr/bin/darktable-cli", "Darktable-Pfad")
 reste = [n for n in os.listdir(h) if n.startswith(".purelapse")]
 pruef(reste == [], f"alte Dateien liegen noch: {reste}")
 pruef(stat.S_IMODE(os.stat(k).st_mode) == 0o600, "Rechte")

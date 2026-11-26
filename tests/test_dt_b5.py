@@ -75,7 +75,7 @@ k = int(a[a.index("--width") + 1])
 assert "--configdir" in a and os.path.exists(xmp) and "colorbalancergb" in open(xmp).read()
 cv2.imwrite(out, np.full((k * 2 // 3, k, 3), 128, np.uint8))
 ''')
-os.chmod(fake, 0o755)
+fake = ausfuehrbar(fake)
 fv = pm.EngineVorschau(fake, k, neu, "x", kante=300)
 erg = []
 fv.fertig.connect(erg.append)

@@ -226,7 +226,7 @@ print("=== 5. Knopf-Freigabe ===")
 ub = schnitt(src, "    def _update_kf_buttons", "    def _open_quick_dialog")
 pruef("_ziel_keyframe()" in ub, "der Knopf fragt nicht nach einem Ziel")
 pruef("getattr(self, '_busy', False)" in ub, "_busy ungesichert")
-pruef("eng('kind') in ('ini', 'darktable')" in ub, "Knopf nicht fuer alle Engines freigegeben")
+pruef("eng('kind') in ('ini', 'darktable', 'lightroom')" in ub, "Knopf nicht fuer alle Engines freigegeben")
 pruef("currentRow" not in ub,
       "der Knopf darf nicht mehr an der Auswahl haengen")
 pruef(ub.count("setToolTip(") == 3,

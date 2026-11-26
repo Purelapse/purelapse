@@ -202,9 +202,21 @@ wx, _ = auto(szene_bild(0.4, 0.3), iso=100, erlaubt={'brightness', 'contrast'})
 pruef(set(wx) <= {'brightness', 'contrast'}, f"gesperrte Regler vorgeschlagen: {wx}")
 en, _ = auto(szene_bild(0.4, 0.3), iso=100, lang='en')
 pruef(any("Lift shadows" in x for x in _) or 'shadows' not in en, "englische Begruendung fehlt")
-# Kein Wort ueber andere Programme in Quelltext oder Begruendung
-for wort in ("adobe", "lightroom", "camera raw"):
-    pruef(wort not in src.lower(), f"'{wort}' steht im Quelltext")
+# Kein Wort ueber andere Programme in der Automatik (Quelltext und
+# Begruendung). "Adobe" nirgends; Lightroom ist seit 2.46 eine Engine und
+# darf im uebrigen Programm vorkommen - nur nicht in der Automatik.
+import re as _re
+def _abschnitt(kopf):
+    i = src.index(kopf)
+    m = _re.compile(r"\n(    )?def |\nclass ").search(src, i + len(kopf))
+    return src[i:m.start() if m else len(src)]
+auto_src = "".join(_abschnitt(k) for k in (
+    "def auto_optimieren", "    def _automatisch", "    def _auto_ausgangsprofil",
+    "    def _auto_engine_fertig", "    def _auto_anwenden"))
+pruef(len(auto_src) > 2000, "Automatik im Quelltext nicht gefunden")
+pruef("adobe" not in src.lower(), "'adobe' steht im Quelltext")
+for wort in ("lightroom", "camera raw"):
+    pruef(wort not in auto_src.lower(), f"'{wort}' steht in der Automatik")
 
 print(f"\n{OK} Pruefungen bestanden, {FEHL} fehlgeschlagen")
 sys.exit(1 if FEHL else 0)

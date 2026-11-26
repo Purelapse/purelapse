@@ -141,9 +141,7 @@ def eigene_engines():
     # Nur die nachgebaute Engine dieses Pruefstands zaehlen - ein echtes
     # RawTherapee, das nebenher fuer ein offenes Purelapse arbeitet, gehoert
     # nicht zu dieser Pruefung.
-    return [z for z in subprocess.run(["pgrep", "-af", "rawtherapee-cli"], capture_output=True,
-                                      text=True).stdout.splitlines()
-            if "pgrep" not in z and RT_CLI in z]
+    return prozesse_mit(RT_CLI)
 laufend = eigene_engines()
 pruef(not laufend, f"nach dem Abbruch laufen noch Engine-Prozesse: {len(laufend)}")
 e = lauf(parameter(ojb, djb, raw_mode='pass2', art_cli_path=RT_CLI, engine='rt'))

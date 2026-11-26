@@ -153,7 +153,7 @@ print("=== 7. Der Aufruf der Engine ===")
 rw = schnitt(src, "    def _render_with_engine", "    def _measure_and_correct")
 pruef('"-S"' in rw, "es wird weiterhin mit -s aufgerufen")
 # Im Befehl selbst darf kein -s mehr stehen (im Kommentar daneben schon)
-befehl = rw[rw.index("grund = ["):rw.index("cmds = [")]
+befehl = rw[rw.index("grund = ["):rw.index("wellen = befehls_wellen(")]
 pruef('"-s"' not in befehl, f"das alte -s steht noch im Befehl: {befehl}")
 pruef("self._pruefe_sidecars(files)" in rw, "die Pruefung wird nicht aufgerufen")
 pruef(rw.index("_run_darktable_cli") < rw.index("_pruefe_sidecars"),
@@ -269,7 +269,7 @@ pe.set_engine('rt')
 import re, ast
 treffer = [k for k in ast.walk(ast.parse(src)) if isinstance(k, ast.Name) and k.id == 'ENGINE']
 pruef(len(treffer) == 0, f"ENGINE wird in main noch {len(treffer)}x gelesen")
-sf = schnitt(src, "    def _set_folder", "        jpg = glob.glob")
+sf = schnitt(src, "    def _set_folder", "        jpg = find_jpg_files(self.target_dir)")
 pruef("engine_key()" in sf, "_set_folder vergleicht nicht gegen den echten Stand")
 pruef("not eigene" in sf, "es wird auch umgestellt, wenn eigene Profile da sind")
 

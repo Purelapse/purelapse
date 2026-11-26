@@ -58,8 +58,42 @@ import purelapse_engines as pe       # noqa: E402
 import exifread                      # noqa: E402  (Stellvertreter)
 from PyQt5 import _basis             # noqa: E402
 
-RT_CLI = os.path.join(HIER, "rawtherapee-cli")
-ART_CLI = os.path.join(HIER, "ART-cli")
+WINDOWS = os.name == 'nt'
+
+
+def ausfuehrbar(skript):
+    """
+    Macht ein Python-Skript als Programm aufrufbar und gibt den Pfad zurueck.
+
+    Linux: Ausfuehrungsrecht setzen, die erste Zeile (#!) erledigt den Rest.
+    Windows kennt das nicht und startet nur .exe/.cmd - dort entsteht neben
+    dem Arbeitsordner eine .cmd-Datei, die Python mit dem Skript aufruft.
+    Der Name bleibt (ART-cli.cmd), daran erkennt die nachgebaute Engine,
+    welche sie sein soll.
+    """
+    if not WINDOWS:
+        os.chmod(skript, 0o755)
+        return skript
+    ordner = os.path.join(ARBEIT, "programme")
+    os.makedirs(ordner, exist_ok=True)
+    ziel = os.path.join(ordner, os.path.splitext(os.path.basename(skript))[0] + ".cmd")
+    with open(ziel, "w", encoding="utf-8") as f:
+        f.write(f'@"{sys.executable}" "{skript}" %*\r\n')
+    return ziel
+
+
+def prozesse_mit(text):
+    """Befehlszeilen laufender Prozesse, die 'text' enthalten (nur Linux)."""
+    if WINDOWS:
+        return []
+    import subprocess
+    return [z for z in subprocess.run(["pgrep", "-af", text], capture_output=True,
+                                      text=True).stdout.splitlines()
+            if "pgrep" not in z and text in z]
+
+
+RT_CLI = ausfuehrbar(os.path.join(HIER, "rawtherapee-cli"))
+ART_CLI = ausfuehrbar(os.path.join(HIER, "ART-cli"))
 
 
 # ---------------------------------------------------------------- Szene

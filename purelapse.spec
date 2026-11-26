@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller-Bauanleitung fuer Purelapse (Einzeldatei).
 # Gebaut wird mit:  ./build.sh
+import sys
 from PyInstaller.utils.hooks import collect_data_files
 
 # ffmpeg-Programm aus dem Paket imageio-ffmpeg mit einpacken
@@ -46,4 +47,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    # Windows: Symbol der .exe (PyInstaller wandelt das PNG mit Pillow um)
+    icon=('docs/assets/icon.png' if sys.platform.startswith('win') else None),
 )

@@ -57,7 +57,7 @@ JPG-Serien laufen in einem einzigen Durchgang, ohne externe Engine.
 |---|---|
 | **Deflicker** | Messung in linearem Licht (16 Bit) ohne ausgebrannte Flächen, zweistufige Glättung, Nachkalibrierung bis unter 0,008 EV Restflackern, Messbereich (ROI), Lichtverlauf Sonnenaufgang/-untergang/gleichbleibend |
 | **Holy Grail** | Belichtungs- und ISO-Sprünge werden ausgeglichen, wechselndes Intervall wird erkannt, EXIF-Belichtung und Sonnenstand als Kurven, Nacht entfernen bei 24-Stunden-Zeitraffern |
-| **RAW-Entwicklung** | ART, RawTherapee, Darktable; Formate NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
+| **RAW-Entwicklung** | ART, RawTherapee, Darktable, Lightroom Classic (über XMP); Formate NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
 | **Keyframes** | Weiche Überblendung zwischen Keyframes (bei Darktable der komplette Modulstapel), Schnelleinstellungen mit echter Engine-Vorschau, automatisch optimieren, Lichter-Rekonstruktion |
 | **Video** | 720p bis 8K, 23,976 bis 120 fps, H.264, H.265 (auch 10 Bit), ProRes 422 HQ, Farbraum BT.709, optional 16-Bit-Zwischenbilder, CPU oder NVIDIA, Intel QuickSync, VAAPI, vier Qualitätsstufen |
 | **Effekte** | Motion Blur (3–25 Bilder), 16:9-Kamerafahrt, Stabilisierung, Entrauschen, Hotpixel, Astro-Clean, Telemetrie-Overlay, Ein-/Ausblenden, rückwärts |
@@ -306,11 +306,54 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 4. In Purelapse unter **Einstellungen** (Zahnrad oben rechts) den Pfad zu
    `rawtherapee-cli`, `ART-cli` bzw. `darktable-cli` eintragen.
 
+**Engines als Flatpak (Flathub):** RawTherapee, ART und darktable aus Flathub
+findet Purelapse selbst; in den Einstellungen steht dann z. B.
+`flatpak:com.rawtherapee.RawTherapee`. Purelapse startet die
+Kommandozeilenfassung im Paket mit `flatpak run --command=…` und gibt der
+Engine dabei genau die Ordner frei, die sie für den Lauf braucht (Bilder,
+Ausgabe, Arbeitsordner).
+
+**darktable:** unterstützt 4.6 bis 5.6. XMPs aus darktable 5 (Belichtung
+Version 7, Weißabgleich Version 4) liest und schreibt Purelapse in ihrer
+Version; Keyframes aus darktable 4 und 5 lassen sich gemischt überblenden.
+
+**Lightroom Classic (Windows, macOS):** Lightroom hat keine Kommandozeile –
+Purelapse schreibt die XMP-Dateien, Lightroom entwickelt. Ablauf:
+
+1. In Lightroom alle Bilder der Serie auswählen → *Metadaten → Metadaten in
+   Datei speichern* (Strg+S). Keyframes mit 5 Sternen markieren.
+2. In Purelapse als Engine „Lightroom (XMP)“ wählen, Pass 1 starten.
+3. Pass 2 starten: Purelapse überblendet die Keyframes in die XMP-Dateien.
+4. In Lightroom *Metadaten aus Dateien lesen*, dann als JPG (Qualität 100)
+   oder TIFF 16 Bit mit dem Originalnamen nach `Purelapse/Lightroom_Export`
+   exportieren.
+5. Pass 2 noch einmal starten: Purelapse gleicht das Restflackern des
+   Exports fein aus und baut das Video.
+
+Nur Lightroom Classic schreibt XMP-Dateien; DNG-Dateien werden nicht
+unterstützt (Lightroom speichert deren Einstellungen in der DNG selbst). Die
+XMP-Dateien kann Purelapse auch unter Linux bearbeiten, etwa wenn der Ordner
+auf einem Server liegt.
+
 Die AppImage enthält Python, Qt, OpenCV, rawpy und FFmpeg. Sie läuft auf
 Linux Mint 21 / Ubuntu 22.04 und neuer. Ist ein System-FFmpeg vorhanden,
 wird dieses bevorzugt (passend zum Grafiktreiber).
 
 Für JPG-Serien wird keine Engine benötigt.
+
+## Windows (in Vorbereitung)
+
+Purelapse wird für Windows vorbereitet. Eine Testversion als einzelne
+`.exe` lässt sich unter *Actions → Windows-Paket* bauen; sie ist noch nicht
+auf einem echten Windows-Rechner mit den Engines erprobt.
+
+- Die Engines findet Purelapse im Suchpfad und in den üblichen
+  Installationsordnern (`C:\Program Files\ART`, `…\RawTherapee\<Version>`,
+  `…\darktable\bin`), sonst unter **Einstellungen** eintragen.
+- Einstellungen und Basisprofile liegen unter `%LOCALAPPDATA%\Purelapse`.
+- Dateinamen mit Doppelpunkt (etwa `2016-12-26_20:15:32.nef`) sind unter
+  Windows nicht erlaubt – solche Serien vorher umbenennen.
+- Hardware-Encoder: NVIDIA und Intel QuickSync; VAAPI gibt es nur unter Linux.
 
 ## Aus dem Quelltext starten
 

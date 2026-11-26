@@ -31,7 +31,8 @@ def schnitt(von, bis):
 
 # ---------------------------------------------------------------- Umgebung
 ns = {"os": os, "subprocess": subprocess, "shutil": shutil, "tempfile": tempfile,
-      "FFMPEG_BIN": shutil.which("ffmpeg") or "ffmpeg"}
+      "FFMPEG_BIN": shutil.which("ffmpeg") or "ffmpeg",
+      "OHNE_FENSTER": ({'creationflags': 0x08000000} if os.name == 'nt' else {})}
 ns["sys"] = sys
 exec(schnitt("def ffmpeg_kandidaten():", "FFMPEG_BIN = _find_ffmpeg()"), ns)
 exec(schnitt("def find_dri_device()", "def load_preview_image("), ns)

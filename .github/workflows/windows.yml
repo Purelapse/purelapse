@@ -1,0 +1,53 @@
+name: Windows-Paket
+
+# Baut Purelapse fuer Windows als einzelne .exe - auf einem Windows-Rechner
+# von GitHub, ein eigener ist dafuer nicht noetig.
+#   - Push auf den Zweig "windows": baut automatisch, nichts wird
+#                   veroeffentlicht - die .exe liegt unter "Artifacts" des Laufs
+#   - von Hand:     Actions -> Windows-Paket -> Run workflow
+#   - beim Release: wird automatisch an den Release angehaengt
+
+on:
+  push:
+    branches: [windows]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bauen:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python-Pakete
+        run: python -m pip install -r requirements.txt pyinstaller pillow
+      - name: Bauen
+        run: pyinstaller --noconfirm purelapse.spec
+      - name: Benennen
+        shell: bash
+        run: |
+          VERSION="$(grep -m1 '^VERSION = ' purelapse_main.py | cut -d'"' -f2)"
+          DATEI="dist/Purelapse-${VERSION}-windows-x64.exe"
+          mv dist/Purelapse.exe "$DATEI"
+          echo "DATEI=$DATEI" >> "$GITHUB_ENV"
+      - name: Startprobe
+        shell: bash
+        # Startet die fertige .exe einmal ohne Fenster: faellt ein Modul
+        # beim Einpacken unter den Tisch, scheitert es hier und nicht beim Nutzer.
+        run: QT_QPA_PLATFORM=offscreen timeout 120 "$DATEI" --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Purelapse-windows
+          path: ${{ env.DATEI }}
+      - name: An den Release haengen
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "$DATEI" --clobber
