@@ -27,10 +27,11 @@ def pruef(b, text):
 def schnitt(von, bis):
     return src[src.index(von):src.index(bis)]
 
-ns = {"os": os, "subprocess": subprocess, "shutil": shutil, "tempfile": tempfile,
+ns = {"os": os, "sys": sys, "subprocess": subprocess, "shutil": shutil, "tempfile": tempfile,
       "time": time, "glob": glob,
       "OHNE_FENSTER": ({'creationflags': 0x08000000} if os.name == 'nt' else {}),
-      "engine_befehl": lambda cmd, env=None: list(cmd)}
+      "engine_befehl": lambda cmd, env=None: list(cmd),
+      "prozess_beenden": lambda p: p.kill()}
 exec(schnitt("THREADS_PRO_PROZESS = 4", "def find_dri_device()"), ns)
 pa = ns["prozess_anzahl"]
 auf = ns["bilder_aufteilen"]

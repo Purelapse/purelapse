@@ -37,8 +37,12 @@ pruef(pe.get_arp_template_path() == neu_basis and os.path.isfile(neu_basis), f"B
 pruef(pe.konfig_lesen('engines', 'dt', 'programm') == "/usr/bin/darktable-cli", "Darktable-Pfad")
 reste = [n for n in os.listdir(h) if n.startswith(".purelapse")]
 pruef(reste == [], f"alte Dateien liegen noch: {reste}")
-pruef(stat.S_IMODE(os.stat(k).st_mode) == 0o600, "Rechte")
-pruef(os.path.dirname(k).endswith(os.path.join(".config", "purelapse")), k)
+if os.name == 'nt':
+    # Windows: keine Unix-Rechte; die Datei liegt im Benutzerprofil (%APPDATA%)
+    pruef(os.path.dirname(k).endswith("Purelapse") and "AppData" in k, k)
+else:
+    pruef(stat.S_IMODE(os.stat(k).st_mode) == 0o600, "Rechte")
+    pruef(os.path.dirname(k).endswith(os.path.join(".config", "purelapse")), k)
 print("=== Lesen/Schreiben ===")
 pm.save_theme("dark"); pm.save_lang("de"); pm.save_last_path("/neu")
 d = json.load(open(k, encoding="utf-8"))

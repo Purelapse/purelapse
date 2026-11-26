@@ -16,8 +16,8 @@ jobs:
       matrix:
         python: ["3.10", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - name: FFmpeg
@@ -27,16 +27,14 @@ jobs:
       - name: Pruefungen
         run: python tests/alle.py
 
-  # Windows-Unterstuetzung ist im Aufbau: die Pruefungen laufen mit, ein
-  # Fehlschlag dort macht den Push aber noch nicht rot.
+  # Seit 2.46 gehoert Windows dazu: ein Fehlschlag dort macht den Push rot.
   windows:
     runs-on: windows-latest
-    continue-on-error: true
     env:
       PYTHONUTF8: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: FFmpeg

@@ -17,13 +17,14 @@ os.makedirs(os.path.join(system, "app", "us.pixls.art.ART"))   # ohne current: u
 orte = [system, nutzer]
 
 print("=== Erkennen ===")
-pruef(pe.flatpak_suchen('rt', orte) == "flatpak:com.rawtherapee.RawTherapee", "RT (Nutzer)")
-pruef(pe.flatpak_suchen('dt', orte) == "flatpak:org.darktable.Darktable", "dt (System)")
-pruef(pe.flatpak_suchen('art', orte) == "", "ART ohne current")
+pruef(pe.flatpak_suchen('rt', orte, nt=False) == "flatpak:com.rawtherapee.RawTherapee", "RT (Nutzer)")
+pruef(pe.flatpak_suchen('dt', orte, nt=False) == "flatpak:org.darktable.Darktable", "dt (System)")
+pruef(pe.flatpak_suchen('art', orte, nt=False) == "", "ART ohne current")
 pruef(pe.engine_vorhanden("flatpak:com.rawtherapee.RawTherapee", orte), "vorhanden")
 pruef(not pe.engine_vorhanden("flatpak:us.pixls.art.ART", orte), "nicht vorhanden")
 pruef(not pe.engine_vorhanden("", orte) and not pe.engine_vorhanden(None, orte), "leer")
 pruef(pe.engine_vorhanden(os.path.abspath(__file__)), "Datei")
+pruef(pe.flatpak_suchen('rt', orte, nt=True) == "", "unter Windows gibt es kein Flatpak")
 pruef(set(pe.FLATPAK_IDS) == {k for k, v in pe.ENGINES.items() if v['bin']},
       "jede Engine mit Programm hat eine App-ID")
 

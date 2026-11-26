@@ -182,7 +182,7 @@ section { padding: 104px 0; }
 .chip.hi { border-color: rgba(242, 162, 75, 0.5); color: var(--orange); }
 
 /* Engines */
-.engines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.engines { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .engine { padding: 24px 26px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .engine h3 { font-size: 20px; }
 .engine ul { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 7px; font-size: 15px; color: var(--dim); }

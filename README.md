@@ -2,7 +2,7 @@
 
 **Deutsch** · [English](README.en.md)
 
-**Zeitraffer ohne Flackern – aus RAW- oder JPG-Serien, mit ART, RawTherapee oder Darktable.**
+**Zeitraffer ohne Flackern – aus RAW- oder JPG-Serien, mit ART, RawTherapee, Darktable oder Lightroom Classic. Für Linux und Windows.**
 
 > ⚠️ **Beta-Version.** Purelapse wird aktiv entwickelt. Bitte Originalbilder
 > sichern und Fehler als [Issue](https://github.com/purelapse/purelapse/issues) melden.
@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/08c6d79c-24cf-44d8-aacb-35ddfd3aa6f2
 - [Leistung](#leistung)
 - [Bedienung](#bedienung)
 - [Installation (Linux)](#installation-linux)
+- [Installation (Windows)](#installation-windows)
 - [Aus dem Quelltext starten](#aus-dem-quelltext-starten)
 - [Selbst bauen](#selbst-bauen)
 - [Bekannte Einschränkungen](#bekannte-einschränkungen)
@@ -341,16 +342,22 @@ wird dieses bevorzugt (passend zum Grafiktreiber).
 
 Für JPG-Serien wird keine Engine benötigt.
 
-## Windows (in Vorbereitung)
+## Installation (Windows)
 
-Purelapse wird für Windows vorbereitet. Eine Testversion als einzelne
-`.exe` lässt sich unter *Actions → Windows-Paket* bauen; sie ist noch nicht
-auf einem echten Windows-Rechner mit den Engines erprobt.
+1. Unter [Releases](https://github.com/purelapse/purelapse/releases) die Datei
+   `Purelapse-…-windows-x64.exe` herunterladen (Windows 10/11, 64 Bit). Sie
+   enthält Python, Qt, OpenCV, rawpy und FFmpeg; eine Installation ist nicht
+   nötig.
+2. Starten. Meldet Windows „Der Computer wurde durch Windows geschützt“: Die
+   Datei ist nicht signiert – *Weitere Informationen → Trotzdem ausführen*.
+3. Für RAW eine Engine installieren (ART, RawTherapee, darktable) oder mit
+   Lightroom Classic über die XMP-Dateien arbeiten (siehe oben).
 
 - Die Engines findet Purelapse im Suchpfad und in den üblichen
   Installationsordnern (`C:\Program Files\ART`, `…\RawTherapee\<Version>`,
   `…\darktable\bin`), sonst unter **Einstellungen** eintragen.
-- Einstellungen und Basisprofile liegen unter `%LOCALAPPDATA%\Purelapse`.
+- Einstellungen liegen in `%APPDATA%\Purelapse\purelapse.json`, selbst
+  erzeugte Basisprofile unter `%LOCALAPPDATA%\Purelapse`.
 - Dateinamen mit Doppelpunkt (etwa `2016-12-26_20:15:32.nef`) sind unter
   Windows nicht erlaubt – solche Serien vorher umbenennen.
 - Hardware-Encoder: NVIDIA und Intel QuickSync; VAAPI gibt es nur unter Linux.

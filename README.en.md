@@ -2,7 +2,7 @@
 
 [Deutsch](README.md) · **English**
 
-**Flicker-free timelapses – from RAW or JPG sequences, with ART, RawTherapee or Darktable.**
+**Flicker-free timelapses – from RAW or JPG sequences, with ART, RawTherapee, Darktable or Lightroom Classic. For Linux and Windows.**
 
 > ⚠️ **Beta version.** Purelapse is under active development. Please back up
 > your original images and report bugs as an [issue](https://github.com/purelapse/purelapse/issues).
@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/08c6d79c-24cf-44d8-aacb-35ddfd3aa6f2
 - [Performance](#performance)
 - [User interface](#user-interface)
 - [Installation (Linux)](#installation-linux)
+- [Installation (Windows)](#installation-windows)
 - [Running from source](#running-from-source)
 - [Building it yourself](#building-it-yourself)
 - [Known limitations](#known-limitations)
@@ -331,16 +332,22 @@ preferred (matching the graphics driver).
 
 JPG sequences don't need an engine.
 
-## Windows (in preparation)
+## Installation (Windows)
 
-Purelapse is being prepared for Windows. A test build as a single `.exe` can
-be made under *Actions → Windows-Paket*; it has not yet been tried on a real
-Windows machine with the engines.
+1. Download `Purelapse-…-windows-x64.exe` from
+   [Releases](https://github.com/purelapse/purelapse/releases) (Windows 10/11,
+   64-bit). It contains Python, Qt, OpenCV, rawpy and FFmpeg; no installation
+   needed.
+2. Start it. If Windows says "Windows protected your PC": the file is not
+   signed – *More info → Run anyway*.
+3. For RAW, install an engine (ART, RawTherapee, darktable) or work with
+   Lightroom Classic via the XMP files (see above).
 
 - Purelapse finds the engines in the search path and in the usual install
   folders (`C:\Program Files\ART`, `…\RawTherapee\<version>`,
   `…\darktable\bin`); otherwise enter them under **Settings**.
-- Settings and base profiles live in `%LOCALAPPDATA%\Purelapse`.
+- Settings live in `%APPDATA%\Purelapse\purelapse.json`, self-made base
+  profiles in `%LOCALAPPDATA%\Purelapse`.
 - File names containing a colon (such as `2016-12-26_20:15:32.nef`) are not
   allowed on Windows – rename such sequences first.
 - Hardware encoders: NVIDIA and Intel QuickSync; VAAPI exists only on Linux.

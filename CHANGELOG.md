@@ -3,9 +3,17 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
-## [Unveröffentlicht]
+## [2.46.0-beta] – 2026-11-26
 
-Lightroom Classic als vierte Engine, Vorbereitung für Windows, Engines als Flatpak und darktable 5.
+Purelapse läuft jetzt auch unter **Windows** – als einzelne `.exe`, ohne Installation. Dazu kommt **Lightroom Classic** als vierte Engine (über die XMP-Dateien), und unter Linux werden Engines aus **Flatpak** erkannt. darktable 5.x wird vollständig unterstützt.
+
+### Windows
+- **Purelapse für Windows 10/11 (64 Bit):** eine einzelne Datei `Purelapse-2.46.0-beta-windows-x64.exe` mit Python, Qt, OpenCV, rawpy und FFmpeg. Engines (ART, RawTherapee, darktable) werden in den üblichen Installationsordnern gefunden; Lightroom Classic läuft über die XMP-Dateien. Getestet mit RawTherapee: Ablauf und Bedienung wie unter Linux.
+- Beim ersten Start meldet Windows evtl. „Der Computer wurde durch Windows geschützt“ – die Datei ist nicht signiert. Weiter über *Weitere Informationen → Trotzdem ausführen*.
+- Gebaut wird die `.exe` auf GitHub (Ablauf *Windows-Paket*) und beim Veröffentlichen automatisch an das Release gehängt.
+- **Videos tragen ihren Farbraum jetzt sicher:** Neuere FFmpeg-Fassungen (ab 8, unter Windows häufig) ließen Primärvalenzen und Kennlinie aus dem Video weg, obwohl Purelapse sie angab – Player mussten raten, Farben konnten leicht verschoben wirken. Die Angaben (BT.709) stehen jetzt zusätzlich an jedem Bild (`setparams`), FFmpeg übernimmt sie von dort.
+- **Abbrechen beendet die Engine unter Windows vollständig:** Ein Programm, das selbst weitere Prozesse startet (etwa über eine `.cmd`- oder `.bat`-Hülle), lief nach dem Abbruch weiter. Purelapse beendet dort jetzt den ganzen Prozessbaum (`taskkill /T`) – in der echten Vorschau, bei Pass 2 und bei darktable-cli.
+- **Prüfungen auch unter Windows grün:** Sechs Prüfreihen waren unter Windows bisher rot – fast alle wegen Unix-Annahmen in den Prüfungen selbst (Dateirechte 0600, Heimverzeichnis, Pfadtrenner). Seit 2.46 macht ein Fehlschlag unter Windows den Push rot.
 
 ### Neu
 - **Lightroom Classic (XMP) als Engine.** Lightroom hat keine Kommandozeile; Purelapse arbeitet deshalb mit den XMP-Begleitdateien (`BILD.xmp`, so wie Lightroom sie nennt):
@@ -24,7 +32,7 @@ Lightroom Classic als vierte Engine, Vorbereitung für Windows, Engines als Flat
   - Die Engine-Anzeige oben nennt „(Flatpak)“.
 - **darktable 5 (getestet gegen den Quelltext von 5.6.2):** Neuere Modulversionen werden gelesen, geschrieben und überblendet – Belichtung 7 (neu: Lichterschutz `compensate_hilite_pres`), Weißabgleich 4 (neu: `preset`), Entrauschen (Profil) 12, Dunstentfernung 3.
 
-- **Windows-Paket:** Ein neuer Ablauf bei GitHub (*Actions → Windows-Paket*) baut Purelapse auf einem Windows-Rechner von GitHub als einzelne `.exe` und startet sie zur Probe einmal. Bei einem Release wird sie automatisch angehängt. Noch nicht auf einem echten Windows-Rechner mit den Engines erprobt.
+- **Windows-Paket:** Ein neuer Ablauf bei GitHub (*Actions → Windows-Paket*) baut Purelapse auf einem Windows-Rechner von GitHub als einzelne `.exe` und startet sie zur Probe einmal. Bei einem Release wird sie automatisch angehängt.
 - **Prüfungen auch unter Windows:** Bei jedem Push laufen alle Prüfungen zusätzlich auf Windows. Solange die Unterstützung im Aufbau ist, macht ein Fehlschlag dort den Push nicht rot.
 
 ### Geändert
@@ -43,6 +51,7 @@ Lightroom Classic als vierte Engine, Vorbereitung für Windows, Engines als Flat
 
 ### Intern
 - Neue Prüfreihe `test_lightroom.py`: Begleitdatei und Erkennung, Lesen/Schreiben (Bewertung, Stichwörter, Kürzel bleiben), Überblenden von Zahlen, Weißabgleich, Kurven und Masken, Prüfsummen bleiben ungemischt, Schnelleinstellungen, und ein ganzer Ablauf: Pass 1 → Pass 2 Schritt 1 → nachgebauter Export mit Restflackern → Pass 2 Schritt 2 mit Video (Feinabgleich halbiert das Flackern mindestens), veralteter Export, fehlendes Bild, fehlende XMP.
+- GitHub-Abläufe auf die Node-24-Fassungen umgestellt (`checkout@v5`, `setup-python@v6`, `upload-artifact@v6`).
 - Pass 2: der Videobau ist als `_pass2_video()` herausgelöst und wird von RAW-Pass 2 und Lightroom gemeinsam genutzt.
 - Neue Prüfreihe `test_dt5.py`: Belichtung 6/7 lesen und schreiben (Version und Nutzerfelder bleiben), Layouts der neuen Versionen, Weißabgleich 4 und gemischt 3+4 weich, Belichtung 6+7, Hochstufen der Dunstentfernung.
 - Neue Prüfreihe `test_flatpak.py`: Erkennen in nachgebauten Flatpak-Ordnern, Aufruf mit `--command`, Ordnerfreigaben (ohne Doppelte, ohne Systemordner), Umgebungsvariablen.

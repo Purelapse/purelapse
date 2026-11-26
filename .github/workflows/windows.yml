@@ -21,8 +21,8 @@ jobs:
   bauen:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Python-Pakete
@@ -41,7 +41,7 @@ jobs:
         # Startet die fertige .exe einmal ohne Fenster: faellt ein Modul
         # beim Einpacken unter den Tisch, scheitert es hier und nicht beim Nutzer.
         run: QT_QPA_PLATFORM=offscreen timeout 120 "$DATEI" --version
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Purelapse-windows
           path: ${{ env.DATEI }}

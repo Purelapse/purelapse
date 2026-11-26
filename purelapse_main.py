@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.45.0-beta"
+VERSION = "2.46.0-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -2114,10 +2114,15 @@ def codec_filter(c):
     """Filterkette: RGB -> YUV mit BT.709 im eingeschraenkten Bereich,
     dann das Pixelformat des Encoders (bzw. dessen eigener Filter)."""
     umrechnen = "scale=out_color_matrix=bt709:out_range=tv"
+    # Primaervalenzen und Kennlinie auch an den Bildern selbst vermerken:
+    # neuere FFmpeg (ab 8) nehmen sie von dort und liessen die Angaben
+    # aus -color_primaries/-color_trc sonst weg - das Video hiesse dann
+    # "Farbraum unbekannt", und Player raten.
+    merken = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
     if c.get('vf'):
-        return f"{umrechnen},{c['vf']}"
+        return f"{umrechnen},{merken},{c['vf']}"
     ziel = c.get('pix') or c.get('pix_intern')
-    return f"{umrechnen},format={ziel}" if ziel else umrechnen
+    return f"{umrechnen},format={ziel},{merken}" if ziel else f"{umrechnen},{merken}"
 
 
 def codec_pre_args(c):
@@ -4339,12 +4344,7 @@ class EngineVorschau(QtCore.QThread):
     def abbrechen(self):
         """Die Regler stehen inzwischen anders - dieses Bild will keiner mehr."""
         self._abbruch = True
-        proc = self._proc
-        if proc is not None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+        prozess_beenden(self._proc)
 
     def run(self):
         start = time.time()
@@ -4365,11 +4365,11 @@ class EngineVorschau(QtCore.QThread):
             self._proc = subprocess.Popen(engine_befehl(cmd), stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT, **OHNE_FENSTER)
             if self._abbruch:
-                self._proc.kill()
+                prozess_beenden(self._proc)
             try:
                 ausgabe, _ = self._proc.communicate(timeout=240)
             except subprocess.TimeoutExpired:
-                self._proc.kill()
+                prozess_beenden(self._proc)
                 ausgabe, _ = self._proc.communicate()
                 erg['fehler'] = "Zeitueberschreitung"
             if self._abbruch:
@@ -7092,7 +7092,7 @@ class Worker(QtCore.QThread):
                         try:
                             pr.wait(timeout=5)
                         except subprocess.TimeoutExpired:
-                            pr.kill()
+                            prozess_beenden(pr)
                     raise RuntimeError(self._t("Vom Benutzer abgebrochen.",
                                                "Cancelled by user."))
                 done = self._count_rendered(out_dir, expected_stems)
@@ -7171,10 +7171,7 @@ class Worker(QtCore.QThread):
 
         def beenden(eintrag):
             proc, slot = eintrag[0], eintrag[4]
-            try:
-                proc.kill()
-            except OSError:
-                pass
+            prozess_beenden(proc)
             try:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:

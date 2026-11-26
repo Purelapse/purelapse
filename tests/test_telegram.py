@@ -43,7 +43,10 @@ ok, info = pm.telegram_senden("GEHEIM:1", "1", "x", timeout=3); pm.TELEGRAM_API 
 pruef(not ok and "GEHEIM" not in info, f"Verbindungsfehler verraet den Token: {info}")
 pm.telegram_speichern(True, " GUT:123 ", " 4711 ")
 pruef(pm.telegram_laden() == {'an': True, 'token': 'GUT:123', 'chat': '4711'}, "speichern/laden")
-pruef(stat.S_IMODE(os.stat(pe.konfig_pfad()).st_mode) == 0o600, "Konfiguration ist fuer andere lesbar")
+# Unter Windows gibt es keine Unix-Rechte; dort schuetzt das Benutzerprofil
+# (%APPDATA%) die Datei.
+if os.name != 'nt':
+    pruef(stat.S_IMODE(os.stat(pe.konfig_pfad()).st_mode) == 0o600, "Konfiguration ist fuer andere lesbar")
 
 print("=== Im Fenster ===")
 o = os.path.join(ARBEIT, "telegram"); d, _ = szene(o, n=60)

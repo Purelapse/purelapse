@@ -437,11 +437,12 @@ def ist_flatpak(pfad):
     return bool(pfad) and str(pfad).startswith(FLATPAK)
 
 
-def flatpak_suchen(key=None, orte=None):
-    """Ersatzpfad "flatpak:<ID>", wenn die Engine als Flatpak da ist, sonst ""."""
+def flatpak_suchen(key=None, orte=None, nt=None):
+    """Ersatzpfad "flatpak:<ID>", wenn die Engine als Flatpak da ist, sonst "".
+    Unter Windows gibt es kein Flatpak (nt=None: das laufende System)."""
     key = key or engine_key()
     app_id = FLATPAK_IDS.get(key)
-    if not app_id or os.name == 'nt':
+    if not app_id or (os.name == 'nt' if nt is None else nt):
         return ""
     if shutil.which("flatpak") is None and orte is None:
         return ""
@@ -470,13 +471,14 @@ def _flatpak_freigaben(args):
         else:
             d = a                         # Ordner, der noch angelegt wird
         d = os.path.normpath(d)
-        if d in ('/', '') or any(d == t or d.startswith(t + '/') for t in _FLATPAK_TABU):
+        tabu = [os.path.normpath(t) for t in _FLATPAK_TABU]
+        if d in (os.sep, '') or any(d == t or d.startswith(t + os.sep) for t in tabu):
             continue
         if d not in ordner:
             ordner.append(d)
     # Unterordner eines schon freigegebenen Ordners brauchen keine eigene Freigabe
     return [d for d in ordner
-            if not any(d != o and d.startswith(o.rstrip('/') + '/') for o in ordner)]
+            if not any(d != o and d.startswith(o.rstrip(os.sep) + os.sep) for o in ordner)]
 
 
 def engine_befehl(cmd, env=None, key=None):
@@ -497,6 +499,28 @@ def engine_befehl(cmd, env=None, key=None):
         if env and env.get(name):
             vorne.append(f"--env={name}={env[name]}")
     return vorne + [app_id] + cmd[1:]
+
+
+def prozess_beenden(proc):
+    """
+    Beendet ein gestartetes Programm sofort - unter Windows samt allen
+    Prozessen, die es selbst gestartet hat. Sonst liefe dort z. B. hinter
+    einer .cmd- oder .bat-Huelle das eigentliche Programm weiter, und wer
+    auf dessen Ausgabe wartet, wartete bis zu dessen Ende.
+    """
+    if proc is None or proc.poll() is not None:
+        return
+    if os.name == 'nt':
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=10, **OHNE_FENSTER)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
 
 
 def get_art_path():

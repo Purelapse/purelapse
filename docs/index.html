@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Purelapse – Zeitraffer ohne Flackern unter Linux</title>
-<meta name="description" content="Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee und darktable, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux.">
+<title>Purelapse – Zeitraffer ohne Flackern für Linux und Windows</title>
+<meta name="description" content="Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee, darktable und Lightroom Classic, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux und Windows.">
 <link rel="me" href="https://mastodon.social/@purelapse">
 <link rel="canonical" href="https://purelapse.org/">
 <link rel="alternate" hreflang="de" href="https://purelapse.org/">
 <link rel="alternate" hreflang="en" href="https://purelapse.org/en.html">
 <link rel="alternate" hreflang="x-default" href="https://purelapse.org/en.html">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Purelapse – Zeitraffer ohne Flackern unter Linux">
-<meta property="og:description" content="Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee und darktable, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux.">
+<meta property="og:title" content="Purelapse – Zeitraffer ohne Flackern für Linux und Windows">
+<meta property="og:description" content="Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee, darktable und Lightroom Classic, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux und Windows.">
 <meta property="og:url" content="https://purelapse.org/">
 <meta property="og:image" content="https://purelapse.org/assets/og-image.jpg">
 <meta property="og:locale" content="de_DE">
@@ -20,7 +20,7 @@
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon.png">
-<link rel="stylesheet" href="assets/style.css?v=7">
+<link rel="stylesheet" href="assets/style.css?v=8">
 <script>try{var l=localStorage.getItem("purelapse-lang");var de=(navigator.languages||[navigator.language||""]).some(function(x){return /^de/i.test(x)});var bot=/bot|crawl|spider|slurp|lighthouse|preview/i.test(navigator.userAgent||"");if(!bot&&(l==="en"||(!l&&!de))){location.replace("en.html"+location.hash)}}catch(e){}</script>
 <script type="application/ld+json">
 {
@@ -28,10 +28,11 @@
  "@type": "SoftwareApplication",
  "name": "Purelapse",
  "url": "https://purelapse.org/",
- "description": "Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee und darktable, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux.",
+ "description": "Purelapse entflackert Zeitraffer aus RAW- oder JPG-Serien, steuert ART, RawTherapee, darktable und Lightroom Classic, blendet Keyframes weich über und rendert das Video bis 8K. Kostenlos und Open Source für Linux und Windows.",
  "applicationCategory": "MultimediaApplication",
  "applicationSubCategory": "Timelapse deflicker",
- "operatingSystem": "Linux",
+ "operatingSystem": "Linux, Windows 10, Windows 11",
+ "softwareVersion": "2.46.0-beta",
  "inLanguage": [
   "de",
   "en"
@@ -66,11 +67,12 @@
 <main id="main">
   <section class="hero">
     <div class="wrap">
-      <a class="pill" href="versionen.html#v2-45-0"><b>Neu in 2.45</b><span>Gefällige Automatik · Nacht entfernen · Entflackern abschaltbar</span><span aria-hidden="true">→</span></a>
+      <a class="pill" href="versionen.html#v2-46-0"><b>Neu in 2.46</b><span>Windows · Lightroom Classic · Flatpak · darktable 5</span><span aria-hidden="true">→</span></a>
       <h1>Zeitraffer<br><span class="grad-text">ohne Flackern.</span></h1>
-      <p class="lead">Purelapse glättet die Helligkeit deiner RAW- oder JPG-Serien, steuert ART, RawTherapee oder darktable und rendert ein sauberes Video – vom Sonnenuntergang bis zum Holy Grail.</p>
+      <p class="lead">Purelapse glättet die Helligkeit deiner RAW- oder JPG-Serien, steuert ART, RawTherapee, darktable oder Lightroom Classic und rendert ein sauberes Video – vom Sonnenuntergang bis zum Holy Grail.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.45.0-beta/Purelapse-2.45.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.45.0-beta</small></span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.46.0-beta</small></span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-windows-x64.exe"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6 10.4 4.5v7.1H3zM11.6 4.3 21 3v8.6h-9.4zM3 12.6h7.4v7L3 18.4zM11.6 12.6H21V21l-9.4-1.3z"/></svg><span>Download für Windows<small>.exe · 2.46.0-beta</small></span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span>Quelltext auf GitHub</span></a>
       </div>
       <p class="meta"><span>Kostenlos</span><span>GPL-3.0</span><span>Deutsch &amp; Englisch</span></p>
@@ -166,8 +168,8 @@
         <h2>Deine Engine, deine Bearbeitung.</h2>
         <p>Purelapse schreibt die Belichtungskorrektur in die Profile und verteilt deine Keyframe-Bearbeitung auf die Bilder dazwischen. Alles andere, was du in der Engine eingestellt hast, bleibt erhalten.</p>
       </div>
-      <div class="engines"><div class="engine"><h3>ART</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li>Lichter-Rekonstruktion</li></ul></div><div class="engine"><h3>RawTherapee</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li>Lichter-Rekonstruktion</li></ul></div><div class="engine"><h3>darktable</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li class="no">Lichter-Rekonstruktion</li></ul></div></div>
-      <p class="note">Bei darktable überträgt Purelapse den kompletten Modulstapel der Keyframes und blendet Zahlenwerte wie Weißabgleich, Schärfe und Farbbalance weich über. Die Schnelleinstellungen umfassen dort alles außer Weißabgleich und Entrauschen. darktable-cli entwickelt mit bis zu vier Prozessen gleichzeitig. Formate: NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW.</p>
+      <div class="engines"><div class="engine"><h3>ART</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li>Lichter-Rekonstruktion</li></ul></div><div class="engine"><h3>RawTherapee</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li>Lichter-Rekonstruktion</li></ul></div><div class="engine"><h3>darktable</h3><ul><li>Deflicker und Nachkalibrierung</li><li>Keyframes</li><li>Schnelleinstellungen</li><li>Echte Vorschau</li><li>Hotpixel-Korrektur</li><li class="no">Lichter-Rekonstruktion</li></ul></div><div class="engine"><h3>Lightroom Classic</h3><ul><li>Deflicker und Feinabgleich</li><li>Keyframes</li><li>Schnelleinstellungen</li><li class="no">Echte Vorschau</li><li class="no">Hotpixel-Korrektur</li><li class="no">Lichter-Rekonstruktion</li></ul></div></div>
+      <p class="note">Bei darktable überträgt Purelapse den kompletten Modulstapel der Keyframes und blendet Zahlenwerte wie Weißabgleich, Schärfe und Farbbalance weich über. Die Schnelleinstellungen umfassen dort alles außer Weißabgleich und Entrauschen. darktable-cli entwickelt mit bis zu vier Prozessen gleichzeitig; unterstützt wird darktable 4.6 bis 5.6. Unter Linux findet Purelapse die Engines auch als Flatpak, unter Windows in den üblichen Installationsordnern. <b>Lightroom Classic</b> hat keine Kommandozeile: Purelapse schreibt Belichtung und Keyframe-Übergänge in die XMP-Dateien, Lightroom liest sie ein und exportiert, und aus dem Export baut Purelapse das Video – mit einem Feinabgleich gegen das Restflackern. Formate: NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW.</p>
     </div>
   </section>
 
@@ -178,18 +180,19 @@
           <div class="eyebrow">Download</div>
           <h2>In zwei Minuten startklar.</h2>
         </div>
-        <ol><li><span><b>ART, RawTherapee oder darktable</b> installieren – für den RAW-Workflow. Für JPG-Serien brauchst du keine Engine.</span></li><li><span>Die <b>AppImage</b> herunterladen. Sie enthält Python, Qt, OpenCV und FFmpeg, eine Installation ist nicht nötig.</span></li><li><span>Ausführbar machen und mit den beiden Befehlen im Kasten starten.</span></li><li><span>In Purelapse unter <b>Einstellungen</b> (Zahnrad oben rechts) den Pfad zu <code>ART-cli</code>, <code>rawtherapee-cli</code> bzw. <code>darktable-cli</code> eintragen.</span></li></ol>
+        <ol><li><span><b>Eine Engine</b> für RAW installieren: ART, RawTherapee oder darktable – unter Linux gern auch als Flatpak – oder mit <b>Lightroom Classic</b> über die XMP-Dateien arbeiten. Für JPG-Serien brauchst du keine Engine.</span></li><li><span><b>Linux:</b> die AppImage herunterladen, ausführbar machen und mit den beiden Befehlen im Kasten starten.</span></li><li><span><b>Windows 10/11:</b> die .exe herunterladen und starten. Meldet Windows „Der Computer wurde durch Windows geschützt“, ist das die fehlende Signatur: <i>Weitere Informationen → Trotzdem ausführen</i>.</span></li><li><span>Beide enthalten Python, Qt, OpenCV und FFmpeg – keine Installation nötig. Die Engine sucht Purelapse selbst; sonst unter <b>Einstellungen</b> (Zahnrad oben rechts) den Pfad eintragen.</span></li></ol>
       </div>
       <div>
         <div class="cta" style="justify-content:flex-start;margin-top:0;margin-bottom:22px">
-          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.45.0-beta/Purelapse-2.45.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.45.0-beta</small></span></a>
+          <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux<small>AppImage · 2.46.0-beta</small></span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-windows-x64.exe"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6 10.4 4.5v7.1H3zM11.6 4.3 21 3v8.6h-9.4zM3 12.6h7.4v7L3 18.4zM11.6 12.6H21V21l-9.4-1.3z"/></svg><span>Download für Windows<small>.exe · 2.46.0-beta</small></span></a>
         </div>
         <div class="term">
-          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.45.0-beta-x86_64.AppImage\n./Purelapse-2.45.0-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
-          <pre><span class="p">$</span> chmod +x Purelapse-2.45.0-beta-x86_64.AppImage
-<span class="p">$</span> ./Purelapse-2.45.0-beta-x86_64.AppImage</pre>
+          <div class="term-bar"><i></i><i></i><i></i><button type="button" id="copy" data-text="chmod +x Purelapse-2.46.0-beta-x86_64.AppImage\n./Purelapse-2.46.0-beta-x86_64.AppImage" data-done="Kopiert">Kopieren</button></div>
+          <pre><span class="p">$</span> chmod +x Purelapse-2.46.0-beta-x86_64.AppImage
+<span class="p">$</span> ./Purelapse-2.46.0-beta-x86_64.AppImage</pre>
         </div>
-        <p class="req">Läuft auf Linux Mint 21 / Ubuntu 22.04 und neuer (x86_64). <a href="versionen.html">Was ist neu? Alle Versionen →</a></p>
+        <p class="req">Linux Mint 21 / Ubuntu 22.04 und neuer (x86_64) · Windows 10/11 (64&nbsp;Bit). <a href="versionen.html">Was ist neu? Alle Versionen →</a></p>
       </div>
     </div>
   </section>
@@ -230,7 +233,8 @@
       <h2>Gern geteilt.</h2>
       <p>Purelapse ist eine Beta. Rückmeldungen, Fehlerberichte und Ideen sind sehr willkommen.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.45.0-beta/Purelapse-2.45.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Download für Linux</span></a>
+        <a class="btn btn-primary" href="https://github.com/purelapse/purelapse/releases/download/v2.46.0-beta/Purelapse-2.46.0-beta-windows-x64.exe"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6 10.4 4.5v7.1H3zM11.6 4.3 21 3v8.6h-9.4zM3 12.6h7.4v7L3 18.4zM11.6 12.6H21V21l-9.4-1.3z"/></svg><span>Download für Windows</span></a>
         <a class="btn" href="https://github.com/purelapse/purelapse/issues">Fehler melden</a>
       </div>
     </div>
@@ -412,6 +416,12 @@
                 <li>Wirksam ist je Modul und Instanz-Priorität der letzte Verlaufseintrag unterhalb von <code>history_end</code>. Der Deflicker-Wert geht in genau diese Belichtungsinstanz; eine eigene Belichtungsänderung des Nutzers bleibt als Abstand erhalten. Auch eine benutzerdefinierte Modul-Reihenfolge wird unterstützt.</li>
                 <li>Frische Profile behalten darktables Grundeinstellungen (<code>auto_presets_applied</code>); nur aus Keyframes übernommene Stapel gelten als fertig.</li>
               </ul>
+              <h4>Lightroom Classic</h4>
+              <ul>
+                <li>Purelapse schreibt in die XMP-Dateien, die Lightroom mit „Metadaten in Datei speichern“ anlegt (<code>BILD.xmp</code>, ohne die Endung des RAW). Nur solche Dateien werden angefasst: Eine selbst erzeugte XMP setzte beim Einlesen alles aus dem Katalog – Zuschnitt, Profil, Objektivkorrektur – auf Grundwerte. Fehlen sie, bricht Pass 1 mit einer Anleitung ab.</li>
+                <li>Die Korrektur geht in <code>crs:Exposure2012</code>, mit drei Nachkommastellen. Geschrieben werden nur die Entwicklungseinstellungen (<code>crs:</code>); Bewertung, Stichwörter und alle anderen Angaben bleiben, wie sie sind.</li>
+                <li>DNG-Dateien werden abgelehnt: Lightroom speichert deren Einstellungen in der DNG-Datei selbst.</li>
+              </ul>
               <h4>Weißabgleich-Prüfung</h4>
               <p>Aus den Kamera-Faktoren Rot/Grün und Blau/Grün berechnet Purelapse das Zappeln von Bild zu Bild und die Gesamtspanne. Unter 0,004 EV Zappeln und 0,02 EV Spanne gilt der Weißabgleich als konstant. Ab 0,004 EV Zappeln warnt Purelapse vor automatischem Weißabgleich – der Deflicker korrigiert nur Helligkeit – und empfiehlt, erstes und letztes Bild als Keyframe mit festem Weißabgleich zu versehen.</p>
               <h4>Kontrollen</h4>
@@ -444,12 +454,19 @@
               <h4>darktable: kompletter Modulstapel</h4>
               <ul>
                 <li>Übertragen werden alle Module der Keyframes, nicht nur die Belichtung. Jede Modulinstanz wird über Operation und Instanz-Priorität zugeordnet.</li>
-                <li>Die Parameter liegen binär in der XMP. Purelapse entschlüsselt sie mit Layouts aus dem Quelltext von darktable 4.6.1 (67 Module) und prüft vor jeder Überblendung Modulversion und Datengröße.</li>
+                <li>Die Parameter liegen binär in der XMP. Purelapse entschlüsselt sie mit Layouts aus dem Quelltext von darktable 4.6.1 (67 Module) und den neueren Modulversionen von darktable 5.6.2 (Belichtung 7, Weißabgleich 4, Entrauschen 12, Dunstentfernung 3) und prüft vor jeder Überblendung Modulversion und Datengröße. Stehen in zwei Keyframes verschiedene Versionen eines Moduls (darktable 4 und 5 gemischt), stuft Purelapse die ältere so hoch, wie darktable es beim Laden täte.</li>
                 <li>Gleitkommawerte werden linear überblendet, Farbtöne auf dem kürzeren Weg um den Farbkreis. Ganzzahlen und Auswahllisten kommen vom näheren Keyframe.</li>
                 <li>Schalter, Masken und Überblendmodi sowie Module, die nur in einem Keyframe vorkommen, kommen ebenfalls vom näheren Keyframe.</li>
                 <li>Nie überblendet werden Geometrie und Retusche: Zuschneiden, Perspektive, Objektivkorrektur, Retusche, Flecken entfernen, Verflüssigen, Hotpixel und die Pflichtmodule der Pipeline.</li>
                 <li>Weich überblendet werden u. a. Weißabgleich, Farbkalibrierung, Schärfen, Farbbalance RGB, Filmic RGB, Sigmoid, Tonwert-Equalizer, lokaler Kontrast, Dunstentfernung und Verlaufsfilter.</li>
                 <li>Vor der Verteilung steht im Protokoll, welche Module übernommen und welche überblendet werden. Empfehlung: in allen Keyframes dieselben Module verwenden (Verlauf kopieren mit Strg+Umschalt+C / Strg+Umschalt+V).</li>
+              </ul>
+              <h4>Lightroom Classic</h4>
+              <ul>
+                <li>Keyframes werden in Lightroom oder in Purelapse mit 5 Sternen markiert; Purelapse schreibt die Bewertung in die XMP von Lightroom.</li>
+                <li>Alle Zahlenregler werden linear überblendet – Belichtung, Kontrast, Lichter, Tiefen, Weiß, Schwarz, Temperatur, Tönung, Dynamik, Klarheit, Dunst … – in der Schreibweise von Lightroom (Vorzeichen, Nachkommastellen wie im Keyframe). Gradationskurven mit gleich vielen Punkten werden Punkt für Punkt überblendet.</li>
+                <li>Unterscheiden sich die Temperaturen, wird der Weißabgleich auf „Benutzerdefiniert“ gestellt. Steht ein Keyframe auf „Automatisch“, warnt Purelapse: Lightroom rechnete ihn für jedes Bild neu.</li>
+                <li>Masken, Profile, Prüfsummen und andere Text- oder Auswahlwerte kommen vom näheren Keyframe und stehen im Protokoll.</li>
               </ul>
             </div>
           </details>
@@ -460,22 +477,22 @@
               <p>„Keyframe einstellen…“ bearbeitet das Profil eines Keyframes, ohne die Engine zu öffnen. Jeder Regler hat ein eigenes Häkchen: Ohne Häkchen wird der Wert im Profil nicht angefasst, eine in der Engine gemachte Bearbeitung bleibt also erhalten. Regler, deren Abschnitt im Profil fehlt, sind gesperrt, statt still einen Schlüssel zu schreiben, den die Engine verwerfen würde.</p>
               <h4>Regler und Zuordnung</h4>
               <div class="tbl"><table>
-                <thead><tr><th>Regler</th><th>Bereich</th><th>ART</th><th>RawTherapee</th><th>darktable</th></tr></thead>
+                <thead><tr><th>Regler</th><th>Bereich</th><th>ART</th><th>RawTherapee</th><th>darktable</th><th>Lightroom</th></tr></thead>
                 <tbody>
-                  <tr><td>Farbtemperatur</td><td class="nw">2000–12000 K</td><td colspan="2"><code>[White Balance] Temperature</code></td><td>–</td></tr>
-                  <tr><td>Grünabgleich</td><td class="nw">0,6–1,8</td><td colspan="2"><code>[White Balance] Green</code></td><td>–</td></tr>
-                  <tr><td>Helligkeit</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Brightness</code></td><td><code>[Exposure] Brightness</code></td><td>Farbbalance RGB, Brillanz × 0,01</td></tr>
-                  <tr><td>Kontrast</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Contrast</code></td><td><code>[Exposure] Contrast</code></td><td>Farbbalance RGB, Kontrast × 0,01</td></tr>
-                  <tr><td>Lichter abdunkeln</td><td class="nw">0–100</td><td>Tonwert-Equalizer, <code>Band4</code> × −0,5 und <code>Band3</code> × −0,2</td><td><code>[Shadows &amp; Highlights] Highlights</code> × 0,75</td><td>Schatten und Lichter, Lichter × −0,6</td></tr>
-                  <tr><td>Tiefen aufhellen</td><td class="nw">0–100</td><td>Tonwert-Equalizer, <code>Band1</code> × 0,6, <code>Band0</code> × 0,35, <code>Band2</code> × 0,2</td><td><code>[Shadows &amp; Highlights] Shadows</code> × 0,3</td><td>Schatten und Lichter, Schatten × 0,6</td></tr>
-                  <tr><td>Dynamik</td><td class="nw">−100…100</td><td><code>[Saturation] Vibrance</code></td><td><code>[Vibrance] Pastels</code> und <code>Saturated</code></td><td>Farbbalance RGB, Dynamik × 0,01</td></tr>
-                  <tr><td>Sättigung</td><td class="nw">−100…100</td><td><code>[Saturation] Saturation</code></td><td><code>[Exposure] Saturation</code></td><td>Farbbalance RGB, Sättigung × 0,01</td></tr>
-                  <tr><td>Schärfe</td><td>1–1000 (darktable 1–800)</td><td colspan="2"><code>[Sharpening] Amount</code></td><td>Schärfen, Stärke ÷ 400 (200 → 0,5)</td></tr>
-                  <tr><td>Entrauschen Helligkeit</td><td class="nw">0–100</td><td><code>[Denoise] Luminance</code></td><td><code>[Directional Pyramid Denoising] Luma</code></td><td>–</td></tr>
-                  <tr><td>Entrauschen Farbe</td><td class="nw">0–100</td><td><code>[Denoise] Chrominance</code></td><td><code>[Directional Pyramid Denoising] Chroma</code></td><td>–</td></tr>
+                  <tr><td>Farbtemperatur</td><td class="nw">2000–12000 K</td><td colspan="2"><code>[White Balance] Temperature</code></td><td>–</td><td><code>Temperature</code></td></tr>
+                  <tr><td>Grünabgleich</td><td class="nw">0,6–1,8</td><td colspan="2"><code>[White Balance] Green</code></td><td>–</td><td>–</td></tr>
+                  <tr><td>Helligkeit</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Brightness</code></td><td><code>[Exposure] Brightness</code></td><td>Farbbalance RGB, Brillanz × 0,01</td><td>–</td></tr>
+                  <tr><td>Kontrast</td><td class="nw">−100…100</td><td><code>[Luminance Curve] Contrast</code></td><td><code>[Exposure] Contrast</code></td><td>Farbbalance RGB, Kontrast × 0,01</td><td><code>Contrast2012</code></td></tr>
+                  <tr><td>Lichter abdunkeln</td><td class="nw">0–100</td><td>Tonwert-Equalizer, <code>Band4</code> × −0,5 und <code>Band3</code> × −0,2</td><td><code>[Shadows &amp; Highlights] Highlights</code> × 0,75</td><td>Schatten und Lichter, Lichter × −0,6</td><td><code>Highlights2012</code> × −1</td></tr>
+                  <tr><td>Tiefen aufhellen</td><td class="nw">0–100</td><td>Tonwert-Equalizer, <code>Band1</code> × 0,6, <code>Band0</code> × 0,35, <code>Band2</code> × 0,2</td><td><code>[Shadows &amp; Highlights] Shadows</code> × 0,3</td><td>Schatten und Lichter, Schatten × 0,6</td><td><code>Shadows2012</code></td></tr>
+                  <tr><td>Dynamik</td><td class="nw">−100…100</td><td><code>[Saturation] Vibrance</code></td><td><code>[Vibrance] Pastels</code> und <code>Saturated</code></td><td>Farbbalance RGB, Dynamik × 0,01</td><td><code>Vibrance</code></td></tr>
+                  <tr><td>Sättigung</td><td class="nw">−100…100</td><td><code>[Saturation] Saturation</code></td><td><code>[Exposure] Saturation</code></td><td>Farbbalance RGB, Sättigung × 0,01</td><td><code>Saturation</code></td></tr>
+                  <tr><td>Schärfe</td><td>1–1000 (darktable 1–800)</td><td colspan="2"><code>[Sharpening] Amount</code></td><td>Schärfen, Stärke ÷ 400 (200 → 0,5)</td><td><code>Sharpness</code> × 0,2 (200 → 40)</td></tr>
+                  <tr><td>Entrauschen Helligkeit</td><td class="nw">0–100</td><td><code>[Denoise] Luminance</code></td><td><code>[Directional Pyramid Denoising] Luma</code></td><td>–</td><td><code>LuminanceSmoothing</code></td></tr>
+                  <tr><td>Entrauschen Farbe</td><td class="nw">0–100</td><td><code>[Denoise] Chrominance</code></td><td><code>[Directional Pyramid Denoising] Chroma</code></td><td>–</td><td><code>ColorNoiseReduction</code></td></tr>
                 </tbody>
               </table></div>
-              <p class="small">Weißabgleich und Entrauschen fehlen bei darktable bewusst: darktable speichert dort kameraabhängige Werte (Kanalfaktoren, Rauschprofil), die sich ohne die Farbmatrix der Kamera nicht aus Kelvin bzw. einer Stärke berechnen lassen. Lichter und Tiefen wirken in allen drei Engines lokal; die Faktoren bringen die verschieden kräftigen Werkzeuge auf etwa dieselbe Wirkung je Reglerstellung. Steht im Profil der Weißabgleich der Kamera, ist die Farbtemperatur nicht angehakt, und ihr Ausgangswert wird aus Kanalfaktoren und Farbmatrix des RAWs berechnet.</p>
+              <p class="small">Lightroom: Helligkeit gibt es dort nicht getrennt von der Belichtung (die gehört dem Deflicker), und die Tönung hat eine eigene Skala – beide fehlen; eine geänderte Temperatur stellt den Weißabgleich auf „Benutzerdefiniert“. Weißabgleich und Entrauschen fehlen bei darktable bewusst: darktable speichert dort kameraabhängige Werte (Kanalfaktoren, Rauschprofil), die sich ohne die Farbmatrix der Kamera nicht aus Kelvin bzw. einer Stärke berechnen lassen. Lichter und Tiefen wirken in allen drei Engines lokal; die Faktoren bringen die verschieden kräftigen Werkzeuge auf etwa dieselbe Wirkung je Reglerstellung. Steht im Profil der Weißabgleich der Kamera, ist die Farbtemperatur nicht angehakt, und ihr Ausgangswert wird aus Kanalfaktoren und Farbmatrix des RAWs berechnet.</p>
               <h4>Automatisch optimieren</h4>
               <p>Ziel ist ein gefälliges, fertiges Bild: erst die Lichter herunterholen und die Tiefen aufhellen, dann dem Mittelton mit etwas Kontrast wieder Biss geben, Farbe über die Dynamik. Gemessen wird am Bild der Engine mit allen Reglern der Automatik auf neutral – samt Belichtung aus dem Deflicker, Tonkurve und Farben; ohne Engine an der Näherung aus dem RAW. Jeder Schritt misst das Bild, wie es nach den vorigen aussieht, und jede Messung steht mit ihrer Zahl in der Begründung:</p>
               <ul>
@@ -533,6 +550,17 @@
                 <li>Bis zu 4 Prozesse gleichzeitig (mehr bringt auf einer Grafikkarte nichts), höchstens einer je 3 GB freiem Arbeitsspeicher.</li>
                 <li>darktable-cli sperrt seine Preset-Datenbank. Deshalb bekommt jeder Prozess einen eigenen Konfigurationsordner im Zwischenspeicher, in den <code>darktablerc</code> und <code>data.db</code> des Nutzers kopiert werden (aus <code>~/.config/darktable</code> oder der Flatpak-Fassung) – OpenCL-Einstellungen und eigene Presets gelten weiter. Nebenbei läuft Pass 2 so auch bei geöffnetem darktable.</li>
                 <li>Zeitlimit 10 Minuten je Bild; ein Abbruch beendet laufende Prozesse sofort und räumt liegengebliebene Sperrdateien weg.</li>
+              </ul>
+              <h4>Flatpak (Linux) und Windows</h4>
+              <ul>
+                <li>Engines aus Flathub (<code>com.rawtherapee.RawTherapee</code>, <code>us.pixls.art.ART</code>, <code>org.darktable.Darktable</code>) erkennt Purelapse in <code>/var/lib/flatpak</code> und <code>~/.local/share/flatpak</code> und merkt sie als <code>flatpak:&lt;ID&gt;</code>. Aufgerufen wird <code>flatpak run --command=rawtherapee-cli</code> usw.; jeder Aufruf gibt mit <code>--filesystem</code> genau die Ordner frei, die er braucht – Bilder, Ausgabe, Arbeits- und Konfigurationsordner, auch unter <code>/tmp</code>. Die Thread-Zahl geht über <code>--env</code> mit, Systemordner werden nie freigegeben.</li>
+                <li>Unter Windows sucht Purelapse <code>ART-cli.exe</code>, <code>rawtherapee-cli.exe</code> und <code>darktable-cli.exe</code> im Suchpfad, in <code>Program Files</code> und <code>%LOCALAPPDATA%\Programs</code> (RawTherapee: neueste Version zuerst). Engines und FFmpeg starten ohne eigenes Konsolenfenster. Eine Befehlszeile darf dort höchstens 32 767 Zeichen lang sein; lange Bildlisten werden deshalb auf mehrere Durchgänge nacheinander aufgeteilt.</li>
+              </ul>
+              <h4>Lightroom Classic</h4>
+              <ul>
+                <li>Pass 2 läuft in zwei Schritten. <b>Erster Start:</b> Keyframe-Verteilung in die XMP-Dateien, dann eine Anleitung: in Lightroom „Metadaten aus Dateien lesen“ und als JPG (Qualität 100) oder 16-Bit-TIFF mit dem Originalnamen nach <code>Purelapse/Lightroom_Export</code> exportieren.</li>
+                <li><b>Zweiter Start:</b> Liegt der Export vollständig vor und ist kein Bild älter als seine XMP, misst Purelapse ihn wie bei der Nachkalibrierung und gleicht das Restflackern beim Videobau als Helligkeitsfaktor aus (höchstens 0,5 EV je Bild, umgerechnet in Gamma: <code>2^(r/2,2)</code>).</li>
+                <li>Ist ein Export älter als seine XMP (Keyframe danach geändert), beginnt Pass 2 wieder mit Schritt 1. Fehlen einzelne Bilder, nennt Purelapse sie, ohne etwas neu zu schreiben.</li>
               </ul>
               <h4>16-Bit-Zwischenbilder</h4>
               <p>Option in den Einstellungen. Die Engine entwickelt nach 16-Bit-TIFF, das Video wird durchgehend in 16 Bit gerechnet (Übergabe an FFmpeg als <code>bgr48le</code>). Feine Verläufe im Himmel bleiben frei von Stufen, besonders mit HEVC 10 Bit oder ProRes. Vorher prüft Purelapse den Platz: <code>Breite × Höhe × 6 Byte × 0,85</code> je Bild, plus 5 % Reserve (bei 24 Megapixeln rund 120 MB je Bild). Wer umschaltet, bekommt die Bilder neu entwickelt.</p>
@@ -721,10 +749,11 @@
                   <tr><td><code>~/.config/purelapse/purelapse.json</code></td><td>Die einzige Konfigurationsdatei (Rechte 0600): Design, Sprache, letzter Ordner, Engine-Pfade und Basisprofile, alle Einstellungen, Start-/Endbild je Ordner, Warteschlange, Telegram. Alte Einzeldateien <code>~/.purelapse_*</code> werden beim ersten Start übernommen und entfernt.</td></tr>
                   <tr><td><code>~/.local/share/purelapse</code></td><td>Von der Engine erzeugte Basisprofile</td></tr>
                   <tr><td><code>~/.cache/purelapse</code></td><td>Konfigurationsordner der darktable-cli-Prozesse, bei jedem Lauf aufgefrischt</td></tr>
+                  <tr><td>Windows</td><td>Konfiguration in <code>%APPDATA%\Purelapse\purelapse.json</code>, Basisprofile in <code>%LOCALAPPDATA%\Purelapse</code></td></tr>
                 </tbody>
               </table></div>
               <h4>Im Bilderordner</h4>
-              <p>Neben den Bildern liegen nur die Begleitdateien der Engine – ART, RawTherapee und darktable erwarten sie dort. Alles andere, was Purelapse anlegt, steht im Unterordner <code>Purelapse/</code>. Ordner aus älteren Versionen räumt Purelapse beim Öffnen einmalig dorthin um; vorhandene Dateien werden dabei nie überschrieben.</p>
+              <p>Neben den Bildern liegen nur die Begleitdateien der Engine – ART, RawTherapee, darktable und Lightroom erwarten sie dort. Alles andere, was Purelapse anlegt, steht im Unterordner <code>Purelapse/</code>. Ordner aus älteren Versionen räumt Purelapse beim Öffnen einmalig dorthin um; vorhandene Dateien werden dabei nie überschrieben.</p>
               <div class="tbl"><table>
                 <tbody>
                   <tr><td><code>*.arp</code> / <code>*.pp3</code> / <code>*.xmp</code></td><td>Profile der Engine mit Korrektur und Keyframe-Gestaltung – neben den Bildern</td></tr>
@@ -732,6 +761,7 @@
                   <tr><td><code>Purelapse/purelapse_deflicker.json</code></td><td>Pass-1-Belichtungswerte je Bild</td></tr>
                   <tr><td><code>Purelapse/purelapse_calib.json</code></td><td>Nachkalibrierung je Bild</td></tr>
                   <tr><td><code>Purelapse/purelapse_result.json</code></td><td>Restabweichung je Bild nach Pass 2</td></tr>
+                  <tr><td><code>Purelapse/Lightroom_Export/</code></td><td>Lightroom Classic: der Export, aus dem das Video entsteht</td></tr>
                   <tr><td><code>Purelapse/Deflickered_JPG/</code></td><td>Entwickelte bzw. entflackerte Bilder (JPG oder 16-Bit-TIFF) und der Entwicklungsmerker</td></tr>
                 </tbody>
               </table></div>
@@ -749,17 +779,17 @@
             <div class="chap-body">
               <h4>Automatische Prüfungen</h4>
               <ul>
-                <li>Rund 3000 Prüfungen durchlaufen das ganze Programm – mit echter Messung, echtem FFmpeg und fertigen Videos, mit Ersatz-Engines, die sich wie ART, RawTherapee und darktable-cli verhalten.</li>
-                <li>Sie laufen bei jedem Push auf GitHub (Ubuntu 24.04, Python 3.10 und 3.12) und lokal mit <code>python tests/alle.py</code>.</li>
+                <li>Rund 4000 Prüfungen durchlaufen das ganze Programm – mit echter Messung, echtem FFmpeg und fertigen Videos, mit Ersatz-Engines, die sich wie ART, RawTherapee und darktable-cli verhalten, und einem nachgebauten Lightroom-Export.</li>
+                <li>Sie laufen bei jedem Push auf GitHub (Ubuntu 24.04 mit Python 3.10 und 3.12, dazu Windows) und lokal mit <code>python tests/alle.py</code>. Die Windows-<code>.exe</code> wird auf GitHub gebaut und vor dem Hochladen einmal gestartet.</li>
                 <li>Prüfstände messen die Bildqualität nach: Restflackern mit und ohne Sonne sowie Gleichmäßigkeit und Schärfe der Kamerafahrt.</li>
               </ul>
               <h4>System</h4>
               <ul>
-                <li>Linux x86_64, Linux Mint 21 / Ubuntu 22.04 und neuer.</li>
-                <li>Die AppImage enthält Python, Qt 5, OpenCV, rawpy und FFmpeg; eine Installation ist nicht nötig.</li>
-                <li>Für RAW: ART, RawTherapee oder darktable mit Kommandozeilenprogramm. Die darktable-Parameter-Layouts stammen aus darktable 4.6.1; andere Modulversionen werden erkannt und dann nicht überblendet, sondern vom näheren Keyframe übernommen.</li>
+                <li>Linux x86_64, Linux Mint 21 / Ubuntu 22.04 und neuer; Windows 10/11 (64 Bit).</li>
+                <li>AppImage und .exe enthalten Python, Qt 5, OpenCV, rawpy und FFmpeg; eine Installation ist nicht nötig.</li>
+                <li>Für RAW: ART, RawTherapee oder darktable mit Kommandozeilenprogramm (unter Linux auch als Flatpak) oder Lightroom Classic. darktable 4.6 bis 5.6; unbekannte Modulversionen werden erkannt und dann nicht überblendet, sondern vom näheren Keyframe übernommen.</li>
                 <li>Oberfläche auf Deutsch und Englisch, dunkles und helles Design.</li>
-                <li>Lizenz GPL-3.0. ART, RawTherapee, darktable und FFmpeg laufen als eigenständige Programme unter ihren eigenen Lizenzen.</li>
+                <li>Lizenz GPL-3.0. ART, RawTherapee, darktable, Lightroom und FFmpeg laufen als eigenständige Programme unter ihren eigenen Lizenzen.</li>
               </ul>
             </div>
           </details>

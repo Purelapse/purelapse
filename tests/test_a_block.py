@@ -116,7 +116,9 @@ pm.get_exif_data = lambda f: {'shutter': 0.5, 'iso': 100, 'aperture': 8.0, 'time
 pm._EXIF_MERKER.clear()
 out = os.path.join(o, "t.mp4")
 cmd = w._build_ffmpeg_cmd(640, 360, out)
-pruef("scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" in cmd and "-colorspace" in cmd, f"Befehl: {cmd}")
+vf = cmd[cmd.index("-vf") + 1] if "-vf" in cmd else ""
+pruef(vf.startswith("scale=out_color_matrix=bt709:out_range=tv,format=yuv420p")
+      and "setparams=color_primaries=bt709:color_trc=bt709" in vf and "-colorspace" in cmd, f"Befehl: {cmd}")
 proc = w._start_encoder(cmd)
 w._video_bauen(bilder, lambda f: cv2.imread(f), lambda f: f, proc, None, 640, 360)
 w._finish_encoder(proc)
@@ -221,6 +223,9 @@ fake = ausfuehrbar(fake)
 src_dt = os.path.join(ARBEIT, "heim", ".config", "darktable"); os.makedirs(src_dt, exist_ok=True)
 open(os.path.join(src_dt, "darktablerc"), "w").write("opencl=TRUE\n")
 open(os.path.join(src_dt, "data.db"), "wb").write(b"SQLite")
+# Unter Windows zeigt "~" nicht auf das Pruef-Heimverzeichnis (USERPROFILE
+# statt HOME) - darktable selbst kennt dafuer DARKTABLE_CONFIGDIR.
+os.environ["DARKTABLE_CONFIGDIR"] = src_dt
 pe.set_engine('dt')
 dto = os.path.join(o, "dt"); os.makedirs(dto)
 raws = []
