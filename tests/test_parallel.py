@@ -29,7 +29,8 @@ def schnitt(von, bis):
 
 ns = {"os": os, "subprocess": subprocess, "shutil": shutil, "tempfile": tempfile,
       "time": time, "glob": glob,
-      "OHNE_FENSTER": ({'creationflags': 0x08000000} if os.name == 'nt' else {})}
+      "OHNE_FENSTER": ({'creationflags': 0x08000000} if os.name == 'nt' else {}),
+      "engine_befehl": lambda cmd, env=None: list(cmd)}
 exec(schnitt("THREADS_PRO_PROZESS = 4", "def find_dri_device()"), ns)
 pa = ns["prozess_anzahl"]
 auf = ns["bilder_aufteilen"]

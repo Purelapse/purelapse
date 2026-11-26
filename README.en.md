@@ -57,7 +57,7 @@ JPG sequences are processed in a single pass, without an external engine.
 |---|---|
 | **Deflicker** | Measurement in linear light (16 bit) without blown-out areas, two-stage smoothing, recalibration until residual flicker is below 0.008 EV, measuring area (ROI), light progression sunrise/sunset/constant |
 | **Holy grail** | Compensates exposure and ISO jumps, detects ramping intervals, EXIF exposure and sun elevation as curves, remove night in 24-hour timelapses |
-| **RAW development** | ART, RawTherapee, Darktable; formats NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
+| **RAW development** | ART, RawTherapee, Darktable, Lightroom Classic (via XMP); formats NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
 | **Keyframes** | Smooth blending between keyframes (with Darktable the complete module stack), quick settings with a real engine preview, automatic optimisation, highlight reconstruction |
 | **Video** | 720p to 8K, 23.976 to 120 fps, H.264, H.265 (also 10 bit), ProRes 422 HQ, BT.709 colour space, optional 16-bit intermediate images, CPU or NVIDIA, Intel QuickSync, VAAPI, four quality levels |
 | **Effects** | Motion blur (3–25 frames), 16:9 camera move, stabilisation, denoise, hot pixels, astro clean, telemetry overlay, fade in/out, reverse |
@@ -298,6 +298,32 @@ the sequence. Purelapse is built for this:
    ```
 4. In Purelapse, open **Settings** (gear icon, top right) and enter the path
    to `rawtherapee-cli`, `ART-cli` or `darktable-cli`.
+
+**Engines as Flatpak (Flathub):** Purelapse finds RawTherapee, ART and
+darktable from Flathub by itself; the settings then show e.g.
+`flatpak:com.rawtherapee.RawTherapee`. Purelapse starts the command-line
+program inside the package with `flatpak run --command=…` and grants the
+engine exactly the folders it needs for the run (images, output, work folder).
+
+**darktable:** supports 4.6 to 5.6. XMPs from darktable 5 (exposure
+version 7, white balance version 4) are read and written in their own version;
+keyframes from darktable 4 and 5 can be blended together.
+
+**Lightroom Classic (Windows, macOS):** Lightroom has no command line –
+Purelapse writes the XMP files, Lightroom develops. Workflow:
+
+1. In Lightroom select all frames of the sequence → *Metadata → Save
+   Metadata to File* (Ctrl+S). Mark keyframes with 5 stars.
+2. In Purelapse choose the engine "Lightroom (XMP)" and run pass 1.
+3. Run pass 2: Purelapse blends the keyframes into the XMP files.
+4. In Lightroom *Read Metadata from Files*, then export as JPG (quality 100)
+   or 16-bit TIFF with the original file name to `Purelapse/Lightroom_Export`.
+5. Run pass 2 once more: Purelapse fine-adjusts the residual flicker of the
+   export and builds the video.
+
+Only Lightroom Classic writes XMP files; DNG files are not supported
+(Lightroom stores their settings inside the DNG). Purelapse can edit the XMP
+files on Linux too, e.g. when the folder is on a server.
 
 The AppImage contains Python, Qt, OpenCV, rawpy and FFmpeg. It runs on
 Linux Mint 21 / Ubuntu 22.04 and newer. If a system FFmpeg is installed, it is

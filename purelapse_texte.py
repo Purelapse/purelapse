@@ -161,6 +161,9 @@ TRANSLATIONS = {
         "darktable doesn't need a base profile: Purelapse works with the "
         "existing .xmp files. It writes the exposure and carries the "
         "keyframes' modules into the frames in between.",
+    # Lightroom-Hinweistext
+    'Lightroom Classic hat keine Kommandozeile – Purelapse arbeitet mit den .xmp-Dateien. Ablauf: in Lightroom alle Bilder wählen → Metadaten in Datei speichern (Strg+S). Pass 1 und Pass 2 schreiben Belichtung und Keyframes hinein. Dann in Lightroom „Metadaten aus Dateien lesen“, nach Purelapse/Lightroom_Export exportieren und Pass 2 noch einmal starten: daraus entsteht das Video.':
+        'Lightroom Classic has no command line – Purelapse works with the .xmp files. Workflow: in Lightroom select all frames → Save Metadata to File (Ctrl+S). Pass 1 and pass 2 write the exposure and keyframes into them. Then in Lightroom “Read Metadata from Files”, export to Purelapse/Lightroom_Export and start pass 2 again: the video is built from that export.',
     # Auswahllisten
     "Pass 1 – Anti-Flacker": "Pass 1 – anti-flicker",
     "Pass 2 – Rendern": "Pass 2 – render",
@@ -226,7 +229,11 @@ TRANSLATIONS = {
                  "Korrektur in die wirksame Belichtung ein und uebertraegt in Pass 2\n"
                  "den Modulstapel der Keyframes; eigene Bearbeitungen bleiben erhalten.\n"
                  "Pro Ordner muss man sich festlegen; liegen bereits Begleitdateien\n"
-                 "vor, stellt Purelapse beim Einlesen selbst um.",
+                 "vor, stellt Purelapse beim Einlesen selbst um.\n\n"
+                 "Lightroom (XMP): Lightroom Classic hat keine Kommandozeile.\n"
+                 "Purelapse schreibt Belichtung und Keyframe-Uebergaenge in die\n"
+                 "XMP-Dateien; Lightroom liest sie ein und exportiert, aus dem\n"
+                 "Export baut Purelapse das Video - mit Feinabgleich.",
     "TT_CALIB": "Purelapse misst das Ergebnis der Engine und schreibt die verbleibende\nAbweichung in die Sidecars zurueck, dann entwickelt die Engine erneut.\nAb Runde 2 nur noch die tatsaechlich geaenderten Bilder.\nEin Durchgang genuegt in aller Regel.",
     "TT_CAMPATH": "Legt den 16:9 Ausschnitt fuer das erste und das letzte Bild fest.\nDazwischen faehrt die Kamera weich von A nach B.",
     "TT_STAB": "Gleicht Verwacklungen zwischen den Bildern aus. Kostet etwas Bildrand.",
@@ -330,7 +337,11 @@ TRANSLATIONS_TT_EN = {
                  "correction into the effective exposure and, in pass 2, carries the\n"
                  "keyframes' module stack across; your own edits are kept.\n"
                  "You have to commit per folder; if sidecars are present already,\n"
-                 "Purelapse switches automatically when reading the folder.",
+                 "Purelapse switches automatically when reading the folder.\n\n"
+                 "Lightroom (XMP): Lightroom Classic has no command line.\n"
+                 "Purelapse writes the exposure and keyframe transitions into the\n"
+                 "XMP files; Lightroom reads them and exports, and Purelapse builds\n"
+                 "the video from the export - with fine adjustment.",
     "TT_CALIB": "Purelapse measures the engine's result and writes the remaining deviation\nback into the sidecars, then the engine develops again.\nFrom round 2 on, only the frames that actually changed.\nOne round is usually enough.",
     "TT_CAMPATH": "Defines the 16:9 crop for the first and the last frame.\nIn between the camera moves smoothly from A to B.",
     "TT_STAB": "Compensates camera shake between frames. Costs a little image border.",

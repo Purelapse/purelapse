@@ -1512,6 +1512,14 @@ def ablauf_plan(params):
         return plan
     if p.get('raw_mode') == 'pass1':
         return ['analyse', 'schreiben'] if entflackern else ['schreiben']
+    if p.get('engine') == 'lr':
+        # Lightroom entwickelt selbst; Purelapse misst den Export
+        plan = ['messung'] if entflackern else []
+        if video and p.get('stabilize'):
+            plan.append('stab')
+        if video:
+            plan.append('video')
+        return plan
     plan = ['entwicklung', 'messung'] if entflackern else ['entwicklung']
     try:
         if entflackern and int(p.get('calib_rounds', 2)) > 0:
@@ -2873,6 +2881,71 @@ def pl_ordner(target_dir, anlegen=False):
 def pl_datei(target_dir, name, anlegen=False):
     """Pfad einer Purelapse-Datei (Messwerte, Protokolle) im Purelapse-Ordner."""
     return os.path.join(pl_ordner(target_dir, anlegen), name)
+
+
+# Reihenfolge der Engines in der Auswahl (gespeichert wird die Stelle)
+ENGINE_REIHE = ('art', 'rt', 'dt', 'lr')
+
+
+def engine_aus_index(i):
+    return ENGINE_REIHE[i] if 0 <= i < len(ENGINE_REIHE) else 'art'
+
+
+# Lightroom exportiert hierher; daraus entsteht das Video
+LR_EXPORT_ORDNER = "Lightroom_Export"
+# Feinabgleich des Exports: groesster Ausgleich je Bild in Blenden
+LR_FEIN_MAX = 0.5
+
+
+def lr_export_ordner(target_dir):
+    return os.path.join(pl_ordner(target_dir), LR_EXPORT_ORDNER)
+
+
+LR_XMP_FEHLT = {
+    'de': "Zu diesem Bild gibt es noch keine Lightroom-XMP mit "
+          "Entwicklungseinstellungen.\n\n"
+          "In Lightroom Classic die Bilder der Serie auswählen und "
+          "Metadaten → Metadaten in Datei speichern (Strg+S). Danach "
+          "stehen die Einstellungen hier zur Verfügung.",
+    'en': "There is no Lightroom XMP with develop settings for this image "
+          "yet.\n\nIn Lightroom Classic select the frames of the sequence "
+          "and choose Metadata → Save Metadata to File (Ctrl+S). The "
+          "settings are available here afterwards.",
+}
+LR_EXPORT_ENDUNGEN = (".jpg", ".JPG", ".jpeg", ".JPEG", ".tif", ".TIF", ".tiff", ".TIFF")
+
+
+def lr_export_datei(ordner, stem):
+    """Das aus Lightroom exportierte Bild zu einem RAW oder None."""
+    for ext in LR_EXPORT_ENDUNGEN:
+        pfad = os.path.join(ordner, stem + ext)
+        if os.path.exists(pfad):
+            return pfad
+    return None
+
+
+DT_HINWEIS_KURZ = {
+    'de': "Darktable braucht kein Basisprofil: Purelapse arbeitet mit den "
+          "vorhandenen .xmp-Dateien. Es schreibt die Belichtung und überträgt "
+          "die Module der Keyframes in die Bilder dazwischen.",
+    'en': "Darktable needs no base profile: Purelapse works with the existing "
+          ".xmp files. It writes the exposure and carries the modules of the "
+          "keyframes over to the frames in between.",
+}
+LR_HINWEIS_KURZ = {
+    'de': "Lightroom Classic hat keine Kommandozeile – Purelapse arbeitet mit "
+          "den .xmp-Dateien. Ablauf: in Lightroom alle Bilder wählen → "
+          "Metadaten in Datei speichern (Strg+S). Pass 1 und Pass 2 schreiben "
+          "Belichtung und Keyframes hinein. Dann in Lightroom „Metadaten aus "
+          "Dateien lesen“, nach Purelapse/" + LR_EXPORT_ORDNER + " exportieren "
+          "und Pass 2 noch einmal starten: daraus entsteht das Video.",
+    'en': "Lightroom Classic has no command line – Purelapse works with the "
+          ".xmp files. Workflow: in Lightroom select all frames → Save Metadata "
+          "to File (Ctrl+S). Pass 1 and pass 2 write the exposure and keyframes "
+          "into them. Then in Lightroom “Read Metadata from Files”, export to "
+          "Purelapse/" + LR_EXPORT_ORDNER + " and start pass 2 again: the video "
+          "is built from that export.",
+}
 
 
 def zwischen_ordner(target_dir):
@@ -4289,7 +4362,7 @@ class EngineVorschau(QtCore.QThread):
                 write_arp_dict_ini(profil_pfad,
                                    vorschau_profil(self.profil, self.kante))
                 cmd = vorschau_befehl(self.cli, self.bild, profil_pfad, ziel)
-            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+            self._proc = subprocess.Popen(engine_befehl(cmd), stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT, **OHNE_FENSTER)
             if self._abbruch:
                 self._proc.kill()
@@ -4355,7 +4428,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         # RAW, einem auffindbaren Programm und einem INI-Profil.
         self._profil0 = {sec: dict(par) for sec, par in (profil or {}).items()}
         self._cli = None
-        if (cli_pfad and os.path.isfile(cli_pfad) and eng('kind') in ('ini', 'darktable')
+        if (engine_vorhanden(cli_pfad) and eng('kind') in ('ini', 'darktable')
                 and bild_pfad and is_raw_file(bild_pfad)
                 and profile_is_complete(profil)):
             self._cli = cli_pfad
@@ -5413,6 +5486,12 @@ class GalleryWorker(QtCore.QThread):
             results = executor.map(process_single_thumb, tasks)
             for i, (f, combined_img, daten) in enumerate(results):
                 if self._abort:
+                    # map() hat alle Bilder schon eingereiht. Ohne das
+                    # Streichen wartete das Ende des with-Blocks, bis jedes
+                    # gelesen ist - beim Schliessen des Fensters lief der
+                    # Lader dann weiter, waehrend Python schon aufraeumte,
+                    # und das Programm stuerzte beim Beenden ab.
+                    executor.shutdown(wait=False, cancel_futures=True)
                     break
                 if combined_img is not None and daten is not None:
                     combined_img = np.ascontiguousarray(combined_img)
@@ -5832,7 +5911,30 @@ class Worker(QtCore.QThread):
         width = p['width']
         calc_height = int(width * 9 / 16)
         results = []
-        if p['format'] == 'raw':
+        lightroom = p['format'] == 'raw' and eng('kind') == 'lightroom'
+        if lightroom:
+            # Lightroom laesst sich nicht aufrufen: was schon exportiert
+            # ist, zeigt die Vorschau; sonst die eingebetteten Vorschaubilder.
+            exp_dir = lr_export_ordner(p['target_dir'])
+            for idx in picks:
+                q = lr_export_datei(exp_dir, os.path.splitext(os.path.basename(files[idx]))[0])
+                if q is not None:
+                    results.append((idx, q))
+            if len(results) < len(picks):
+                results = []
+                self.log.emit(self._t(
+                    "> Vorschau: Lightroom laesst sich nicht aufrufen und der Export "
+                    "ist noch nicht vollstaendig - gezeigt werden die eingebetteten "
+                    "Vorschaubilder mit dem Helligkeitsausgleich, ohne Keyframes.",
+                    "> Preview: Lightroom cannot be called and the export is not "
+                    "complete yet - showing the embedded previews with the brightness "
+                    "correction, without keyframes."))
+            else:
+                self.log.emit(self._t("> Vorschau aus dem Lightroom-Export.",
+                                      "> Preview from the Lightroom export."))
+        if results:
+            pass
+        elif p['format'] == 'raw' and not lightroom:
             missing = [files[i] for i in picks if not os.path.exists(sidecar(files[i]))]
             if missing:
                 raise RuntimeError(self._t(
@@ -6252,6 +6354,60 @@ class Worker(QtCore.QThread):
             "B) In Purelapse unter Einstellungen als Engine ART oder RawTherapee "
             "waehlen - die legen ihre Profile selbst an.")
 
+    def _pruefe_lightroom_xmp(self, files):
+        """
+        Lightroom: Purelapse schreibt nur in XMP-Dateien, die Lightroom mit
+        den Entwicklungseinstellungen angelegt hat. Eine selbst erzeugte
+        Datei wuerde beim Einlesen in Lightroom alles, was im Katalog
+        eingestellt ist (Zuschnitt, Profil, Objektivkorrektur ...), auf
+        Grundwerte setzen.
+        """
+        dng = [f for f in files if f.lower().endswith('.dng')]
+        if dng:
+            raise RuntimeError(self._t(
+                f"{len(dng)} Bilder sind DNG-Dateien. Lightroom speichert deren "
+                "Einstellungen in der DNG-Datei selbst, nicht in einer XMP "
+                "daneben - und in die Originale schreibt Purelapse nicht.\n\n"
+                "Fuer DNG bitte ART, RawTherapee oder Darktable als Engine waehlen.",
+                f"{len(dng)} images are DNG files. Lightroom stores their settings "
+                "inside the DNG file itself, not in an XMP next to it - and "
+                "Purelapse does not write into the originals.\n\n"
+                "For DNG please choose ART, RawTherapee or darktable as the engine."))
+        fehlend = []
+        for f in files:
+            ok, grund = lr_sidecar_bereit(sidecar(f))
+            if not ok:
+                fehlend.append((os.path.basename(f), grund))
+        if not fehlend:
+            return
+        en = self.p.get('lang') == 'en'
+        gruende_en = {"fehlt": "missing", "nicht lesbar": "not readable",
+                      "ohne Entwicklungseinstellungen": "no develop settings"}
+        beispiele = "\n".join(f"  {n}: {gruende_en.get(g, g) if en else g}"
+                               for n, g in fehlend[:5])
+        if len(fehlend) > 5:
+            beispiele += (f"\n  ... and {len(fehlend) - 5} more" if en
+                          else f"\n  ... und {len(fehlend) - 5} weitere")
+        if en:
+            raise RuntimeError(
+                f"{len(fehlend)} of {len(files)} images have no Lightroom XMP "
+                f"with develop settings:\n{beispiele}\n\n"
+                "In Lightroom Classic: select ALL frames of the sequence → "
+                "Metadata → Save Metadata to File (Ctrl+S). Then start again.")
+        raise RuntimeError(
+            f"Fuer {len(fehlend)} von {len(files)} Bildern gibt es keine "
+            f"Lightroom-XMP mit Entwicklungseinstellungen:\n{beispiele}\n\n"
+            "In Lightroom Classic: ALLE Bilder der Serie auswaehlen → "
+            "Metadaten → Metadaten in Datei speichern (Strg+S). Danach "
+            "erneut starten.")
+
+    def _pruefe_engine_dateien(self, files):
+        """Darktable und Lightroom: die Begleitdateien muessen von dort kommen."""
+        if eng('kind') == 'darktable':
+            self._pruefe_darktable_xmp(files)
+        elif eng('kind') == 'lightroom':
+            self._pruefe_lightroom_xmp(files)
+
     def _basisprofil(self, abs_target_dir, files, probe):
         """
         Das Basisprofil der Engine, aus dem fehlende Begleitdateien entstehen:
@@ -6314,8 +6470,7 @@ class Worker(QtCore.QThread):
         """
         p = self.p
         d = p['target_dir']
-        if eng('kind') == 'darktable':
-            self._pruefe_darktable_xmp(files)
+        self._pruefe_engine_dateien(files)
         template = self._basisprofil(d, files, files[0])
         alt_basis = load_base_ev(d)
         alt_kalib = load_calib(d)
@@ -6377,8 +6532,7 @@ class Worker(QtCore.QThread):
             return
         self.log.emit(self._t("> Starte RAW Pass 1 (Analyse)...",
                 "> Starting RAW pass 1 (analysis)..."))
-        if eng('kind') == 'darktable':
-            self._pruefe_darktable_xmp(files)
+        self._pruefe_engine_dateien(files)
         start_time = time.time()
         threads = mess_threads(p.get('cores', 1))
         if threads > 1:
@@ -6923,7 +7077,7 @@ class Worker(QtCore.QThread):
                     lf = None
                 logs.append(lf)
                 procs.append(subprocess.Popen(
-                    cmd, env=art_env,
+                    engine_befehl(cmd, art_env), env=art_env,
                     stdout=lf or subprocess.DEVNULL,
                     stderr=subprocess.STDOUT if lf else subprocess.DEVNULL,
                     **OHNE_FENSTER))
@@ -7065,7 +7219,7 @@ class Worker(QtCore.QThread):
                         dt_log.write(" ".join(cmd) + "\n")
                     try:
                         proc = subprocess.Popen(
-                            cmd, env=env, stdin=subprocess.DEVNULL,
+                            engine_befehl(cmd, env), env=env, stdin=subprocess.DEVNULL,
                             stdout=(ausgabe or subprocess.DEVNULL),
                             stderr=subprocess.STDOUT if ausgabe else subprocess.DEVNULL,
                             **OHNE_FENSTER)
@@ -7504,6 +7658,9 @@ class Worker(QtCore.QThread):
                 "brightness correction.\n\nPlease run pass 1 again with "
                 "\u201cDeflicker\u201d switched on, or start pass 2 without "
                 "deflickering."))
+        if eng('kind') == 'lightroom':
+            self._run_lightroom_pass2(entflackern)
+            return
         if not entflackern:
             self.log.emit(self._t(
                 "> OHNE Entflackern: Belichtung bleibt, wie aufgenommen; keine "
@@ -7617,6 +7774,167 @@ class Worker(QtCore.QThread):
         # die Nacht, damit die Daemmerung stimmt; ins Video kommt sie nicht.
         file_list_for_video = (self._ohne_nacht(processed_jpgs) if entflackern
                                else processed_jpgs)
+        self._pass2_video(file_list_for_video, tief, out_dir)
+
+    def _run_lightroom_pass2(self, entflackern):
+        """
+        Pass 2 mit Lightroom - in zwei Schritten, weil Lightroom selbst
+        entwickelt:
+
+        1. Fehlt der Export oder ist er aelter als die XMP-Dateien:
+           Keyframes in die Bilder dazwischen ueberblenden, XMP schreiben
+           und sagen, was in Lightroom zu tun ist.
+        2. Liegt der Export vollstaendig und aktuell vor: Feinabgleich der
+           exportierten Bilder (Restflackern messen, als Helligkeitsfaktor
+           ausgleichen) und das Video bauen.
+        """
+        p = self.p
+        d = p['target_dir']
+        files = p['files']
+        noetig = files if entflackern else self._ohne_nacht(files)
+        self._pruefe_lightroom_xmp(noetig)
+        exp_dir = lr_export_ordner(d)
+        os.makedirs(exp_dir, exist_ok=True)
+        export, fehlend, veraltet = [], [], []
+        for f in noetig:
+            q = lr_export_datei(exp_dir, os.path.splitext(os.path.basename(f))[0])
+            if q is None:
+                fehlend.append(f)
+                continue
+            try:
+                alt = os.path.getmtime(q) < os.path.getmtime(sidecar(f))
+            except OSError:
+                alt = True
+            (veraltet if alt else export).append(q)
+        if veraltet or not export:
+            self._lightroom_vorbereiten(files, noetig, entflackern, exp_dir,
+                                        len(veraltet), len(export))
+            return
+        if fehlend:
+            namen = ", ".join(os.path.basename(f) for f in fehlend[:6]) + (
+                " ..." if len(fehlend) > 6 else "")
+            raise RuntimeError(self._t(
+                f"Im Lightroom-Export fehlen {len(fehlend)} von {len(noetig)} "
+                f"Bildern: {namen}\n\nOrdner: {exp_dir}\n\n"
+                "Bitte diese Bilder in Lightroom nachexportieren (Dateiname wie "
+                "das Original) und Pass 2 erneut starten.",
+                f"The Lightroom export is missing {len(fehlend)} of {len(noetig)} "
+                f"images: {namen}\n\nFolder: {exp_dir}\n\n"
+                "Please export these images from Lightroom (file name as the "
+                "original) and start pass 2 again."))
+        self.log.emit(self._t(
+            f"> Lightroom-Export vollstaendig: {len(export)} Bilder in {exp_dir}",
+            f"> Lightroom export complete: {len(export)} images in {exp_dir}"))
+        tief = any(q.lower().endswith(('.tif', '.tiff')) for q in export)
+        faktoren = {}
+        if entflackern:
+            sigma, rows, _ = self._measure_and_correct(export, noetig,
+                                                       apply_correction=False)
+            if sigma is not None:
+                rest = {r['file']: float(r['residual_ev']) for r in rows}
+                begrenzt = 0
+                for q in export:
+                    r = rest.get(os.path.basename(q), 0.0)
+                    if abs(r) > LR_FEIN_MAX:
+                        r = math.copysign(LR_FEIN_MAX, r)
+                        begrenzt += 1
+                    # Messung linear, Bild in Gamma: 2^(r/2.2) entspricht
+                    # r Blenden im linearen Licht
+                    faktoren[q] = 2.0 ** (r / 2.2)
+                self._save_report("purelapse_pass2.csv", rows)
+                self.log.emit(self._t(
+                    f"> Feinabgleich: Restflackern im Export {sigma:.4f} EV (Sigma), "
+                    f"groesster Ausgleich {max(abs(r['residual_ev']) for r in rows):.3f} EV.",
+                    f"> Fine adjustment: residual flicker in the export {sigma:.4f} EV "
+                    f"(sigma), largest correction {max(abs(r['residual_ev']) for r in rows):.3f} EV."))
+                if begrenzt:
+                    self.log.emit(self._t(
+                        f"> HINWEIS: Bei {begrenzt} Bildern war die Abweichung groesser als "
+                        f"{LR_FEIN_MAX} EV und wurde begrenzt. Wurde nach Pass 2 in "
+                        "Lightroom noch einzeln nachbearbeitet?",
+                        f"> NOTE: For {begrenzt} images the deviation exceeded "
+                        f"{LR_FEIN_MAX} EV and was limited. Were frames edited "
+                        "individually in Lightroom after pass 2?"))
+        else:
+            save_residuals(d, {})
+        video = self._ohne_nacht(export) if entflackern else export
+        speichern = None
+        out_dir = exp_dir
+        if faktoren and not p['make_video']:
+            # Ohne Video sind die abgeglichenen Bilder das Ergebnis
+            out_dir = zwischen_ordner(d)
+            os.makedirs(out_dir, exist_ok=True)
+
+            def speichern(bild, f):
+                ziel = os.path.join(out_dir, os.path.splitext(os.path.basename(f))[0] + ".jpg")
+                acht = bild if bild.dtype == np.uint8 else (bild // 257).astype(np.uint8)
+                ok, daten = cv2.imencode(".jpg", acht, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                if ok:
+                    datei_atomar(ziel, daten.tobytes())
+        self._pass2_video(video, tief, out_dir, faktoren=faktoren, speichern=speichern)
+
+    def _lightroom_vorbereiten(self, files, noetig, entflackern, exp_dir,
+                               n_veraltet, n_aktuell):
+        """Schritt 1 von Pass 2 mit Lightroom: XMP schreiben, Anleitung."""
+        if not entflackern:
+            self._profile_ohne_entflackern(noetig)
+        self._prepare_keyframe_profiles(files)
+        hinweise = set()
+        for f in files:
+            if check_is_keyframe(sidecar(f)):
+                hinweise.update(lr_hinweise(read_arp_dict(sidecar(f))))
+        if 'wb_auto' in hinweise:
+            self.log.emit(self._t(
+                "> ACHTUNG: Ein Keyframe steht auf Weissabgleich \"Automatisch\". "
+                "Lightroom berechnet ihn dann fuer jedes Bild neu - das flackert "
+                "in der Farbe. Besser eine feste Temperatur einstellen.",
+                "> WARNING: A keyframe uses white balance \"Auto\". Lightroom then "
+                "computes it for every frame - that flickers in colour. Better set "
+                "a fixed temperature."))
+        if 'auto_tone' in hinweise:
+            self.log.emit(self._t(
+                "> ACHTUNG: Ein Keyframe hat \"Automatisch\" (Tonwerte) aktiv. "
+                "Wird es in Lightroom erneut angewendet, rechnet es je Bild "
+                "eigene Werte - das flackert.",
+                "> WARNING: A keyframe has \"Auto\" (tone) enabled. If Lightroom "
+                "applies it again, it computes values per frame - that flickers."))
+        if n_veraltet:
+            self.log.emit(self._t(
+                f"> {n_veraltet} exportierte Bilder sind aelter als ihre XMP - "
+                "die Einstellungen haben sich seit dem Export geaendert.",
+                f"> {n_veraltet} exported images are older than their XMP - the "
+                "settings have changed since the export."))
+        self.finished_ok.emit(self._t(
+            "Pass 2, Schritt 1 fertig: Belichtung und Keyframe-Uebergaenge stehen "
+            f"in den XMP-Dateien von {len(files)} Bildern.\n\n"
+            "Jetzt in Lightroom Classic:\n"
+            "1. Alle Bilder der Serie auswaehlen.\n"
+            "2. Metadaten → Metadaten aus Dateien lesen.\n"
+            "3. Exportieren als JPG (Qualitaet 100) oder TIFF 16 Bit, "
+            "Dateiname wie das Original, ohne Groessenaenderung, in den Ordner:\n"
+            f"   {exp_dir}\n\n"
+            "Danach Pass 2 noch einmal starten - Purelapse gleicht die "
+            "exportierten Bilder fein ab und baut das Video.",
+            "Pass 2, step 1 done: exposure and keyframe transitions are in the "
+            f"XMP files of {len(files)} frames.\n\n"
+            "Now in Lightroom Classic:\n"
+            "1. Select all frames of the sequence.\n"
+            "2. Metadata → Read Metadata from Files.\n"
+            "3. Export as JPG (quality 100) or 16-bit TIFF, file name as the "
+            "original, no resizing, into the folder:\n"
+            f"   {exp_dir}\n\n"
+            "Then start pass 2 once more - Purelapse fine-adjusts the exported "
+            "images and builds the video."))
+
+    def _pass2_video(self, file_list_for_video, tief, out_dir, faktoren=None,
+                     speichern=None):
+        """
+        Aus den entwickelten Bildern das Video: Stabilisierung, Encoder,
+        Bildstrecke. faktoren {Pfad: Helligkeitsfaktor} gleicht Reste aus
+        (Lightroom-Feinabgleich), speichern legt die Bilder zusaetzlich ab.
+        """
+        p = self.p
+        abs_target_dir = p['target_dir']
         stab_diffs = None
         if p['make_video'] and p['stabilize']:
             self.log.emit(self._t("\n> Führe Optische Stabilisierung durch...",
@@ -7640,15 +7958,24 @@ class Worker(QtCore.QThread):
 
         def laden(f):
             img = bild_lesen(f)
-            if img is not None and tief and img.dtype != np.uint16:
+            if img is None:
+                return None
+            if tief and img.dtype != np.uint16:
                 img = img.astype(np.uint16) * 257
+            elif not tief and img.dtype != np.uint8:
+                img = (img // 257).astype(np.uint8)
+            faktor = (faktoren or {}).get(f)
+            if faktor and abs(faktor - 1.0) > 1e-4:
+                grenze = 65535 if img.dtype == np.uint16 else 255
+                img = np.clip(img.astype(np.float32) * faktor + 0.5,
+                              0, grenze).astype(img.dtype)
             return img
 
         def exif_von(f):
             return find_original_raw(abs_target_dir, os.path.splitext(os.path.basename(f))[0])
 
         anzahl = self._video_bauen(render_sequence, laden, exif_von, ffmpeg_proc,
-                                   stab_diffs, width, calc_height)
+                                   stab_diffs, width, calc_height, speichern=speichern)
         self._schritt_fertig("Video", anzahl, start_time)
         if p['make_video'] and ffmpeg_proc:
             self._finish_encoder(ffmpeg_proc)
@@ -8846,11 +9173,10 @@ class MainWindow(QtWidgets.QWidget):
         gperf = QtWidgets.QGridLayout(self.box_perf)
         gperf.addWidget(QtWidgets.QLabel("Entwicklungs-Engine:"), 0, 0)
         self.cmb_engine = QtWidgets.QComboBox()
-        # Reihenfolge = 'art', 'rt', 'dt' - siehe _on_engine_changed() und
-        # _collect_params() (Block 7).
-        self.cmb_engine.addItems([ENGINES['art']['label'],
-                                  ENGINES['rt']['label'],
-                                  ENGINES['dt']['label']])
+        # Reihenfolge = ENGINE_REIHE. Gespeichert wird die Stelle in der
+        # Liste - neue Engines deshalb nur hinten anfuegen.
+        self.cmb_engine.addItems([ENGINES[k]['label'] + (" (XMP)" if k == 'lr' else "")
+                                  for k in ENGINE_REIHE])
         self.cmb_engine.currentIndexChanged.connect(self._on_engine_changed)
         gperf.addWidget(self.cmb_engine, 0, 1, 1, 2)
         self.lbl_art_path = QtWidgets.QLabel("ART-Programm:")
@@ -8877,10 +9203,7 @@ class MainWindow(QtWidgets.QWidget):
         self.btn_arp_browse.clicked.connect(self._browse_arp_template)
         gperf.addWidget(self.btn_arp_browse, 2, 2)
         # Hinweiszeile, die nur bei Darktable sichtbar ist.
-        self.lbl_dt_note = QtWidgets.QLabel(
-            "Darktable braucht kein Basisprofil: Purelapse arbeitet mit den "
-            "vorhandenen .xmp-Dateien. Es schreibt die Belichtung und überträgt "
-            "die Module der Keyframes in die Bilder dazwischen.")
+        self.lbl_dt_note = QtWidgets.QLabel(DT_HINWEIS_KURZ['de'])
         self.lbl_dt_note.setWordWrap(True)
         self.lbl_dt_note.setVisible(False)
         gperf.addWidget(self.lbl_dt_note, 2, 0, 1, 3)
@@ -9237,8 +9560,15 @@ class MainWindow(QtWidgets.QWidget):
                                "Set smoothing strength and target brightness.")),
             'keys': self._t(f"Einzelne Bilder in {engine} bearbeiten; Purelapse blendet dazwischen über.",
                             f"Edit individual frames in {engine}; Purelapse blends between them."),
-            'render': (self._t(f"Pass 2 lässt {engine} entwickeln, verteilt die Keyframe-Profile und baut das Video.",
-                               f"Pass 2 lets {engine} develop, spreads the keyframe profiles and builds the video.")
+            'render': ((self._t("Pass 2 schreibt die Keyframe-Übergänge in die XMP-Dateien. "
+                                "Nach dem Export aus Lightroom baut ein zweiter Start "
+                                "von Pass 2 daraus das Video.",
+                                "Pass 2 writes the keyframe transitions into the XMP files. "
+                                "After the export from Lightroom, starting pass 2 again "
+                                "builds the video from it.")
+                        if eng('kind') == 'lightroom' else
+                        self._t(f"Pass 2 lässt {engine} entwickeln, verteilt die Keyframe-Profile und baut das Video.",
+                                f"Pass 2 lets {engine} develop, spreads the keyframe profiles and builds the video."))
                        if is_raw else
                        self._t("Video-Format, Effekte und Speicherort festlegen.",
                                "Set video format, effects and location.")),
@@ -9416,16 +9746,29 @@ class MainWindow(QtWidgets.QWidget):
                           f"Purelapse processes JPG sequences itself, without an engine.\n"
                           f"Set for RAW: {name}.\n\nClick: settings")
             farbe, rand = t['dim'], t['border2']
-        elif not (cli and os.path.isfile(cli)):
+        elif eng('kind') == 'lightroom':
+            text = "Engine: Lightroom (XMP)"
+            tip = self._t("Purelapse schreibt die XMP-Dateien, Lightroom Classic "
+                          "entwickelt und exportiert nach Purelapse/"
+                          f"{LR_EXPORT_ORDNER}; daraus entsteht das Video.\n\n"
+                          "Klick: Einstellungen",
+                          "Purelapse writes the XMP files, Lightroom Classic "
+                          "develops and exports to Purelapse/"
+                          f"{LR_EXPORT_ORDNER}; the video is built from that.\n\n"
+                          "Click: settings")
+            farbe, rand = t['text'], t['border2']
+        elif not engine_vorhanden(cli):
             text = self._t(f"⚠ Engine: {name} – Programm fehlt",
                            f"⚠ Engine: {name} – program missing")
             tip = self._t(f"Fuer Pass 2 und die Vorschau braucht Purelapse {eng('bin')}.\n\n"
+                          "Installiert als Programm oder als Flatpak (Flathub).\n"
                           "Klick: in den Einstellungen den Pfad eintragen.",
                           f"Pass 2 and the preview need {eng('bin')}.\n\n"
+                          "Installed as a program or as a Flatpak (Flathub).\n"
                           "Click: enter its path in the settings.")
             farbe = rand = t['warn']
         else:
-            text = f"Engine: {name}"
+            text = f"Engine: {name}" + (" (Flatpak)" if ist_flatpak(cli) else "")
             tip = self._t(f"RAW-Entwicklung mit {name}\n{cli}\n\nKlick: Einstellungen",
                           f"RAW development with {name}\n{cli}\n\nClick: settings")
             farbe, rand = t['text'], t['border2']
@@ -9589,14 +9932,14 @@ class MainWindow(QtWidgets.QWidget):
     def _update_kf_buttons(self):
         """Gibt den Einstellknopf frei, sobald es ein Keyframe gibt."""
         ziel = self._ziel_keyframe() if self.tiles else None
-        passende_engine = (eng('kind') in ('ini', 'darktable'))
+        passende_engine = (eng('kind') in ('ini', 'darktable', 'lightroom'))
         moeglich = (ziel is not None and passende_engine
                     and not getattr(self, '_busy', False))
         self.btn_kf_edit.setEnabled(moeglich)
         if not passende_engine:
             self.btn_kf_edit.setToolTip(self._t(
-                "Schnelleinstellungen gibt es fuer ART, RawTherapee und Darktable.",
-                "Quick settings exist for ART, RawTherapee and darktable."))
+                "Schnelleinstellungen gibt es fuer ART, RawTherapee, Darktable und Lightroom.",
+                "Quick settings exist for ART, RawTherapee, darktable and Lightroom."))
         elif ziel is None:
             self.btn_kf_edit.setToolTip(self._t(
                 "Noch kein Keyframe markiert. Dafuer in der Bildleiste "
@@ -9632,6 +9975,12 @@ class MainWindow(QtWidgets.QWidget):
         bild = os.path.join(self.target_dir, t['name'])
         pfad = sidecar(bild)
         profil = read_arp_dict(pfad) if os.path.exists(pfad) else {}
+        if eng('kind') == 'lightroom' and not lr_sidecar_bereit(pfad)[0]:
+            QtWidgets.QMessageBox.information(
+                self, self._t("Noch keine Lightroom-Einstellungen",
+                              "No Lightroom settings yet"),
+                self._t(LR_XMP_FEHLT['de'], LR_XMP_FEHLT['en']))
+            return
         if not profile_is_complete(profil):
             # Ohne vollstaendiges Profil waere jeder geschriebene Wert ein
             # Schuss ins Leere: die Engine verwirft ein duennes Profil.
@@ -10010,12 +10359,13 @@ class MainWindow(QtWidgets.QWidget):
         # wechselte die Engine auch dann, wenn sie schon richtig stand.
         erkannt = detect_engine(self.target_dir)
         aktuell = engine_key()
-        eigene = bool(glob.glob(os.path.join(self.target_dir,
-                                             "*" + ENGINES[aktuell]['ext']))
-                      + glob.glob(os.path.join(self.target_dir,
-                                               "*" + ENGINES[aktuell]['ext'].upper())))
+        eigene = [p for p in glob.glob(os.path.join(self.target_dir,
+                                                    "*" + ENGINES[aktuell]['ext']))
+                  + glob.glob(os.path.join(self.target_dir,
+                                           "*" + ENGINES[aktuell]['ext'].upper()))
+                  if ENGINES[aktuell]['ext'] != '.xmp' or xmp_herkunft(p) == aktuell]
         if erkannt and erkannt != aktuell and not eigene:
-            idx = {'art': 0, 'rt': 1, 'dt': 2}.get(erkannt, 0)
+            idx = ENGINE_REIHE.index(erkannt) if erkannt in ENGINE_REIHE else 0
             self.cmb_engine.setCurrentIndex(idx)
             self._on_log(self._t(
                 f"purelapse@engine:~$ Nur {ENGINES[erkannt]['label']}-"
@@ -10036,8 +10386,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def _on_engine_changed(self, idx=None):
         # 3-Wege-Zuordnung statt vorher nur 2 (art/rt).
-        mapping = {0: 'art', 1: 'rt', 2: 'dt'}
-        key = mapping.get(self.cmb_engine.currentIndex(), 'art')
+        key = engine_aus_index(self.cmb_engine.currentIndex())
         set_engine(key)
         self.txt_art_path.setText(get_art_path())
         self.txt_arp_template.setText(get_arp_template_path())
@@ -10048,9 +10397,16 @@ class MainWindow(QtWidgets.QWidget):
         # Basisprofil-Zeile blendet sich bei Darktable aus, dafuer erscheint
         # der Hinweistext.
         ist_dt = (key == 'dt')
+        ist_lr = (key == 'lr')
         for w in (self.lbl_arp_tpl, self.txt_arp_template, self.btn_arp_browse):
-            w.setVisible(not ist_dt)
-        self.lbl_dt_note.setVisible(ist_dt)
+            w.setVisible(not (ist_dt or ist_lr))
+        # Lightroom: kein Programm, das Purelapse starten koennte
+        for w in (self.lbl_art_path, self.txt_art_path, self.btn_art_browse):
+            w.setVisible(not ist_lr)
+        self.lbl_dt_note.setText(self._t(LR_HINWEIS_KURZ['de'], LR_HINWEIS_KURZ['en'])
+                                 if ist_lr else self._t(DT_HINWEIS_KURZ['de'],
+                                                        DT_HINWEIS_KURZ['en']))
+        self.lbl_dt_note.setVisible(ist_dt or ist_lr)
         if self.target_dir:
             anders = self._sterne_abgleichen()
             if anders:
@@ -10065,6 +10421,24 @@ class MainWindow(QtWidgets.QWidget):
             self._update_summary()
 
     def _browse_art_cli(self):
+        fp = flatpak_suchen()
+        if fp and self.txt_art_path.text().strip() != fp:
+            with self.abdunkler.halten():
+                antwort = QtWidgets.QMessageBox.question(
+                    self, eng('label'),
+                    self._t(f"{eng('label')} ist als Flatpak installiert.\n\n"
+                            f"Dieses verwenden? (Nein: eine Programmdatei waehlen)",
+                            f"{eng('label')} is installed as a Flatpak.\n\n"
+                            f"Use it? (No: choose a program file)"),
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No |
+                    QtWidgets.QMessageBox.Cancel)
+            if antwort == QtWidgets.QMessageBox.Cancel:
+                return
+            if antwort == QtWidgets.QMessageBox.Yes:
+                self.txt_art_path.setText(fp)
+                save_art_path(fp)
+                self._engine_anzeigen()
+                return
         start_dir = os.path.dirname(self.txt_art_path.text()) if os.path.exists(self.txt_art_path.text()) else os.path.expanduser("~")
         with self.abdunkler.halten():
             path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -10915,7 +11289,10 @@ class MainWindow(QtWidgets.QWidget):
         # Die Bewertung in die .xmp des Bildes - bei Darktable ist das die
         # Begleitdatei selbst, sonst eine Zusatzdatei. bewertung_schreiben
         # aendert in einer vorhandenen Datei nur die Bewertung.
-        bewertung_schreiben(f"{full_path}.xmp", 5 if checked else 0)
+        # Lightroom: die Bewertung gehoert in dessen XMP (BILD.xmp) - dort
+        # sieht Lightroom sie, und dort sucht Purelapse den Keyframe.
+        bewertung_schreiben(arp_path if eng('kind') == 'lightroom' else f"{full_path}.xmp",
+                            5 if checked else 0)
         if eng('kind') == 'darktable' and not getattr(self, '_dt_stern_gemeldet', False):
             # Einmal je Programmlauf: sonst wundert man sich, warum die
             # Sterne in Darktable nicht auftauchen.
@@ -11521,7 +11898,7 @@ class MainWindow(QtWidgets.QWidget):
             'telemetry': self.chk_tel.isChecked(),
             'make_video': (self.chk_video.isChecked() or is_raw),
             # 3-Wege-Zuordnung statt vorher nur 2 (art/rt).
-            'engine': {0: 'art', 1: 'rt', 2: 'dt'}.get(self.cmb_engine.currentIndex(), 'art'),
+            'engine': engine_aus_index(self.cmb_engine.currentIndex()),
             'cores': self.cmb_cores.currentIndex() + 1,
             'procs': PROZESS_WAHL[max(0, min(len(PROZESS_WAHL) - 1,
                                              self.cmb_procs.currentIndex()))],
@@ -11544,9 +11921,11 @@ class MainWindow(QtWidgets.QWidget):
             art = self.txt_art_path.text().strip()
             if p['raw_mode'] == 'pass1':
                 p['make_video'] = False
-                p['art_cli_path'] = art if art and os.path.isfile(art) else ''
+                p['art_cli_path'] = art if engine_vorhanden(art) else ''
+            elif eng('kind') == 'lightroom':
+                p['art_cli_path'] = ''      # Lightroom entwickelt selbst
             else:
-                if not art or not os.path.isfile(art):
+                if not engine_vorhanden(art):
                     QtWidgets.QMessageBox.warning(self, self._t("Fehler", "Error"), self._t(f"Bitte zuerst {eng('bin')} in den Einstellungen auswählen.",
                             f"Please select {eng('bin')} in the settings first."))
                     return None
@@ -11852,9 +12231,10 @@ class MainWindow(QtWidgets.QWidget):
         params['preview_count'] = 5
         params['luma_curve'] = list(self.luma_history)
         params['diag'] = False
-        if params['format'] == 'raw' and not params.get('art_cli_path'):
+        if (params['format'] == 'raw' and not params.get('art_cli_path')
+                and eng('kind') != 'lightroom'):
             art = self.txt_art_path.text().strip()
-            if not art or not os.path.isfile(art):
+            if not engine_vorhanden(art):
                 QtWidgets.QMessageBox.warning(
                     self, "Fehler" if self.lang == 'de' else "Error",
                     self._t(f"Für die RAW-Vorschau wird {eng('bin')} benötigt (siehe Einstellungen).",
@@ -12317,7 +12697,9 @@ class MainWindow(QtWidgets.QWidget):
         self._save_settings()
         if self.gallery_worker and self.gallery_worker.isRunning():
             self.gallery_worker._abort = True
-            self.gallery_worker.wait(1000)
+            # Nur noch die Bilder, die gerade gelesen werden, laufen zu Ende
+            # (der Rest ist gestrichen) - meist Sekundenbruchteile.
+            self.gallery_worker.wait(15000)
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
             self.worker.wait(2000)
