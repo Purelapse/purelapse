@@ -35,6 +35,11 @@ import json
 import threading
 import re
 import math
+
+# Windows: Konsolenprogramme (Engines, FFmpeg) ohne eigenes Fenster starten.
+# Ohne das blitzte bei jedem Aufruf ein schwarzes Konsolenfenster auf.
+OHNE_FENSTER = ({'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)}
+                if os.name == 'nt' else {})
 import xml.etree.ElementTree as ET
 
 # ==========================================================================
@@ -316,11 +321,60 @@ def konfig_setzen(*schluessel_und_wert):
         return ok
 
 
+# Wo die Installer der Engines unter Windows ablegen - relativ zu
+# "C:\Program Files" und Co. Die Versionsordner (RawTherapee\5.10) werden
+# per Muster gefunden, die neueste zuerst.
+WINDOWS_ORTE = {
+    'art': ("ART\\ART-cli.exe", "ART*\\ART-cli.exe"),
+    'rt': ("RawTherapee\\*\\rawtherapee-cli.exe", "RawTherapee\\rawtherapee-cli.exe"),
+    'dt': ("darktable\\bin\\darktable-cli.exe",),
+}
+
+
+def _versions_schluessel(pfad):
+    """Sortiert 5.10 nach 5.9 - Zahlen als Zahlen, nicht als Text."""
+    return [int(t) if t.isdigit() else t.lower()
+            for t in re.split(r'(\d+)', pfad)]
+
+
+def engine_suchen(key=None, umgebung=None, nt=None, suchpfad=True):
+    """
+    Das Kommandozeilenprogramm einer Engine: erst im Suchpfad, unter
+    Windows dann in den ueblichen Installationsordnern.
+    suchpfad=False laesst den Suchpfad aus (fuer die Pruefungen: ein
+    installiertes RawTherapee soll sie nicht beeinflussen).
+    Rueckgabe: Pfad oder "".
+    """
+    key = key or engine_key()
+    bin_name = ENGINES[key]['bin']
+    gefunden = shutil.which(bin_name) if suchpfad else None
+    if gefunden:
+        return gefunden
+    if not (os.name == 'nt' if nt is None else nt):
+        return ""
+    env = os.environ if umgebung is None else umgebung
+    wurzeln = []
+    for name in ('ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)'):
+        w = env.get(name)
+        if w and w not in wurzeln:
+            wurzeln.append(w)
+    if env.get('LOCALAPPDATA'):
+        wurzeln.append(os.path.join(env['LOCALAPPDATA'], "Programs"))
+    for w in wurzeln:
+        for muster in WINDOWS_ORTE.get(key, ()):
+            treffer = sorted(glob.glob(os.path.join(w, *muster.split('\\'))),
+                             key=_versions_schluessel, reverse=True)
+            for t in treffer:
+                if os.path.isfile(t):
+                    return t
+    return ""
+
+
 def get_art_path():
     wert = konfig_lesen('engines', engine_key(), 'programm', standard="")
     if wert:
         return wert
-    return shutil.which(eng('bin')) or ""
+    return engine_suchen()
 
 
 def save_art_path(path):
@@ -1220,7 +1274,7 @@ def bootstrap_arp_template_ini(art_cli_path, sample_image):
             cmd = [art_cli_path] + args + ["-Y", "-j80"] + eng('extra') + ["-c", sample_image]
             try:
                 subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, timeout=300)
+                               stderr=subprocess.DEVNULL, timeout=300, **OHNE_FENSTER)
             except (OSError, subprocess.SubprocessError):
                 continue
             found = sorted(glob.glob(os.path.join(tmp, '*' + eng('ext'))) +

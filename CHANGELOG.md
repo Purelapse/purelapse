@@ -3,6 +3,28 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+Vorbereitung für Windows. Unter Linux ändert sich nichts.
+
+### Neu
+- **Windows-Paket:** Ein neuer Ablauf bei GitHub (*Actions → Windows-Paket*) baut Purelapse auf einem Windows-Rechner von GitHub als einzelne `.exe` und startet sie zur Probe einmal. Bei einem Release wird sie automatisch angehängt. Noch nicht auf einem echten Windows-Rechner mit den Engines erprobt.
+- **Prüfungen auch unter Windows:** Bei jedem Push laufen alle Prüfungen zusätzlich auf Windows. Solange die Unterstützung im Aufbau ist, macht ein Fehlschlag dort den Push nicht rot.
+
+### Geändert
+- **Engines finden:** Unter Windows sucht Purelapse `ART-cli.exe`, `rawtherapee-cli.exe` und `darktable-cli.exe` nicht nur im Suchpfad, sondern auch in den üblichen Installationsordnern (`Program Files`, `%LOCALAPPDATA%\Programs`) – bei RawTherapee die neueste Version zuerst (5.10 vor 5.9).
+- **Lange Befehlszeilen:** Windows erlaubt höchstens 32 767 Zeichen je Aufruf. Bei 900 Bildern mit langen Pfaden käme ART/RawTherapee darüber und startete gar nicht. Purelapse teilt die Bildliste dort auf mehrere Durchgänge nacheinander; unter Linux bleibt es bei einem Aufruf.
+- **Kein Konsolenfenster:** Engines und FFmpeg starten unter Windows ohne eigenes Fenster – sonst blitzte bei jedem Aufruf eines auf.
+- **VAAPI** ist unter Windows in der Codec-Liste gesperrt; die Liste bleibt vollständig, damit gespeicherte Einstellungen ihren Codec behalten.
+- `Purelapse --version` nennt die Version und beendet sich – für die Startprobe beim Bauen.
+
+### Behoben
+- **Jedes Bild doppelt auf Windows (und macOS):** Purelapse suchte `*.nef` und `*.NEF` getrennt. Unter Linux sind das verschiedene Dateien; Systeme, die Groß- und Kleinschreibung nicht unterscheiden, hätten für beide Muster dieselben Dateien geliefert. Die Suche führt jetzt jede Datei nur einmal.
+
+### Intern
+- Neue Prüfreihe `test_windows.py` (läuft auf jedem System): Dateilisten ohne Doppelte, Engines in nachgebauten Installationsordnern, Teilen langer Befehlszeilen (keine Zeile zu lang, kein Bild verloren oder doppelt), Encoder je System, jeder Programmaufruf ohne Konsolenfenster.
+- Prüfstand: Die nachgebauten Engines werden unter Windows über eine `.cmd`-Datei aufgerufen; Prüfungen, die `pgrep` oder Schreibschutz für Ordner brauchen, entfallen dort.
+
 ## [2.45.0-beta] – 2026-11-25
 
 „Automatisch optimieren“ liefert jetzt ein gefälliges, fertiges Bild – mit wenigen Reglern, in allen drei Engines gleich. Dazu: Entflackern lässt sich abschalten, und bei 24-Stunden-Zeitraffern fällt die Nacht auf Wunsch aus dem Video.

@@ -271,13 +271,41 @@ RAW_EXTS = ('.nef', '.cr2', '.cr3', '.dng', '.arw', '.raf', '.orf', '.rw2', '.pe
 def is_raw_file(path):
     return path.lower().endswith(RAW_EXTS)
 
+def ohne_doppelte(pfade):
+    """
+    Sortierte Dateiliste, jede Datei einmal.
+
+    Gesucht wird je Endung klein und gross (*.nef und *.NEF). Unter Linux
+    sind das verschiedene Dateien; Windows unterscheidet Gross- und
+    Kleinschreibung nicht und liefert fuer beide Muster dieselben Dateien -
+    jedes Bild stuende sonst zweimal in der Liste.
+    """
+    gesehen, out = set(), []
+    for p in pfade:
+        k = os.path.normcase(os.path.abspath(p))
+        if k not in gesehen:
+            gesehen.add(k)
+            out.append(p)
+    return sorted(out)
+
+
+def bilder_suchen(ordner, endungen):
+    """Alle Dateien mit den Endungen (klein und gross), ohne Doppelte."""
+    out = []
+    for ext in endungen:
+        out += glob.glob(os.path.join(ordner, "*" + ext.lower()))
+        out += glob.glob(os.path.join(ordner, "*" + ext.upper()))
+    return ohne_doppelte(out)
+
+
+def find_jpg_files(target_dir):
+    """Alle JPG-Dateien eines Ordners."""
+    return bilder_suchen(target_dir, (".jpg",))
+
+
 def find_raw_files(target_dir):
     """Alle RAW-Dateien eines Ordners, unabhaengig vom Kamerahersteller."""
-    out = []
-    for ext in RAW_EXTS:
-        out += glob.glob(os.path.join(target_dir, "*" + ext))
-        out += glob.glob(os.path.join(target_dir, "*" + ext.upper()))
-    return sorted(out)
+    return bilder_suchen(target_dir, RAW_EXTS)
 
 def find_original_raw(target_dir, stem):
     """Sucht zu einem Dateinamen-Stamm (ohne Endung) die zugehoerige RAW-Datei."""
@@ -1918,6 +1946,47 @@ def bilder_aufteilen(files, jobs):
     return [t for t in teile if t]
 
 
+# Windows begrenzt eine Befehlszeile auf 32767 Zeichen. Mit 900 Bildern
+# zu je 60 Zeichen Pfad laege ein einzelner Aufruf weit darueber, und die
+# Engine startete gar nicht ("Dateiname oder Erweiterung ist zu lang").
+# Unter Linux liegt die Grenze bei mehreren Megabyte - dort keine Teilung.
+KOMMANDO_MAX = 30000 if os.name == 'nt' else None
+
+
+def befehls_wellen(kopf, teile, max_laenge=None):
+    """
+    Teilt die Bildlisten der Prozesse so, dass keine Befehlszeile zu lang wird.
+
+    kopf        Programm und Schalter vor den Bildern
+    teile       je Prozess eine Liste von Bildern (siehe bilder_aufteilen)
+    max_laenge  hoechstens so viele Zeichen je Befehlszeile; None = beliebig
+
+    Rueckgabe: Liste von Wellen; jede Welle ist eine Liste von Befehlen, die
+    gleichzeitig laufen. Ohne Grenze ist es genau eine Welle wie bisher.
+    """
+    if not max_laenge:
+        return [[list(kopf) + list(t) for t in teile]]
+    stuecke = []
+    for teil in teile:
+        eigene, aktuell = [], []
+        laenge = len(subprocess.list2cmdline(list(kopf)))
+        for bild in teil:
+            zusatz = len(subprocess.list2cmdline([bild])) + 1
+            if aktuell and laenge + zusatz > max_laenge:
+                eigene.append(aktuell)
+                aktuell = []
+                laenge = len(subprocess.list2cmdline(list(kopf)))
+            aktuell.append(bild)
+            laenge += zusatz
+        if aktuell:
+            eigene.append(aktuell)
+        stuecke.append(eigene)
+    wellen = []
+    for k in range(max((len(e) for e in stuecke), default=0)):
+        wellen.append([list(kopf) + e[k] for e in stuecke if k < len(e)])
+    return wellen
+
+
 def find_dri_device():
     """Erster Render-Knoten der Grafikkarte, fuer VAAPI und QuickSync."""
     for n in range(128, 136):
@@ -2010,6 +2079,13 @@ VIDEO_CODECS = [
 ]
 
 
+def codec_verfuegbar(c, nt=None):
+    """Gibt es den Encoder auf diesem System grundsaetzlich? VAAPI ist
+    eine Schnittstelle von Linux - unter Windows nie vorhanden."""
+    windows = (os.name == 'nt') if nt is None else nt
+    return not (windows and c.get('hw') == 'vaapi')
+
+
 def codec_def(idx):
     """Codec-Zeile zum gespeicherten Index, mit Rueckfall auf libx264."""
     if isinstance(idx, int) and 0 <= idx < len(VIDEO_CODECS):
@@ -2083,7 +2159,7 @@ def _probe_mit(programm, idx, crf="23", timeout=30):
     cmd += ["-frames:v", "3", "-f", "null", "-"]
     try:
         proc = subprocess.run(cmd, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.PIPE, timeout=timeout)
+                              stderr=subprocess.PIPE, timeout=timeout, **OHNE_FENSTER)
     except subprocess.TimeoutExpired:
         return False, "Der Testlauf von FFmpeg hat nicht geantwortet."
     except (OSError, subprocess.SubprocessError) as e:
@@ -4214,7 +4290,7 @@ class EngineVorschau(QtCore.QThread):
                                    vorschau_profil(self.profil, self.kante))
                 cmd = vorschau_befehl(self.cli, self.bild, profil_pfad, ziel)
             self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                          stderr=subprocess.STDOUT)
+                                          stderr=subprocess.STDOUT, **OHNE_FENSTER)
             if self._abbruch:
                 self._proc.kill()
             try:
@@ -5307,7 +5383,7 @@ class GalleryWorker(QtCore.QThread):
 
     def run(self):
         d = self.target_dir
-        jpg = sorted(glob.glob(os.path.join(d, "*.jpg")) + glob.glob(os.path.join(d, "*.JPG")))
+        jpg = find_jpg_files(d)
         nef = find_raw_files(d)
         if self._abort:
             return
@@ -5438,7 +5514,7 @@ class Worker(QtCore.QThread):
         """
         self._enc_err = tempfile.TemporaryFile()
         return subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE,
-                                stderr=self._enc_err)
+                                stderr=self._enc_err, **OHNE_FENSTER)
 
     def _encoder_error(self):
         """Die gesammelten FFmpeg-Meldungen als Text."""
@@ -5961,7 +6037,8 @@ class Worker(QtCore.QThread):
         self.log.emit(" ".join(cmd) + "\n")
         self.status.emit("Vergleichsvideo wird erstellt...")
         self.progress.emit(0, 1)
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                **OHNE_FENSTER)
         _, err = proc.communicate()
         if proc.returncode != 0:
             raise RuntimeError(self._t("FFmpeg konnte die Videos nicht zusammenfuegen.\n",
@@ -6823,7 +6900,7 @@ class Worker(QtCore.QThread):
                 pass
 
     def _run_engine_cli(self, cmds, art_env, out_dir, total_dev, label,
-                        expected_stems=None):
+                        expected_stems=None, abschluss=True):
         """
         Startet einen oder mehrere ART-/RawTherapee-CLI-Prozesse und wartet
         mit Fortschrittsanzeige, bis alle fertig sind.
@@ -6848,7 +6925,8 @@ class Worker(QtCore.QThread):
                 procs.append(subprocess.Popen(
                     cmd, env=art_env,
                     stdout=lf or subprocess.DEVNULL,
-                    stderr=subprocess.STDOUT if lf else subprocess.DEVNULL))
+                    stderr=subprocess.STDOUT if lf else subprocess.DEVNULL,
+                    **OHNE_FENSTER))
 
             start_time = time.time()
             while any(pr.poll() is None for pr in procs):
@@ -6868,7 +6946,8 @@ class Worker(QtCore.QThread):
                 time.sleep(1.0)
             fertig = self._count_rendered(out_dir, expected_stems)
             self.progress.emit(fertig, total_dev)
-            self._schritt_fertig(label, fertig, start_time)
+            if abschluss:
+                self._schritt_fertig(label, fertig, start_time)
         finally:
             self._write_engine_log(cmds, procs, logs, label)
 
@@ -6988,7 +7067,8 @@ class Worker(QtCore.QThread):
                         proc = subprocess.Popen(
                             cmd, env=env, stdin=subprocess.DEVNULL,
                             stdout=(ausgabe or subprocess.DEVNULL),
-                            stderr=subprocess.STDOUT if ausgabe else subprocess.DEVNULL)
+                            stderr=subprocess.STDOUT if ausgabe else subprocess.DEVNULL,
+                            **OHNE_FENSTER)
                     except OSError as e:
                         frei_slots.append(slot)
                         raise RuntimeError(self._t(
@@ -7265,7 +7345,8 @@ class Worker(QtCore.QThread):
         grund = [self.p['art_cli_path'], "-S", "-Y", "-o", out_dir]
         # 16 Bit: gepacktes TIFF; sonst JPG in der gewuenschten Qualitaet
         grund += ["-tz", "-b16"] if tief else [f"-j{quality}"]
-        cmds = [grund + eng('extra') + ["-c"] + teil for teil in teile]
+        wellen = befehls_wellen(grund + eng('extra') + ["-c"], teile, KOMMANDO_MAX)
+        cmds = wellen[0]
         stems = [os.path.splitext(os.path.basename(f))[0] for f in files]
         self.log.emit(self._t(f"\n> {eng('label').upper()}-CLI ENGINE - {label}: {len(files)} Bilder",
                 f"\n> {eng('label').upper()}-CLI ENGINE - {self._l(label)}: {len(files)} images"))
@@ -7276,8 +7357,14 @@ class Worker(QtCore.QThread):
             self.log.emit(" ".join(grund + eng('extra') + ["-c"]) + " <Bilderliste>\n")
         else:
             self.log.emit(" ".join(cmds[0]) + "\n")
-        self._run_engine_cli(cmds, art_env, out_dir, len(files), label,
-                             expected_stems=stems)
+        if len(wellen) > 1:
+            self.log.emit(self._t(
+                f"> Befehlszeile zu lang fuer Windows: {len(wellen)} Durchgaenge nacheinander.",
+                f"> Command line too long for Windows: {len(wellen)} passes one after another."))
+        for nr, welle in enumerate(wellen):
+            self._run_engine_cli(welle, art_env, out_dir, len(files), label,
+                                 expected_stems=stems,
+                                 abschluss=(nr == len(wellen) - 1))
 
     def _measure_and_correct(self, jpgs, files, apply_correction=True):
         """Misst das Rendering-Ergebnis und schreibt die Restabweichung in die Sidecars."""
@@ -8608,6 +8695,15 @@ class MainWindow(QtWidgets.QWidget):
         gv.addWidget(QtWidgets.QLabel("Video-Codec:"), 3, 0)
         self.cmb_codec = QtWidgets.QComboBox()
         self.cmb_codec.addItems([c['label'] for c in VIDEO_CODECS])
+        # Die Liste bleibt vollstaendig - gespeicherte Einstellungen und
+        # Auftraege merken sich den Index. Was es auf diesem System nicht
+        # gibt, ist gesperrt statt entfernt.
+        for i, c in enumerate(VIDEO_CODECS):
+            if not codec_verfuegbar(c):
+                try:
+                    self.cmb_codec.model().item(i).setEnabled(False)
+                except AttributeError:
+                    pass
         self.cmb_codec.currentIndexChanged.connect(self._update_filesize_estimate)
         self.cmb_codec.currentIndexChanged.connect(self._on_codec_changed)
         gv.addWidget(self.cmb_codec, 3, 1)
@@ -9930,7 +10026,7 @@ class MainWindow(QtWidgets.QWidget):
                 "sidecars found, engine switched from "
                 f"{ENGINES[aktuell]['label']} to "
                 f"{ENGINES[erkannt]['label']}."))
-        jpg = glob.glob(os.path.join(self.target_dir, "*.jpg")) + glob.glob(os.path.join(self.target_dir, "*.JPG"))
+        jpg = find_jpg_files(self.target_dir)
         nef = find_raw_files(self.target_dir)
         self.lbl_count.setText(self._t(f"Ordner gewählt: {len(jpg)} JPG(s) und {len(nef)} NEF(s) gefunden.",
                                        f"Folder selected: {len(jpg)} JPG(s) and {len(nef)} NEF(s) found."))
@@ -11727,8 +11823,7 @@ class MainWindow(QtWidgets.QWidget):
         if params.get('format') == 'raw':
             files = find_raw_files(d)
         else:
-            files = sorted(glob.glob(os.path.join(d, "*.jpg")) +
-                           glob.glob(os.path.join(d, "*.JPG")))
+            files = find_jpg_files(d)
         if not files:
             job['status'] = 'failed'
             self._on_log(f"[FEHLER] {self._t('Keine Bilder in', 'No images in')} {d}")
@@ -12229,6 +12324,11 @@ class MainWindow(QtWidgets.QWidget):
         event.accept()
 def main():
     multiprocessing.freeze_support()
+    # Fuer die Startprobe beim Bauen: alle Module sind geladen, Qt laeuft -
+    # damit ist gezeigt, dass das Paket vollstaendig ist. Kein Fenster.
+    if "--version" in sys.argv[1:]:
+        print(f"Purelapse {VERSION}")
+        return
     app_instance.setStyle("Fusion")
     win = MainWindow()
     win.show()

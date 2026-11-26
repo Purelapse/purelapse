@@ -312,6 +312,20 @@ wird dieses bevorzugt (passend zum Grafiktreiber).
 
 Für JPG-Serien wird keine Engine benötigt.
 
+## Windows (in Vorbereitung)
+
+Purelapse wird für Windows vorbereitet. Eine Testversion als einzelne
+`.exe` lässt sich unter *Actions → Windows-Paket* bauen; sie ist noch nicht
+auf einem echten Windows-Rechner mit den Engines erprobt.
+
+- Die Engines findet Purelapse im Suchpfad und in den üblichen
+  Installationsordnern (`C:\Program Files\ART`, `…\RawTherapee\<Version>`,
+  `…\darktable\bin`), sonst unter **Einstellungen** eintragen.
+- Einstellungen und Basisprofile liegen unter `%LOCALAPPDATA%\Purelapse`.
+- Dateinamen mit Doppelpunkt (etwa `2016-12-26_20:15:32.nef`) sind unter
+  Windows nicht erlaubt – solche Serien vorher umbenennen.
+- Hardware-Encoder: NVIDIA und Intel QuickSync; VAAPI gibt es nur unter Linux.
+
 ## Aus dem Quelltext starten
 
 ```bash

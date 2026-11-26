@@ -305,6 +305,20 @@ preferred (matching the graphics driver).
 
 JPG sequences don't need an engine.
 
+## Windows (in preparation)
+
+Purelapse is being prepared for Windows. A test build as a single `.exe` can
+be made under *Actions → Windows-Paket*; it has not yet been tried on a real
+Windows machine with the engines.
+
+- Purelapse finds the engines in the search path and in the usual install
+  folders (`C:\Program Files\ART`, `…\RawTherapee\<version>`,
+  `…\darktable\bin`); otherwise enter them under **Settings**.
+- Settings and base profiles live in `%LOCALAPPDATA%\Purelapse`.
+- File names containing a colon (such as `2016-12-26_20:15:32.nef`) are not
+  allowed on Windows – rename such sequences first.
+- Hardware encoders: NVIDIA and Intel QuickSync; VAAPI exists only on Linux.
+
 ## Running from source
 
 ```bash
