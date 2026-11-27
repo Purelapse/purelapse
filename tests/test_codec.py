@@ -154,6 +154,17 @@ for i, c in enumerate(VC):
     pruef("Nacht01_Purelapse_2160p_25fps" in pfad, f"Codec {i}: Name falsch gebildet")
     pruef(os.path.dirname(pfad) == os.path.join(basis, "Nacht01", "Purelapse")
           and os.path.isdir(os.path.dirname(pfad)), f"Codec {i}: Video nicht im Purelapse-Ordner: {pfad}")
+# Kuerzel der Engine im Namen - nur bei RAW und nur fuer das eigentliche Video
+for eng_, k_ in (('rt', 'RT'), ('art', 'AR'), ('dt', 'DT'), ('lr', 'LT'), ('rr', 'RR')):
+    pfad = ns["W2"](dict(grund, codec_idx=0, format='raw', engine=eng_))._get_output_video_path()
+    pruef(os.path.basename(pfad) == f"Nacht01_Purelapse_2160p_25fps_{k_}.mp4", f"{eng_}: {os.path.basename(pfad)}")
+pfad = ns["W2"](dict(grund, codec_idx=0, format='jpg', engine='rt'))._get_output_video_path()
+pruef(os.path.basename(pfad) == "Nacht01_Purelapse_2160p_25fps.mp4", f"JPG ohne Engine: {os.path.basename(pfad)}")
+pfad = ns["W2"](dict(grund, codec_idx=0, format='raw', engine='rt', mode='plain',
+                     name_suffix='_Original'))._get_output_video_path()
+pruef(os.path.basename(pfad) == "Nacht01_Purelapse_2160p_25fps_Original.mp4", f"Rohfassung: {os.path.basename(pfad)}")
+pfad = ns["W2"](dict(grund, codec_idx=0, format='raw', engine='rr', versioning=True))._get_output_video_path()
+pruef(os.path.basename(pfad) == "Nacht01_Purelapse_2160p_25fps_RR_v1.mp4", f"mit Versionierung: {os.path.basename(pfad)}")
 # Versionierung behaelt die Endung
 p = dict(grund, codec_idx=4, versioning=True)
 pfad1 = ns["W2"](p)._get_output_video_path()

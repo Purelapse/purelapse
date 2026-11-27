@@ -37,7 +37,7 @@ _, g3, _ = pe.schnell_profil(p0, {}, None)
 pruef(g3 == [], "hl=None schreibt")
 v = pe.vorschau_profil(neu, 900)
 pruef(v['Resize'] == {'Enabled': 'true', 'DataSpecified': '3', 'Width': '900', 'Height': '900',
-                      'AllowUpscaling': 'false'} and 'Resize' not in neu, f"Resize: {v.get('Resize')}")
+                      'AllowUpscaling': 'false', 'Unit': 'px'} and 'Resize' not in neu, f"Resize: {v.get('Resize')}")
 pruef({s: v[s] for s in neu} == neu, "vorschau_profil aendert mehr als die Groesse")
 b = pe.vorschau_befehl("/x/rawtherapee-cli", "/b/a.NEF", "/t/v.pp3", "/t/v.jpg")
 pruef(b[0] == "/x/rawtherapee-cli" and b[b.index("-o") + 1] == "/t/v.jpg" and b[b.index("-p") + 1] == "/t/v.pp3"
@@ -113,6 +113,18 @@ abw_n = float(np.abs(klein.astype(float) - naeh.astype(float)).mean())
 print(f"   Abweichung zu Pass 2: echte Vorschau {abw:.2f}, alte Naeherung {abw_n:.1f} (von 255)")
 pruef(abw < abw_n / 5, "die echte Vorschau ist nicht deutlich naeher als die Naeherung")
 
+print("=== 4b. Unscharf und Puls ===")
+probe = np.zeros((90, 160, 3), np.uint8); probe[:, ::2] = 255
+weich = pm.unscharf_zeigen(probe)
+pruef(weich.shape == probe.shape and weich.std() < probe.std() * 0.2, "unscharf_zeigen zeichnet nicht weich")
+import math as _m
+werte_ = []
+for s_ in (0.0, 0.35, 0.7, 1.05):
+    phase = s_ / pm.PULS_DAUER * 2 * _m.pi
+    werte_.append(0.675 - 0.325 * _m.cos(phase))
+pruef(min(werte_) >= 0.35 - 1e-9 and max(werte_) <= 1.0 + 1e-9 and len(set(round(x, 2) for x in werte_)) > 2,
+      "Puls schwingt nicht weich zwischen 35 und 100 Prozent")
+
 print("=== 5. Im Dialog ===")
 og = O("echt_gui"); dg, _ = szene(og, n=N)
 fen = pm.MainWindow()
@@ -123,8 +135,13 @@ gesehen = {}
 def bedienen(dlg):
     bilder = []
     alt = dlg._bild_setzen
-    def merke(rgb, echt): bilder.append((rgb.copy(), echt)); alt(rgb, echt)
+    unscharf = []
+    def merke(rgb, echt): bilder.append((rgb.copy(), echt)); unscharf.append((echt, dlg._unscharf)); alt(rgb, echt)
     dlg._bild_setzen = merke
+    pulse = []
+    alt_an, alt_aus = dlg._puls_an, dlg._puls_aus
+    dlg._puls_an = lambda: (pulse.append('an'), alt_an())
+    dlg._puls_aus = lambda: (pulse.append('aus'), alt_aus())
     starts = []
     alt_start = pm.EngineVorschau.start
     def zaehl(self): starts.append(self.kennung); alt_start(self)
@@ -139,6 +156,11 @@ def bedienen(dlg):
         hell = bilder[-1][0].mean()
         pruef(bilder[-1][1] and hell > bilder[0][0].mean() * 1.1, "das echte Bild zeigt die Helligkeit nicht")
         pruef(any(not e for _, e in bilder), "waehrend des Wartens stand keine Naeherung da")
+        pruef(any(not e and u for e, u in unscharf), "die Naeherung waehrend des Wartens ist nicht unscharf")
+        pruef(all(not u for e, u in unscharf if e), "ein Bild der Engine wurde unscharf gezeigt")
+        pruef('an' in pulse and pulse[-1] == 'aus', f"Hinweis pulsiert nicht bzw. hoert nicht auf: {pulse[-4:]}")
+        pruef(dlg.lbl_echt.styleSheet() == pm.ECHT_STIL if hasattr(dlg.lbl_echt, 'styleSheet') else True,
+              "nach dem fertigen Bild steht der Hinweis nicht wieder ruhig da")
         # zurueck auf einen schon entwickelten Stand: kein neuer Lauf
         n1 = len(starts); sl.setValue(0); chk.setChecked(False)
         pruef(len(starts) == n1 and dlg._gezeigt_echt, f"bekannter Stand wird neu entwickelt ({len(starts)-n1} Laeufe)")

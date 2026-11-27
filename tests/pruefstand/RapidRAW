@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+# Nachbau von RapidRAW fuer die Pruefungen - siehe fake_rapidraw.py
+import os, runpy
+runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fake_rapidraw.py'), run_name='__main__')

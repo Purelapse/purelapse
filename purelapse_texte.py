@@ -164,6 +164,9 @@ TRANSLATIONS = {
     # Lightroom-Hinweistext
     'Lightroom Classic hat keine Kommandozeile – Purelapse arbeitet mit den .xmp-Dateien. Ablauf: in Lightroom alle Bilder wählen → Metadaten in Datei speichern (Strg+S). Pass 1 und Pass 2 schreiben Belichtung und Keyframes hinein. Dann in Lightroom „Metadaten aus Dateien lesen“, nach Purelapse/Lightroom_Export exportieren und Pass 2 noch einmal starten: daraus entsteht das Video.':
         'Lightroom Classic has no command line – Purelapse works with the .xmp files. Workflow: in Lightroom select all frames → Save Metadata to File (Ctrl+S). Pass 1 and pass 2 write the exposure and keyframes into them. Then in Lightroom “Read Metadata from Files”, export to Purelapse/Lightroom_Export and start pass 2 again: the video is built from that export.',
+    # RapidRAW-Hinweistext
+    'RapidRAW braucht kein Basisprofil: Purelapse arbeitet mit den .rrdata-Dateien. Ablauf: in RapidRAW die Keyframes bearbeiten und mit 5 Sternen markieren, dann Pass 1 und Pass 2. Entwickelt wird mit „RapidRAW export“ (ab RapidRAW 1.6), ohne dass RapidRAW sich öffnet.':
+        'RapidRAW needs no base profile: Purelapse works with the .rrdata files. Workflow: edit the keyframes in RapidRAW and mark them with 5 stars, then pass 1 and pass 2. Developing uses “RapidRAW export” (RapidRAW 1.6 or newer) without opening RapidRAW.',
     # Auswahllisten
     "Pass 1 – Anti-Flacker": "Pass 1 – anti-flicker",
     "Pass 2 – Rendern": "Pass 2 – render",
@@ -233,7 +236,11 @@ TRANSLATIONS = {
                  "Lightroom (XMP): Lightroom Classic hat keine Kommandozeile.\n"
                  "Purelapse schreibt Belichtung und Keyframe-Uebergaenge in die\n"
                  "XMP-Dateien; Lightroom liest sie ein und exportiert, aus dem\n"
-                 "Export baut Purelapse das Video - mit Feinabgleich.",
+                 "Export baut Purelapse das Video - mit Feinabgleich.\n\n"
+                 "RapidRAW: Purelapse arbeitet mit den .rrdata-Dateien und\n"
+                 "entwickelt mit \u201eRapidRAW export\u201c (ab RapidRAW 1.6), ohne\n"
+                 "dass sich RapidRAW oeffnet. Keyframes in RapidRAW bearbeiten und\n"
+                 "mit 5 Sternen markieren.",
     "TT_CALIB": "Purelapse misst das Ergebnis der Engine und schreibt die verbleibende\nAbweichung in die Sidecars zurueck, dann entwickelt die Engine erneut.\nAb Runde 2 nur noch die tatsaechlich geaenderten Bilder.\nEin Durchgang genuegt in aller Regel.",
     "TT_CAMPATH": "Legt den 16:9 Ausschnitt fuer das erste und das letzte Bild fest.\nDazwischen faehrt die Kamera weich von A nach B.",
     "TT_STAB": "Gleicht Verwacklungen zwischen den Bildern aus. Kostet etwas Bildrand.",
@@ -341,7 +348,11 @@ TRANSLATIONS_TT_EN = {
                  "Lightroom (XMP): Lightroom Classic has no command line.\n"
                  "Purelapse writes the exposure and keyframe transitions into the\n"
                  "XMP files; Lightroom reads them and exports, and Purelapse builds\n"
-                 "the video from the export - with fine adjustment.",
+                 "the video from the export - with fine adjustment.\n\n"
+                 "RapidRAW: Purelapse works with the .rrdata files and develops\n"
+                 "with \u201cRapidRAW export\u201d (RapidRAW 1.6 or newer) without\n"
+                 "opening RapidRAW. Edit keyframes in RapidRAW and mark them with\n"
+                 "5 stars.",
     "TT_CALIB": "Purelapse measures the engine's result and writes the remaining deviation\nback into the sidecars, then the engine develops again.\nFrom round 2 on, only the frames that actually changed.\nOne round is usually enough.",
     "TT_CAMPATH": "Defines the 16:9 crop for the first and the last frame.\nIn between the camera moves smoothly from A to B.",
     "TT_STAB": "Compensates camera shake between frames. Costs a little image border.",

@@ -2722,6 +2722,29 @@ def process_single_thumb(args):
         pass
     if img is None:
         return f, None, None
+    combined_img, rgb_img, img_small, (b_mean, g_mean, r_mean) = kachel_bauen(img, roi_rel)
+    luma = 0.2989 * r_mean + 0.5870 * g_mean + 0.1140 * b_mean
+    is_kf = check_is_keyframe(sidecar(f))
+    # Farbstich in den Lichtern schon beim Einlesen messen - das kostet
+    # auf dem 128er Vorschaubild nichts und zeigt, ob das Problem die
+    # ganze Sequenz betrifft oder nur ein paar Bilder.
+    hl_bunt = lichter_farbstich(rgb_img, linear=False)[0]
+    daten = {
+        'hl_bunt': float(hl_bunt),
+        'luma': float(luma),
+        'kf': bool(is_kf),
+        'wb': float(np.log2(max(r_mean, 1e-3) / max(b_mean, 1e-3))),
+        'clip': ausgebrannt_anteil(img_small),
+    }
+    return f, combined_img, daten
+
+
+def kachel_bauen(img, roi_rel=None):
+    """
+    Bild der Kachel in der Bildleiste: verkleinert, darunter das Histogramm.
+    Rueckgabe: (Kachel RGB, Bild RGB, Bild BGR klein, Mittelwerte BGR im
+    Messbereich)
+    """
     # --- Kleineres 3:2 Format für das Raster-Layout ---
     thumb_w, thumb_h = 128, 85
     img_small = cv2.resize(img, (thumb_w, thumb_h))
@@ -2735,7 +2758,6 @@ def process_single_thumb(args):
         b_mean, g_mean, r_mean = cv2.mean(roi_img)[:3]
     else:
         b_mean, g_mean, r_mean = cv2.mean(img_small)[:3]
-    luma = 0.2989 * r_mean + 0.5870 * g_mean + 0.1140 * b_mean
     hist_h, hist_w = 30, thumb_w
     hist_bgr = np.zeros((hist_h, hist_w, 3), dtype=np.uint8)
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
@@ -2750,19 +2772,7 @@ def process_single_thumb(args):
     rgb_img = cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB)
     hist_rgb = cv2.cvtColor(hist_bgr, cv2.COLOR_BGR2RGB)
     combined_img = np.vstack((rgb_img, hist_rgb))
-    is_kf = check_is_keyframe(sidecar(f))
-    # Farbstich in den Lichtern schon beim Einlesen messen - das kostet
-    # auf dem 128er Vorschaubild nichts und zeigt, ob das Problem die
-    # ganze Sequenz betrifft oder nur ein paar Bilder.
-    hl_bunt = lichter_farbstich(rgb_img, linear=False)[0]
-    daten = {
-        'hl_bunt': float(hl_bunt),
-        'luma': float(luma),
-        'kf': bool(is_kf),
-        'wb': float(np.log2(max(r_mean, 1e-3) / max(b_mean, 1e-3))),
-        'clip': ausgebrannt_anteil(img_small),
-    }
-    return f, combined_img, daten
+    return combined_img, rgb_img, img_small, (b_mean, g_mean, r_mean)
 
 def get_exif_data(filepath):
     data = {'shutter': 0.0, 'iso': 100, 'aperture': 0.0, 'time': ''}
@@ -2889,7 +2899,7 @@ def pl_datei(target_dir, name, anlegen=False):
 
 
 # Reihenfolge der Engines in der Auswahl (gespeichert wird die Stelle)
-ENGINE_REIHE = ('art', 'rt', 'dt', 'lr')
+ENGINE_REIHE = ('art', 'rt', 'dt', 'lr', 'rr')
 
 
 def engine_aus_index(i):
@@ -2927,6 +2937,245 @@ def lr_export_datei(ordner, stem):
         if os.path.exists(pfad):
             return pfad
     return None
+
+
+RR_RRDATA_FEHLT = {
+    'de': "In diesem Ordner hat noch kein Bild eine RapidRAW-Bearbeitung "
+          "(.rrdata).\n\n"
+          "Purelapse übernimmt den Look aus RapidRAW, statt ihn zu erfinden: "
+          "Bitte den Ordner in RapidRAW öffnen und mindestens ein Bild der "
+          "Serie bearbeiten – am besten die Keyframes, mit 5 Sternen "
+          "markiert. Danach Pass 1 erneut starten.",
+    'en': "No image in this folder has a RapidRAW edit (.rrdata) yet.\n\n"
+          "Purelapse takes the look from RapidRAW instead of inventing one: "
+          "please open the folder in RapidRAW and edit at least one frame of "
+          "the sequence – ideally the keyframes, marked with 5 stars. Then "
+          "start pass 1 again.",
+}
+RR_HINWEIS_KURZ = {
+    'de': "RapidRAW braucht kein Basisprofil: Purelapse arbeitet mit den "
+          ".rrdata-Dateien. Ablauf: in RapidRAW die Keyframes bearbeiten und "
+          "mit 5 Sternen markieren, dann Pass 1 und Pass 2. Entwickelt wird mit "
+          "„RapidRAW export“ (ab RapidRAW 1.6), ohne dass RapidRAW sich öffnet.",
+    'en': "RapidRAW needs no base profile: Purelapse works with the .rrdata "
+          "files. Workflow: edit the keyframes in RapidRAW and mark them with "
+          "5 stars, then pass 1 and pass 2. Developing uses “RapidRAW export” "
+          "(RapidRAW 1.6 or newer) without opening RapidRAW.",
+}
+RR_KEYFRAME_HINWEIS = {
+    'de': "RapidRAW: Keyframes in RapidRAW bearbeiten und dort mit 5 Sternen "
+          "markieren – Purelapse liest die Sterne aus der .rrdata. Masken und "
+          "KI-Retusche gehen nicht weich über; sie wechseln in der Mitte "
+          "zwischen zwei Keyframes.",
+    'en': "RapidRAW: edit keyframes in RapidRAW and mark them there with 5 "
+          "stars – Purelapse reads the stars from the .rrdata. Masks and AI "
+          "retouching do not blend; they switch halfway between two keyframes.",
+}
+
+
+# So lange darf RapidRAW ohne ein neues Bild arbeiten, bevor Purelapse
+# von einem Haenger ausgeht (erstes Bild: Programmstart, Objektivdaten ...).
+RR_STILLSTAND_SEK = 300
+
+
+def rr_verknuepfen(dateien, ordner):
+    """
+    Legt in 'ordner' Verknuepfungen auf die Bilder und ihre .rrdata an -
+    damit "RapidRAW export" genau diese Bilder in einem Aufruf entwickelt
+    (als Quelle nimmt es einen ganzen Ordner samt Unterordnern).
+    Zuerst feste Verknuepfungen (brauchen dasselbe Laufwerk), dann
+    symbolische (unter Windows nur mit Entwicklermodus).
+    Rueckgabe: 'hart', 'symbolisch' oder '' (geht nicht - dann einzeln).
+    """
+    for art in ('hart', 'symbolisch'):
+        shutil.rmtree(ordner, ignore_errors=True)
+        try:
+            os.makedirs(ordner)
+            for f in dateien:
+                for quelle in (f, sidecar(f)):
+                    ziel = os.path.join(ordner, os.path.basename(quelle))
+                    if art == 'hart':
+                        os.link(quelle, ziel)
+                    else:
+                        os.symlink(os.path.abspath(quelle), ziel)
+            return art
+        except (OSError, NotImplementedError, AttributeError):
+            continue
+    shutil.rmtree(ordner, ignore_errors=True)
+    return ''
+
+
+def rr_ausgaben(ordner):
+    """Fertige Ausgaben von RapidRAW: {Stamm: Pfad}."""
+    out = {}
+    try:
+        namen = os.listdir(ordner)
+    except OSError:
+        return out
+    for name in namen:
+        stamm = rr_ausgabe_stamm(name)
+        if stamm:
+            out[stamm] = os.path.join(ordner, name)
+    return out
+
+
+class RrAbbruch(RuntimeError):
+    """Der Lauf wurde von aussen abgebrochen."""
+
+
+class RrStillstand(RuntimeError):
+    """RapidRAW liefert seit RR_STILLSTAND_SEK kein Bild mehr."""
+
+
+def rr_export_lauf(cli, files, out_dir, tief=False, quality=100, abbruch=None,
+                   takt=None, beginn=None, bericht=None, einzeln_gleichzeitig=2):
+    """
+    Entwickelt 'files' mit "RapidRAW export" nach out_dir/STAMM.jpg
+    (16 Bit: STAMM.tif). Gemeinsamer Kern fuer Pass 2, die Vorschau und
+    die Bildleiste.
+
+    RapidRAW nimmt als Quelle ein Bild oder einen ganzen Ordner samt
+    Unterordnern. Im Bilderordner liegen aber auch Purelapses eigene
+    Ausgaben und vielleicht die JPGs der Kamera. Deshalb entsteht ein
+    Arbeitsordner mit Verknuepfungen auf genau diese Bilder: ein Aufruf
+    fuer die ganze Serie, RapidRAW verteilt selbst auf mehrere Kerne.
+    Laesst das Laufwerk keine Verknuepfungen zu, kommt jedes Bild einzeln.
+
+    RapidRAW nennt die Ausgabe BILD_edited.jpeg und gibt ihr das Datum der
+    Aufnahme. Purelapse legt sie als BILD.jpg mit dem Datum von jetzt ab -
+    am Datum erkennt es, welche Bilder sich geaendert haben.
+
+    abbruch()        True: Prozesse beenden, RrAbbruch
+    takt(fertig)     nach jedem Blick auf den Fortschritt
+    beginn(art, cmds, gleichzeitig)   bevor der erste Prozess startet
+    bericht          dict, wird gefuellt: procs, cmds, logs, art
+    """
+    if bericht is None:
+        bericht = {}
+    bericht.update(procs=[], cmds=[], logs=[], art='')
+    if not files:
+        return bericht
+    quelle = os.path.join(out_dir, ".rapidraw_quelle")
+    ausgabe = os.path.join(out_dir, ".rapidraw_ausgabe")
+    shutil.rmtree(ausgabe, ignore_errors=True)
+    os.makedirs(ausgabe, exist_ok=True)
+    stems = [os.path.splitext(os.path.basename(f))[0] for f in files]
+    gesucht = set(stems)
+    art = rr_verknuepfen(files, quelle)
+    bericht['art'] = art
+    if art:
+        cmds = [rr_export_befehl(cli, quelle, ausgabe, tief, quality)]
+        gleichzeitig = 1
+    else:
+        endung = ".tiff" if tief else ".jpeg"
+        cmds = [rr_export_befehl(cli, f, os.path.join(ausgabe, st + "_edited" + endung),
+                                 tief, quality)
+                for f, st in zip(files, stems)]
+        gleichzeitig = max(1, min(einzeln_gleichzeitig, len(cmds)))
+    if beginn:
+        beginn(art, cmds, gleichzeitig)
+    freigaben = sorted({os.path.dirname(os.path.abspath(f)) for f in files})
+    env = os.environ.copy()
+    offen = list(cmds)
+    laufend = []
+    zuletzt_neu, zuletzt_zahl = time.time(), 0
+    verschoben = set()
+
+    def abholen():
+        # Jedes fertige Bild gleich in den Ausgabeordner: dort sieht man
+        # den Fortschritt, und ein Abbruch verliert nichts. Schreibt
+        # RapidRAW noch daran, schreibt es unter Linux in dieselbe Datei
+        # weiter; unter Windows schlaegt das Umbenennen dann fehl und
+        # klappt beim naechsten Blick.
+        for st, pfad in rr_ausgaben(ausgabe).items():
+            if st not in gesucht:
+                continue
+            ziel = os.path.join(out_dir, st + (".tif" if tief else ".jpg"))
+            try:
+                os.replace(pfad, ziel)
+                os.utime(ziel, None)
+                verschoben.add(st)
+            except OSError:
+                pass
+
+    durch = False
+    try:
+        while offen or laufend:
+            if abbruch and abbruch():
+                for pr in laufend:
+                    prozess_beenden(pr)
+                for pr in laufend:
+                    try:
+                        pr.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                raise RrAbbruch()
+            while offen and len(laufend) < gleichzeitig:
+                cmd = offen.pop(0)
+                try:
+                    lf = tempfile.TemporaryFile()
+                except OSError:
+                    lf = None
+                pr = subprocess.Popen(
+                    engine_befehl(cmd, env, freigaben=freigaben), env=env,
+                    stdout=lf or subprocess.DEVNULL,
+                    stderr=subprocess.STDOUT if lf else subprocess.DEVNULL,
+                    **OHNE_FENSTER)
+                laufend.append(pr)
+                bericht['procs'].append(pr)
+                bericht['logs'].append(lf)
+                bericht['cmds'].append(cmd)
+            laufend = [pr for pr in laufend if pr.poll() is None]
+            abholen()
+            fertig = len(verschoben)
+            if takt:
+                takt(fertig)
+            if fertig != zuletzt_zahl:
+                zuletzt_neu, zuletzt_zahl = time.time(), fertig
+            elif laufend and time.time() - zuletzt_neu > RR_STILLSTAND_SEK:
+                # Eine RapidRAW-Fassung ohne "export" (vor 1.6) oeffnet
+                # stattdessen ihr Fenster und kehrt nie zurueck.
+                for pr in laufend:
+                    prozess_beenden(pr)
+                raise RrStillstand()
+            if offen or laufend:
+                time.sleep(0.5)
+        durch = True
+    finally:
+        # Nach einem regulaeren Ende ist alles fertig. Nach einem Abbruch
+        # liegt im Arbeitsordner, was RapidRAW gerade schrieb - das bleibt
+        # dort und verschwindet mit ihm. Was schon abgeholt ist, bleibt:
+        # der naechste Lauf setzt darauf auf (die juengsten verwirft
+        # _sichere_teilstand, falls RapidRAW an ihnen noch schrieb).
+        if durch:
+            abholen()
+        for ordner in (quelle, ausgabe):
+            # Unter Windows haelt ein eben beendeter Prozess seine Dateien
+            # manchmal noch einen Augenblick fest
+            for _ in range(20):
+                shutil.rmtree(ordner, ignore_errors=True)
+                if not os.path.exists(ordner):
+                    break
+                time.sleep(0.05)
+    return bericht
+
+
+def rr_letzte_zeile(bericht):
+    """Letzte Ausgabezeile eines fehlgeschlagenen RapidRAW-Aufrufs."""
+    letzte = ""
+    for lf, pr in zip(bericht.get('logs', []), bericht.get('procs', [])):
+        if lf is None or pr.returncode in (0, None):
+            continue
+        try:
+            lf.flush()
+            lf.seek(0)
+            zeilen = [z.strip() for z in lf.read().decode("utf-8", "ignore").splitlines()
+                      if z.strip()]
+            if zeilen:
+                letzte = zeilen[-1][:200]
+        except (OSError, ValueError):
+            pass
+    return letzte
 
 
 DT_HINWEIS_KURZ = {
@@ -4320,6 +4569,19 @@ class ZoomBild(QtWidgets.QScrollArea):
         return super().eventFilter(obj, event)
 
 
+ECHT_STIL = "font-size: 10px; font-weight: bold;"
+PULS_FARBE = (241, 154, 58)       # Orange aus dem Logo
+PULS_DAUER = 1.4                  # Sekunden fuer ein Auf und Ab
+
+
+def unscharf_zeigen(rgb):
+    """Das Bild fuer die Wartezeit: deutlich weichgezeichnet - man sieht
+    die Richtung, aber auch, dass es noch nicht das fertige Bild ist."""
+    h, w = rgb.shape[:2]
+    sigma = max(2.0, max(h, w) / 110.0)
+    return cv2.GaussianBlur(rgb, (0, 0), sigma)
+
+
 class EngineVorschau(QtCore.QThread):
     """
     Laesst die Engine ein Bild mit einem bestimmten Profil entwickeln.
@@ -4350,53 +4612,90 @@ class EngineVorschau(QtCore.QThread):
         start = time.time()
         erg = {'kennung': self.kennung, 'rgb': None, 'dauer': 0.0,
                'fehler': "", 'abgebrochen': False, 'faden': self}
-        ordner = tempfile.mkdtemp(prefix="purelapse_vorschau_")
-        try:
-            if eng('kind') == 'darktable':
-                slots, _q = dt_konfig_slots(1, os.path.join(cache_ordner(), "darktable_vorschau"))
-                cmd, ziel = dt_vorschau_befehl(self.cli, self.bild, self.profil,
-                                               ordner, self.kante, configdir=slots[0])
-            else:
-                profil_pfad = os.path.join(ordner, "vorschau" + eng('ext'))
-                ziel = os.path.join(ordner, "vorschau.jpg")
-                write_arp_dict_ini(profil_pfad,
-                                   vorschau_profil(self.profil, self.kante))
-                cmd = vorschau_befehl(self.cli, self.bild, profil_pfad, ziel)
-            self._proc = subprocess.Popen(engine_befehl(cmd), stdout=subprocess.PIPE,
-                                          stderr=subprocess.STDOUT, **OHNE_FENSTER)
-            if self._abbruch:
-                prozess_beenden(self._proc)
-            try:
-                ausgabe, _ = self._proc.communicate(timeout=240)
-            except subprocess.TimeoutExpired:
-                prozess_beenden(self._proc)
-                ausgabe, _ = self._proc.communicate()
-                erg['fehler'] = "Zeitueberschreitung"
-            if self._abbruch:
-                erg['abgebrochen'] = True
-            elif os.path.exists(ziel):
-                roh = cv2.imdecode(np.fromfile(ziel, dtype=np.uint8),
-                                   cv2.IMREAD_COLOR)
-                if roh is not None:
-                    erg['rgb'] = np.ascontiguousarray(
-                        cv2.cvtColor(roh, cv2.COLOR_BGR2RGB))
-            if erg['rgb'] is None and not erg['abgebrochen'] and not erg['fehler']:
-                zeilen = [z.strip() for z in
-                          (ausgabe or b"").decode("utf-8", "ignore").splitlines()
-                          if z.strip()]
-                erg['fehler'] = zeilen[-1][:200] if zeilen else "kein Bild erhalten"
-        except Exception as e:
-            erg['fehler'] = str(e)[:200]
-        finally:
-            # Nach einem Abbruch kann die Engine noch einen Augenblick an
-            # ihren Dateien haengen - dann kurz warten und nachfassen.
-            for _ in range(20):
-                shutil.rmtree(ordner, ignore_errors=True)
-                if not os.path.exists(ordner):
-                    break
-                time.sleep(0.05)
+        e = engine_einzelbild(self.cli, self.bild, self.profil, self.kante,
+                              abbruch=lambda: self._abbruch,
+                              prozess=lambda pr: setattr(self, '_proc', pr),
+                              dt_ablage="darktable_vorschau")
+        if e['bgr'] is not None:
+            erg['rgb'] = np.ascontiguousarray(cv2.cvtColor(e['bgr'], cv2.COLOR_BGR2RGB))
+        erg['fehler'], erg['abgebrochen'] = e['fehler'], e['abgebrochen']
         erg['dauer'] = time.time() - start
         self.fertig.emit(erg)
+
+
+def engine_einzelbild(cli, bild, profil, kante, abbruch=None, prozess=None,
+                      dt_ablage="darktable_vorschau", zeitlimit=240):
+    """
+    Laesst die eingestellte Engine EIN Bild mit einem bestimmten Profil
+    entwickeln, hoechstens 'kante' Pixel gross. Gearbeitet wird in einem
+    eigenen Ordner, der danach wieder verschwindet - die Begleitdatei des
+    Bildes bleibt unberuehrt. Fuer die echte Vorschau im Keyframe-Dialog
+    und die Keyframes in der Bildleiste.
+
+    abbruch()      True: das Bild will keiner mehr
+    prozess(proc)  bekommt den gestarteten Prozess (zum Beenden von aussen)
+    dt_ablage      eigener Konfigurationsordner fuer darktable-cli - zwei
+                   gleichzeitige Aufrufe duerfen sich keine Datenbank teilen
+    Rueckgabe: {'bgr': Bild oder None, 'fehler': Text, 'abgebrochen': bool}
+    """
+    erg = {'bgr': None, 'fehler': "", 'abgebrochen': False}
+    abbruch = abbruch or (lambda: False)
+    ordner = tempfile.mkdtemp(prefix="purelapse_vorschau_")
+    try:
+        freigaben = ()
+        if eng('kind') == 'darktable':
+            slots, _q = dt_konfig_slots(1, os.path.join(cache_ordner(), dt_ablage))
+            cmd, ziel = dt_vorschau_befehl(cli, bild, profil, ordner, kante,
+                                           configdir=slots[0])
+        elif eng('kind') == 'rapidraw':
+            # RapidRAW gibt immer in voller Groesse aus; verkleinert wird unten
+            cmd, ziel = rr_vorschau_befehl(cli, bild, profil, ordner)
+            freigaben = (os.path.dirname(os.path.abspath(bild)),)
+        else:
+            profil_pfad = os.path.join(ordner, "vorschau" + eng('ext'))
+            ziel = os.path.join(ordner, "vorschau.jpg")
+            write_arp_dict_ini(profil_pfad, vorschau_profil(profil, kante))
+            cmd = vorschau_befehl(cli, bild, profil_pfad, ziel)
+        proc = subprocess.Popen(engine_befehl(cmd, freigaben=freigaben),
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, **OHNE_FENSTER)
+        if prozess:
+            prozess(proc)
+        if abbruch():
+            prozess_beenden(proc)
+        try:
+            ausgabe, _ = proc.communicate(timeout=zeitlimit)
+        except subprocess.TimeoutExpired:
+            prozess_beenden(proc)
+            ausgabe, _ = proc.communicate()
+            erg['fehler'] = "Zeitueberschreitung"
+        if abbruch():
+            erg['abgebrochen'] = True
+        elif os.path.exists(ziel):
+            roh = cv2.imdecode(np.fromfile(ziel, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if roh is not None:
+                h, w = roh.shape[:2]
+                f = float(kante) / max(h, w)
+                if f < 1.0:
+                    roh = cv2.resize(roh, (max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                                     interpolation=cv2.INTER_AREA)
+                erg['bgr'] = roh
+        if erg['bgr'] is None and not erg['abgebrochen'] and not erg['fehler']:
+            zeilen = [z.strip() for z in
+                      (ausgabe or b"").decode("utf-8", "ignore").splitlines()
+                      if z.strip()]
+            erg['fehler'] = zeilen[-1][:200] if zeilen else "kein Bild erhalten"
+    except Exception as e:
+        erg['fehler'] = str(e)[:200]
+    finally:
+        # Nach einem Abbruch kann die Engine noch einen Augenblick an
+        # ihren Dateien haengen - dann kurz warten und nachfassen.
+        for _ in range(20):
+            shutil.rmtree(ordner, ignore_errors=True)
+            if not os.path.exists(ordner):
+                break
+            time.sleep(0.05)
+    return erg
 
 
 class QuickLookDialog(QtWidgets.QDialog):
@@ -4428,7 +4727,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         # RAW, einem auffindbaren Programm und einem INI-Profil.
         self._profil0 = {sec: dict(par) for sec, par in (profil or {}).items()}
         self._cli = None
-        if (engine_vorhanden(cli_pfad) and eng('kind') in ('ini', 'darktable')
+        if (engine_vorhanden(cli_pfad) and eng('kind') in ('ini', 'darktable', 'rapidraw')
                 and bild_pfad and is_raw_file(bild_pfad)
                 and profile_is_complete(profil)):
             self._cli = cli_pfad
@@ -4564,9 +4863,16 @@ class QuickLookDialog(QtWidgets.QDialog):
         self.chk_echt.toggled.connect(self._vorschau_anfordern)
         zeile_v.addWidget(self.chk_echt)
         self.lbl_echt = QtWidgets.QLabel("")
-        self.lbl_echt.setStyleSheet("font-size: 10px; font-weight: bold;")
+        self.lbl_echt.setStyleSheet(ECHT_STIL)
         zeile_v.addWidget(self.lbl_echt)
         zeile_v.addStretch()
+        # Solange die Engine rechnet, pulsiert der Hinweis sanft in Orange
+        # (kein Blinken: die Deckkraft schwingt weich auf und ab)
+        self._puls_timer = QtCore.QTimer(self)
+        self._puls_timer.setInterval(40)
+        self._puls_timer.timeout.connect(self._puls_schritt)
+        self._puls_start = 0.0
+        self._unscharf = False
         self._echt_timer = QtCore.QTimer(self)
         self._echt_timer.setSingleShot(True)
         self._echt_timer.setInterval(ECHT_WARTEZEIT_MS)
@@ -5189,13 +5495,19 @@ class QuickLookDialog(QtWidgets.QDialog):
                 rgb = self._naeherung(profil)
             except Exception:
                 rgb = None
+            # Unscharf nur, solange ein Bild der Engine kommt - ist sie
+            # fuer diesen Stand gescheitert, bleibt die Naeherung stehen.
+            self._unscharf = kennung not in self._echt_fehlschlag
             if rgb is not None:
                 self._bild_setzen(rgb, echt=False)
+            self._unscharf = False
             if kennung in self._echt_fehlschlag:
                 return
             self.lbl_echt.setText(self._t("Näherung …", "approximation …"))
+            self._puls_an()
             self._echt_timer.start()
             return
+        self._puls_aus()
         self.lbl_echt.setText("")
         werte = {} if self.chk_vorher.isChecked() else self.werte()
         try:
@@ -5208,8 +5520,10 @@ class QuickLookDialog(QtWidgets.QDialog):
     def _bild_setzen(self, rgb, echt):
         """Zeigt ein fertiges Bild samt Histogramm an."""
         rgb = np.ascontiguousarray(rgb)
-        h, w, ch = rgb.shape
-        bild = QtGui.QImage(rgb.data, w, h, ch * w,
+        zeigen = (np.ascontiguousarray(unscharf_zeigen(rgb))
+                  if (not echt and self._unscharf) else rgb)
+        h, w, ch = zeigen.shape
+        bild = QtGui.QImage(zeigen.data, w, h, ch * w,
                             QtGui.QImage.Format_RGB888).copy()
         self.lbl_vorschau.setPixmap(QtGui.QPixmap.fromImage(bild))
         self._gezeigt_echt = bool(echt)
@@ -5296,10 +5610,30 @@ class QuickLookDialog(QtWidgets.QDialog):
         self._echt_zustand = self._zustand_von(profil)
         self._echt_lin = None
         self._bild_setzen(rgb, echt=True)
+        self._puls_aus()
         self.lbl_echt.setText(self._t(
             f"\u2713 von {eng('label')} entwickelt",
             f"\u2713 developed by {eng('label')}"))
         self.lbl_echt.setToolTip("")
+
+    # ---- Pulsierender Hinweis, solange die Engine rechnet -------------
+    def _puls_an(self):
+        if not self._puls_timer.isActive():
+            self._puls_start = time.time()
+            self._puls_timer.start()
+        self._puls_schritt()
+
+    def _puls_aus(self):
+        self._puls_timer.stop()
+        self.lbl_echt.setStyleSheet(ECHT_STIL)
+
+    def _puls_schritt(self):
+        """Deckkraft weich zwischen 35 und 100 Prozent (Sinus)."""
+        phase = ((time.time() - self._puls_start) / PULS_DAUER) * 2.0 * math.pi
+        deckung = 0.675 - 0.325 * math.cos(phase)
+        r, g, b = PULS_FARBE
+        self.lbl_echt.setStyleSheet(
+            f"{ECHT_STIL} color: rgba({r}, {g}, {b}, {deckung:.3f});")
 
     def _echt_starten(self):
         """Die Regler ruhen - die Engine entwickelt den jetzigen Stand."""
@@ -5323,6 +5657,7 @@ class QuickLookDialog(QtWidgets.QDialog):
         faden.fertig.connect(self._echt_fertig)
         self.lbl_echt.setText(self._t(
             f"{eng('label')} entwickelt …", f"{eng('label')} is developing …"))
+        self._puls_an()
         faden.start()
 
     def _echt_fertig(self, erg):
@@ -5339,6 +5674,9 @@ class QuickLookDialog(QtWidgets.QDialog):
         if rgb is None:
             self._echt_fehlschlag.add(kennung)
             if aktuell:
+                self._puls_aus()
+                # Die Naeherung bleibt stehen - jetzt scharf
+                self._vorschau_zeichnen()
                 self.lbl_echt.setText(self._t(
                     "\u26a0 echte Vorschau nicht möglich - Näherung",
                     "\u26a0 true preview failed - approximation"))
@@ -5361,7 +5699,7 @@ class QuickLookDialog(QtWidgets.QDialog):
     def _echt_beenden(self):
         """Beim Schliessen: nichts im Hintergrund weiterlaufen lassen."""
         self._zu = True
-        for t in (self._echt_timer, self._v_timer):
+        for t in (self._echt_timer, self._v_timer, self._puls_timer):
             t.stop()
         for faden in self._echt_alle:
             faden.abbrechen()
@@ -5436,6 +5774,235 @@ class QuickLookDialog(QtWidgets.QDialog):
             "others are not.\nRemedy: switch on \u201creconstruct "
             "highlights\u201d."))
         self.lbl_hl_warnung.setVisible(True)
+
+
+def entwickelte_vorschau(target_dir, dateien):
+    """
+    Die schon entwickelten Bilder zu einer RAW-Serie: {RAW: Bilddatei}.
+
+    Pass 2 legt die Zwischenbilder in Purelapse/Deflickered_JPG ab und
+    merkt sich, mit welchem Profilstand jedes entstand. Nur Bilder, deren
+    Profil seitdem unveraendert ist, zeigen also, wie das Bild jetzt
+    aussieht. Bei Lightroom zaehlt der Export, sofern er juenger ist als
+    die XMP.
+    """
+    out = {}
+    if not dateien or not is_raw_file(dateien[0]):
+        return out
+    if eng('kind') == 'lightroom':
+        ordner = lr_export_ordner(target_dir)
+        for f in dateien:
+            q = lr_export_datei(ordner, os.path.splitext(os.path.basename(f))[0])
+            if q is None:
+                continue
+            try:
+                if os.path.getmtime(q) >= os.path.getmtime(sidecar(f)):
+                    out[f] = q
+            except OSError:
+                continue
+        return out
+    ordner = zwischen_ordner(target_dir)
+    index = load_dev_index(ordner)
+    if not index:
+        return out
+    for f in dateien:
+        stamm = os.path.splitext(os.path.basename(f))[0]
+        eintrag = index.get(stamm)
+        if not eintrag:
+            continue
+        tief = eintrag.endswith("|16")
+        q = zw_datei(ordner, stamm, tief)
+        if q is not None and eintrag == _dev_kennung(f, tief):
+            out[f] = q
+    return out
+
+
+BILDLEISTE_KANTE = 480
+BILDLEISTE_SPERRE = threading.Lock()
+
+
+def bildleiste_cache(f):
+    """Ablage des von der Engine entwickelten Vorschaubildes eines Bildes.
+    Der Name haengt an Engine und Inhalt der Begleitdatei: eine Aenderung
+    ergibt ein neues Bild, ein Engine-Wechsel auch."""
+    kennung = hashlib.sha1((engine_key() + "|" + os.path.abspath(f) + "|"
+                            + arp_fingerprint(sidecar(f))).encode("utf-8")).hexdigest()[:24]
+    return os.path.join(cache_ordner(), "bildleiste", kennung + ".jpg")
+
+
+def _bildleiste_ablegen(f, img):
+    """Verkleinert ablegen; Rueckgabe: Pfad oder None."""
+    if img is None:
+        return None
+    if img.dtype != np.uint8:
+        img = (img // 257).astype(np.uint8)
+    h, w = img.shape[:2]
+    fak = float(BILDLEISTE_KANTE) / max(h, w)
+    if fak < 1.0:
+        img = cv2.resize(img, (max(1, int(w * fak)), max(1, int(h * fak))),
+                         interpolation=cv2.INTER_AREA)
+    ok, daten = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        return None
+    ziel = bildleiste_cache(f)
+    try:
+        os.makedirs(os.path.dirname(ziel), exist_ok=True)
+        datei_atomar(ziel, daten.tobytes())
+    except OSError:
+        return None
+    return ziel
+
+
+def bildleiste_engine_entwickeln(cli, dateien, abbruch=None, prozess=None):
+    """
+    ART, RawTherapee, darktable: jedes Bild einzeln und gleich verkleinert
+    entwickeln lassen - so wie die echte Vorschau im Keyframe-Dialog.
+    Vorhandene (unveraenderte) werden nicht neu entwickelt.
+    Rueckgabe: {RAW: Vorschaubild}
+    """
+    out = {}
+    for f in dateien:
+        if abbruch and abbruch():
+            break
+        z = bildleiste_cache(f)
+        if os.path.exists(z):
+            out[f] = z
+            continue
+        profil = read_arp_dict(sidecar(f))
+        if not profile_is_complete(profil):
+            continue
+        e = engine_einzelbild(cli, f, profil, BILDLEISTE_KANTE, abbruch=abbruch,
+                              prozess=prozess, dt_ablage="darktable_bildleiste")
+        pfad = _bildleiste_ablegen(f, e['bgr'])
+        if pfad:
+            out[f] = pfad
+    return out
+
+
+def bildleiste_rr_entwickeln(cli, dateien, abbruch=None):
+    """
+    Laesst RapidRAW die Bilder fuer die Bildleiste entwickeln und legt sie
+    verkleinert ab. Vorhandene (unveraenderte) werden nicht neu entwickelt.
+    Rueckgabe: {RAW: Vorschaubild}
+    """
+    out, fehlt = {}, []
+    for f in dateien:
+        z = bildleiste_cache(f)
+        (out.__setitem__(f, z) if os.path.exists(z) else fehlt.append(f))
+    if not fehlt:
+        return out
+    ablage = os.path.dirname(bildleiste_cache(fehlt[0]))
+    os.makedirs(ablage, exist_ok=True)
+    arbeit = tempfile.mkdtemp(prefix="bildleiste_", dir=ablage)
+    try:
+        try:
+            rr_export_lauf(cli, fehlt, arbeit, quality=90, abbruch=abbruch)
+        except (RrAbbruch, RrStillstand, OSError):
+            pass
+        for f in fehlt:
+            q = zw_datei(arbeit, os.path.splitext(os.path.basename(f))[0])
+            pfad = _bildleiste_ablegen(f, bild_lesen(q) if q else None)
+            if pfad:
+                out[f] = pfad
+    finally:
+        shutil.rmtree(arbeit, ignore_errors=True)
+    return out
+
+
+class BildleisteEntwickelt(QtCore.QThread):
+    """
+    Ersetzt in der Bildleiste das eingebettete Kamerabild durch das, was
+    die Engine daraus macht:
+      - nach Pass 2 die entwickelten Zwischenbilder (alle Engines; bei
+        Lightroom der Export), solange das Profil unveraendert ist
+      - die Keyframes, entwickelt von der Engine selbst (RapidRAW, ART,
+        RawTherapee, darktable) - so sieht man den Look schon vor Pass 1.
+        Lightroom laesst sich nicht aufrufen.
+    """
+    bild = QtCore.pyqtSignal(str, QtGui.QImage, str)
+    # Bei einem Lauf ueber alle Bilder: die Namen, die ein Engine-Bild
+    # behalten bzw. bekommen. Alle anderen gehen zurueck aufs Kamerabild -
+    # etwa nach Pass 1, wenn die Zwischenbilder nicht mehr aktuell sind.
+    bestand = QtCore.pyqtSignal(object)
+
+    def __init__(self, target_dir, dateien, roi_rel=None, cli="", nur=None):
+        super().__init__()
+        self.target_dir = target_dir
+        self.dateien = list(dateien)
+        self.roi_rel = roi_rel
+        self.cli = cli
+        self.nur = set(nur) if nur else None
+        self._abort = False
+        self._proc = None
+
+    def abbrechen(self):
+        self._abort = True
+        prozess_beenden(self._proc)
+
+    def _senden(self, f, pfad, quelle):
+        # Die Kachel ist 128 Pixel breit: ein JPG gleich verkleinert
+        # einlesen (ein Achtel der Kantenlaenge, spart Zeit und Speicher)
+        img = None
+        if pfad.lower().endswith((".jpg", ".jpeg")):
+            try:
+                img = cv2.imdecode(np.fromfile(pfad, dtype=np.uint8),
+                                   cv2.IMREAD_REDUCED_COLOR_8)
+            except (OSError, ValueError):
+                img = None
+        if img is None:
+            img = bild_lesen(pfad)
+        if img is None or self._abort:
+            return
+        if img.dtype != np.uint8:
+            img = (img // 257).astype(np.uint8)
+        kachel = np.ascontiguousarray(kachel_bauen(img, self.roi_rel)[0])
+        h, w, ch = kachel.shape
+        qimg = QtGui.QImage(kachel.data, w, h, ch * w, QtGui.QImage.Format_RGB888).copy()
+        self.bild.emit(os.path.basename(f), qimg, quelle)
+
+    def run(self):
+        try:
+            dateien = [f for f in self.dateien
+                       if self.nur is None or os.path.basename(f) in self.nur]
+            fertig = entwickelte_vorschau(self.target_dir, dateien)
+            art = eng('kind')
+            kf = []
+            if art in ('ini', 'darktable', 'rapidraw') and engine_vorhanden(self.cli):
+                kf = [f for f in dateien if f not in fertig and check_is_keyframe(sidecar(f))]
+                if art == 'rapidraw':
+                    kf = [f for f in kf if rr_sidecar_bereit(sidecar(f))[0]]
+                else:
+                    kf = [f for f in kf if profile_is_complete(read_arp_dict(sidecar(f)))]
+            if self.nur is None:
+                self.bestand.emit({os.path.basename(f) for f in list(fertig) + kf})
+            for f, pfad in fertig.items():
+                if self._abort:
+                    return
+                self._senden(f, pfad, 'pass2')
+            if not kf or self._abort:
+                return
+            # Nacheinander, nie zwei Laeufe gleichzeitig: ein neuer Stern
+            # startet einen eigenen Faden, waehrend der erste vielleicht
+            # noch entwickelt - darktable-cli vertraegt keine zwei Aufrufe
+            # mit demselben Konfigurationsordner, und RapidRAW teilt sich
+            # die Grafikkarte besser mit sich selbst.
+            with BILDLEISTE_SPERRE:
+                if self._abort:
+                    return
+                if art == 'rapidraw':
+                    bilder = bildleiste_rr_entwickeln(self.cli, kf,
+                                                      abbruch=lambda: self._abort)
+                else:
+                    bilder = bildleiste_engine_entwickeln(
+                        self.cli, kf, abbruch=lambda: self._abort,
+                        prozess=lambda pr: setattr(self, '_proc', pr))
+            for f, pfad in bilder.items():
+                if self._abort:
+                    return
+                self._senden(f, pfad, 'engine')
+        except Exception:
+            # Nur eine Ansicht: geht etwas schief, bleibt das Kamerabild
+            pass
 
 
 class GalleryWorker(QtCore.QThread):
@@ -5651,8 +6218,16 @@ class Worker(QtCore.QThread):
             out_base = SCRIPT_DIR
         else:
             out_base = custom_dir if custom_dir else abs_target_dir
+        # Kuerzel der Engine, die das Video entwickelt hat - nur bei RAW.
+        # Rohfassung und Schnellvorschau kommen ohne Engine aus.
+        engine_teil = ""
+        if (p.get('format') == 'raw' and p.get('mode', 'normal') == 'normal'
+                and not p.get('name_suffix')):
+            kuerzel = {'lr': "LT", 'dt': "DT", 'rt': "RT", 'art': "AR", 'rr': "RR"}
+            if p.get('engine') in kuerzel:
+                engine_teil = "_" + kuerzel[p['engine']]
         base_filename = (f"{parent_dir_name}_Purelapse_{p['res_name']}_{p['fps']}fps"
-                         + p.get('name_suffix', ''))
+                         + engine_teil + p.get('name_suffix', ''))
         # Die Endung bestimmt der Codec: ProRes liegt in .mov, alles
         # andere in .mp4. Mit .mp4 verweigert FFmpeg ProRes den Dienst.
         ext = codec_def(p.get('codec_idx', 0))['ext']
@@ -6401,12 +6976,24 @@ class Worker(QtCore.QThread):
             "Metadaten → Metadaten in Datei speichern (Strg+S). Danach "
             "erneut starten.")
 
+    def _pruefe_rapidraw(self, files):
+        """
+        RapidRAW: mindestens ein Bild der Serie muss dort bearbeitet sein.
+        Aus ihm (bzw. den Keyframes) kommt der Look fuer alle anderen -
+        Purelapse erfindet keinen eigenen.
+        """
+        vorlage, _quelle = find_arp_template(self.p['target_dir'], files)
+        if vorlage is None:
+            raise RuntimeError(self._t(RR_RRDATA_FEHLT['de'], RR_RRDATA_FEHLT['en']))
+
     def _pruefe_engine_dateien(self, files):
-        """Darktable und Lightroom: die Begleitdateien muessen von dort kommen."""
+        """Darktable, Lightroom und RapidRAW: die Begleitdateien muessen von dort kommen."""
         if eng('kind') == 'darktable':
             self._pruefe_darktable_xmp(files)
         elif eng('kind') == 'lightroom':
             self._pruefe_lightroom_xmp(files)
+        elif eng('kind') == 'rapidraw':
+            self._pruefe_rapidraw(files)
 
     def _basisprofil(self, abs_target_dir, files, probe):
         """
@@ -6763,6 +7350,27 @@ class Worker(QtCore.QThread):
         first_arp = strip_rank(read_arp_dict(arp_files[first]))
         last_arp = strip_rank(read_arp_dict(arp_files[last]))
         d_first, d_last = _kf_delta(first), _kf_delta(last)
+        if eng('kind') == 'rapidraw':
+            hinweise = set()
+            for i in kf_idx:
+                hinweise.update(rr_hinweise(read_arp_dict(arp_files[i])))
+            if 'basic_aus' in hinweise:
+                self.log.emit(self._t(
+                    "> HINWEIS: In einem Keyframe waren die Grundeinstellungen von "
+                    "RapidRAW ausgeschaltet. Darin sitzt die Belichtung - Purelapse "
+                    "schaltet sie fuer den Deflicker ein.",
+                    "> NOTE: A keyframe had RapidRAW's basic adjustments switched "
+                    "off. The exposure lives there - Purelapse switches them on for "
+                    "the deflicker."))
+            if 'masken' in hinweise:
+                self.log.emit(self._t(
+                    "> HINWEIS: Keyframes mit Masken oder KI-Retusche: diese gehen "
+                    "nicht weich ueber, sondern wechseln in der Mitte zwischen zwei "
+                    "Keyframes. Auf Bilder vor dem ersten bzw. nach dem letzten "
+                    "Keyframe werden sie unveraendert uebertragen.",
+                    "> NOTE: Keyframes with masks or AI retouching: these do not "
+                    "blend but switch halfway between two keyframes. Frames before "
+                    "the first and after the last keyframe get them unchanged."))
         if eng('kind') == 'darktable':
             self._dt_stapel_melden([strip_rank(read_arp_dict(arp_files[i])) for i in kf_idx])
             if self.p.get('hotpixel'):
@@ -7124,6 +7732,80 @@ class Worker(QtCore.QThread):
             self.log.emit(self._t(f"> ACHTUNG: {eng('label')} endete mit Fehlercode "
                           f"({wo}){hinweis}",
                 f"> WARNING: {eng('label')} ended with an error code ({wo}){hinweis}"))
+
+    def _run_rapidraw_cli(self, files, out_dir, label, quality=100, tief=False):
+        """Entwickelt mit "RapidRAW export" (ab RapidRAW 1.6), ohne dass
+        sich RapidRAW oeffnet - siehe rr_export_lauf()."""
+        if not files:
+            return
+        fehlend = [os.path.basename(f) for f in files
+                   if not rr_sidecar_bereit(sidecar(f))[0]]
+        if fehlend:
+            namen = ", ".join(fehlend[:5]) + (" ..." if len(fehlend) > 5 else "")
+            raise RuntimeError(self._t(
+                f"{len(fehlend)} von {len(files)} Bildern haben keine "
+                f"RapidRAW-Einstellungen (.rrdata): {namen}\n\n"
+                "Bitte zuerst Pass 1 laufen lassen - er legt sie an.",
+                f"{len(fehlend)} of {len(files)} images have no RapidRAW "
+                f"settings (.rrdata): {namen}\n\n"
+                "Please run pass 1 first - it creates them."))
+        stems = [os.path.splitext(os.path.basename(f))[0] for f in files]
+        start_time = time.time()
+
+        def beginn(art, cmds, gleichzeitig):
+            # Bei einem Abbruch koennen so viele Bilder halb geschrieben
+            # sein: RapidRAW exportiert mit bis zu acht Faeden.
+            self._prozesse_zuletzt = 8 if art else gleichzeitig
+            self.log.emit(self._t(
+                f"\n> RAPIDRAW-EXPORT - {label}: {len(files)} Bilder",
+                f"\n> RAPIDRAW EXPORT - {self._l(label)}: {len(files)} images"))
+            if not art:
+                self.log.emit(self._t(
+                    "> Keine Verknuepfungen moeglich (Laufwerk ohne Links?) - "
+                    "RapidRAW entwickelt jedes Bild einzeln.",
+                    "> No links possible (drive without links?) - RapidRAW "
+                    "develops each image on its own."))
+            self.log.emit(" ".join(cmds[0]) + "\n")
+
+        bericht = {}
+        try:
+            rr_export_lauf(self.p['art_cli_path'], files, out_dir, tief, quality,
+                           abbruch=lambda: self._abort,
+                           takt=lambda anzahl: self._fortschritt(label, anzahl, len(files),
+                                                                 start_time),
+                           beginn=beginn, bericht=bericht)
+        except RrAbbruch:
+            raise RuntimeError(self._t("Vom Benutzer abgebrochen.", "Cancelled by user."))
+        except RrStillstand:
+            raise RuntimeError(self._t(
+                f"RapidRAW hat seit {RR_STILLSTAND_SEK // 60} Minuten kein "
+                "Bild geliefert und wurde beendet.\n\n"
+                "Entwickeln ohne Oberflaeche („RapidRAW export“) "
+                "gibt es ab RapidRAW 1.6. Hat sich ein RapidRAW-Fenster "
+                "geoeffnet, ist die Fassung zu alt.",
+                f"RapidRAW has not delivered an image for "
+                f"{RR_STILLSTAND_SEK // 60} minutes and was stopped.\n\n"
+                "Developing without the interface (“RapidRAW export”) "
+                "exists from RapidRAW 1.6. If a RapidRAW window opened, the "
+                "version is too old."))
+        finally:
+            letzte_zeile = rr_letzte_zeile(bericht)
+            self._write_engine_log(bericht.get('cmds', []), bericht.get('procs', []),
+                                   bericht.get('logs', []), label)
+        fertig = self._count_rendered(out_dir, stems)
+        self.progress.emit(fertig, len(files))
+        self._schritt_fertig(label, fertig, start_time)
+        fehler = sum(1 for pr in bericht.get('procs', []) if pr.returncode not in (0, None))
+        if fehler:
+            self.log.emit(self._t(
+                f"> ACHTUNG: RapidRAW meldete bei {fehler} Aufruf(en) einen Fehler"
+                + (f": {letzte_zeile}" if letzte_zeile else "")
+                + (" - Details in purelapse_art.log" if self._diag()
+                   else " - fuer Details den Diagnose-Modus einschalten"),
+                f"> WARNING: RapidRAW reported an error in {fehler} call(s)"
+                + (f": {letzte_zeile}" if letzte_zeile else "")
+                + (" - details in purelapse_art.log" if self._diag()
+                   else " - switch on diagnostic mode for details")))
 
     def _run_darktable_cli(self, files, out_dir, label, quality=100, tief=False):
         """
@@ -7491,6 +8173,9 @@ class Worker(QtCore.QThread):
         if eng('kind') == 'darktable':
             self._run_darktable_cli(files, out_dir, label, quality=quality, tief=tief)
             return
+        if eng('kind') == 'rapidraw':
+            self._run_rapidraw_cli(files, out_dir, label, quality=quality, tief=tief)
+            return
         self._pruefe_sidecars(files)
         kerne = max(1, int(self.p.get('cores', 1)))
         jobs = prozess_anzahl(len(files), kerne, self.p.get('procs', 0))
@@ -7683,6 +8368,15 @@ class Worker(QtCore.QThread):
         # Wahrheit Pass 1 fehlt oder mit einer anderen Engine lief.
         self._pruefe_sidecars(files)
         thin = sum(1 for f in files if not profile_is_complete(read_arp_dict(sidecar(f))))
+        if thin and eng('kind') == 'rapidraw':
+            raise RuntimeError(self._t(
+                f"{thin} von {len(files)} Bildern haben noch keine "
+                "RapidRAW-Einstellungen (.rrdata).\n\n"
+                "Bitte zuerst Pass 1 laufen lassen - er uebertraegt den Look der "
+                "in RapidRAW bearbeiteten Bilder auf alle anderen.",
+                f"{thin} of {len(files)} images have no RapidRAW settings "
+                "(.rrdata) yet.\n\nPlease run pass 1 first - it carries the "
+                "look of the images edited in RapidRAW over to all others."))
         if thin:
             self.log.emit(self._t(f"> ACHTUNG: {thin} von {len(files)} Sidecar-Dateien enthalten kein "
                           f"vollständiges {eng('label')}-Profil. {eng('label')} verwirft solche "
@@ -8242,6 +8936,71 @@ def workflow_stand(ordner, lang='de'):
     if wann:
         zeile += (f"  \u00b7  last changed {wann}" if en else f"  \u00b7  zuletzt geaendert {wann}")
     return zeile
+
+
+def mittig_auf(dialog, eltern, bereich):
+    """
+    Position (x, y) fuer ein Fenster der Groesse dialog=(b, h), mittig ueber
+    eltern=(x, y, b, h) und ganz innerhalb von bereich=(x, y, b, h) - dem
+    nutzbaren Teil des Bildschirms, auf dem das Elternfenster steht.
+    """
+    db, dh = dialog
+    ex, ey, eb, eh = eltern
+    bx, by, bb, bh = bereich
+    x = ex + (eb - db) // 2
+    y = ey + (eh - dh) // 2
+    x = max(bx, min(x, bx + bb - db))
+    y = max(by, min(y, by + bh - dh))
+    return x, y
+
+
+class DialogPlatzierer(QtCore.QObject):
+    """
+    Haelt Dialoge auf dem Bildschirm ihres Hauptfensters.
+
+    Bei zwei Bildschirmen legt die Fensterverwaltung einen Dialog sonst
+    gern auf den Hauptbildschirm oder dorthin, wo die Maus steht - etwa den
+    Startdialog, der aufgeht, bevor das Hauptfenster seinen Platz hat.
+    Steht ein Dialog auf einem anderen Bildschirm als sein Elternfenster,
+    rueckt er mittig darueber. Auf demselben Bildschirm bleibt er, wo die
+    Fensterverwaltung ihn hinstellt.
+    """
+
+    def eventFilter(self, obj, event):
+        try:
+            if (event.type() == QtCore.QEvent.Show
+                    and isinstance(obj, QtWidgets.QDialog) and obj.isWindow()
+                    and obj.parentWidget() is not None):
+                self._setzen(obj)
+                # Nach dem Anzeigen noch einmal: manche Fensterverwaltung
+                # setzt den Dialog erst beim Abbilden um.
+                QtCore.QTimer.singleShot(0, lambda d=obj: self._setzen(d))
+        except Exception:
+            pass
+        return False
+
+    @staticmethod
+    def _setzen(dlg):
+        try:
+            if not dlg.isVisible():
+                return
+            haupt = dlg.parentWidget().window()
+            eltern = haupt.frameGeometry()
+            if not eltern.isValid() or eltern.width() < 50:
+                return
+            schirm_e = QtWidgets.QApplication.screenAt(eltern.center())
+            if schirm_e is None:
+                return
+            schirm_d = QtWidgets.QApplication.screenAt(dlg.frameGeometry().center())
+            if schirm_d is not None and schirm_d.name() == schirm_e.name():
+                return
+            g = schirm_e.availableGeometry()
+            x, y = mittig_auf((dlg.frameGeometry().width(), dlg.frameGeometry().height()),
+                              (eltern.x(), eltern.y(), eltern.width(), eltern.height()),
+                              (g.x(), g.y(), g.width(), g.height()))
+            dlg.move(x, y)
+        except Exception:
+            pass
 
 
 class StartDialog(QtWidgets.QDialog):
@@ -9650,6 +10409,8 @@ class MainWindow(QtWidgets.QWidget):
         if eng('kind') == 'darktable':
             hints['keys'] += ("\n\n" + DT_KEYFRAME_HINWEIS['en' if self.lang == 'en' else 'de']
                               + "\n\n" + DT_STERNE_HINWEIS['en' if self.lang == 'en' else 'de'])
+        elif eng('kind') == 'rapidraw':
+            hints['keys'] += "\n\n" + RR_KEYFRAME_HINWEIS['en' if self.lang == 'en' else 'de']
         for key, lbl in self.step_hints.items():
             lbl.setText(hints[key])
         if self._kf_count > 0:
@@ -9945,14 +10706,16 @@ class MainWindow(QtWidgets.QWidget):
     def _update_kf_buttons(self):
         """Gibt den Einstellknopf frei, sobald es ein Keyframe gibt."""
         ziel = self._ziel_keyframe() if self.tiles else None
-        passende_engine = (eng('kind') in ('ini', 'darktable', 'lightroom'))
+        passende_engine = (eng('kind') in ('ini', 'darktable', 'lightroom', 'rapidraw'))
         moeglich = (ziel is not None and passende_engine
                     and not getattr(self, '_busy', False))
         self.btn_kf_edit.setEnabled(moeglich)
         if not passende_engine:
             self.btn_kf_edit.setToolTip(self._t(
-                "Schnelleinstellungen gibt es fuer ART, RawTherapee, Darktable und Lightroom.",
-                "Quick settings exist for ART, RawTherapee, darktable and Lightroom."))
+                "Schnelleinstellungen gibt es fuer ART, RawTherapee, Darktable, "
+                "Lightroom und RapidRAW.",
+                "Quick settings exist for ART, RawTherapee, darktable, Lightroom "
+                "and RapidRAW."))
         elif ziel is None:
             self.btn_kf_edit.setToolTip(self._t(
                 "Noch kein Keyframe markiert. Dafuer in der Bildleiste "
@@ -9999,6 +10762,14 @@ class MainWindow(QtWidgets.QWidget):
             # Schuss ins Leere: die Engine verwirft ein duennes Profil.
             dateien = self._nef_files or self._jpg_files
             vorlage, quelle = find_arp_template(self.target_dir, dateien)
+            if vorlage is None and eng('kind') == 'rapidraw':
+                # Pass 1 hilft hier nicht: auch er braucht ein in RapidRAW
+                # bearbeitetes Bild, aus dem der Look kommt.
+                QtWidgets.QMessageBox.information(
+                    self, self._t("Noch keine RapidRAW-Bearbeitung",
+                                  "No RapidRAW edit yet"),
+                    self._t(RR_RRDATA_FEHLT['de'], RR_RRDATA_FEHLT['en']))
+                return
             if vorlage is None:
                 QtWidgets.QMessageBox.information(
                     self, self._t("Noch kein Profil", "No profile yet"),
@@ -10071,6 +10842,7 @@ class MainWindow(QtWidgets.QWidget):
                 self._t(f"Das Profil konnte nicht geschrieben werden:\n{e}",
                         f"The profile could not be written:\n{e}"))
             return
+        self._entwickelte_zeigen(nur=[t['name']])
         # Nachlesen statt vertrauen: ein stiller Fehlschlag beim Schreiben
         # waere sonst erst Stunden spaeter im Video zu sehen.
         kontrolle = read_arp_dict(pfad)
@@ -10414,15 +11186,18 @@ class MainWindow(QtWidgets.QWidget):
         # der Hinweistext.
         ist_dt = (key == 'dt')
         ist_lr = (key == 'lr')
+        ist_rr = (key == 'rr')
         for w in (self.lbl_arp_tpl, self.txt_arp_template, self.btn_arp_browse):
-            w.setVisible(not (ist_dt or ist_lr))
+            w.setVisible(not (ist_dt or ist_lr or ist_rr))
         # Lightroom: kein Programm, das Purelapse starten koennte
         for w in (self.lbl_art_path, self.txt_art_path, self.btn_art_browse):
             w.setVisible(not ist_lr)
         self.lbl_dt_note.setText(self._t(LR_HINWEIS_KURZ['de'], LR_HINWEIS_KURZ['en'])
-                                 if ist_lr else self._t(DT_HINWEIS_KURZ['de'],
+                                 if ist_lr else
+                                 self._t(RR_HINWEIS_KURZ['de'], RR_HINWEIS_KURZ['en'])
+                                 if ist_rr else self._t(DT_HINWEIS_KURZ['de'],
                                                         DT_HINWEIS_KURZ['en']))
-        self.lbl_dt_note.setVisible(ist_dt or ist_lr)
+        self.lbl_dt_note.setVisible(ist_dt or ist_lr or ist_rr)
         if self.target_dir:
             anders = self._sterne_abgleichen()
             if anders:
@@ -10432,6 +11207,10 @@ class MainWindow(QtWidgets.QWidget):
                     f"NOTE: With {eng('label')}, {anders} images count differently as keyframes "
                     "than shown so far - the stars in the gallery have been updated."))
             self._recount_keyframes()
+            # Bilder der vorigen Engine gelten nicht mehr
+            if getattr(self, 'tiles', None):
+                self._kamerabilder_zurueck()
+                self._entwickelte_zeigen()
         if hasattr(self, 'btn_start'):
             self._update_steps()
             self._update_summary()
@@ -10467,8 +11246,8 @@ class MainWindow(QtWidgets.QWidget):
             self._engine_anzeigen()
 
     def _browse_arp_template(self):
-        if eng('kind') == 'darktable':
-            return  # Basisprofil-Konzept gibt es bei Darktable nicht
+        if eng('kind') in ('darktable', 'lightroom', 'rapidraw'):
+            return  # Basisprofil-Konzept gibt es dort nicht
         start_dir = self.target_dir or os.path.expanduser("~")
         with self.abdunkler.halten():
             path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -10645,6 +11424,8 @@ class MainWindow(QtWidgets.QWidget):
         self.progress.setValue(0)
         if getattr(self, 'lade_schirm', None) is not None:
             self.lade_schirm.zeige(self.target_dir, self.lang)
+        for faden in getattr(self, '_bl_faeden', []):
+            faden.abbrechen()       # gehoert zum vorigen Ordner
         self.gallery_worker = GalleryWorker(self.target_dir, self.roi_rel, lang=self.lang)
         # Jeder Ladelauf bekommt eine Nummer. Signale, die ein abgeloester
         # Lader schon abgeschickt hatte, kommen sonst noch nach dem Leeren
@@ -11141,7 +11922,7 @@ class MainWindow(QtWidgets.QWidget):
         for kind in widget.findChildren(QtWidgets.QWidget):
             kind.installEventFilter(self)
         self.tiles.append({'item': item, 'widget': widget,
-                           'img': lbl_img, 'qimg': qimg,
+                           'img': lbl_img, 'qimg': qimg, 'qimg_kamera': qimg,
                            'chk': chk_kf, 'name': filename})
         self._resize_tile(self.tiles[-1], self._tile_width())
         self.frames_x.append(index)
@@ -11307,8 +12088,18 @@ class MainWindow(QtWidgets.QWidget):
         # aendert in einer vorhandenen Datei nur die Bewertung.
         # Lightroom: die Bewertung gehoert in dessen XMP (BILD.xmp) - dort
         # sieht Lightroom sie, und dort sucht Purelapse den Keyframe.
-        bewertung_schreiben(arp_path if eng('kind') == 'lightroom' else f"{full_path}.xmp",
-                            5 if checked else 0)
+        try:
+            if eng('kind') == 'rapidraw':
+                # RapidRAW fuehrt die Sterne in seiner .rrdata
+                rr_bewertung_schreiben(arp_path, 5 if checked else 0)
+            else:
+                bewertung_schreiben(arp_path if eng('kind') == 'lightroom'
+                                    else f"{full_path}.xmp", 5 if checked else 0)
+        except OSError as fehler:
+            self._on_log("> " + self._t(f"FEHLER: {fehler}", f"ERROR: {fehler}"))
+        if checked:
+            # Neues Keyframe: zeigen, was die Engine daraus macht
+            self._entwickelte_zeigen(nur=[filename])
         if eng('kind') == 'darktable' and not getattr(self, '_dt_stern_gemeldet', False):
             # Einmal je Programmlauf: sonst wundert man sich, warum die
             # Sterne in Darktable nicht auftauchen.
@@ -11390,6 +12181,61 @@ class MainWindow(QtWidgets.QWidget):
             self._update_steps()
             self._update_summary()
 
+    def _entwickelte_zeigen(self, nur=None):
+        """
+        Zeigt in der Bildleiste, was die Engine aus den Bildern macht (siehe
+        BildleisteEntwickelt). Laeuft im Hintergrund; bis ein Bild fertig
+        ist, bleibt das Kamerabild stehen. nur: Dateinamen, sonst alle.
+        """
+        if not self.target_dir or not getattr(self, 'tiles', None):
+            return
+        if not self.rb_raw.isChecked() or not self._nef_files:
+            return
+        faeden = [f for f in getattr(self, '_bl_faeden', []) if f.isRunning()]
+        if nur is None:
+            for f in faeden:
+                f.abbrechen()
+        lauf = getattr(self, '_galerie_lauf', 0)
+        faden = BildleisteEntwickelt(self.target_dir, self._nef_files, self.roi_rel,
+                                     cli=self.txt_art_path.text().strip(), nur=nur)
+        faden.bild.connect(
+            lambda name, qimg, quelle: self._on_entwickelt_bild(name, qimg, quelle)
+            if lauf == getattr(self, '_galerie_lauf', 0) else None)
+        faden.bestand.connect(
+            lambda namen: self._kamerabilder_zurueck(namen)
+            if lauf == getattr(self, '_galerie_lauf', 0) else None)
+        faeden.append(faden)
+        self._bl_faeden = faeden
+        faden.start()
+
+    def _kamerabilder_zurueck(self, behalten=()):
+        """Kacheln, deren Engine-Bild nicht mehr gilt, zeigen wieder das
+        Kamerabild (behalten: Namen, die ein aktuelles Engine-Bild haben)."""
+        for eintrag in self.tiles:
+            if eintrag.get('name') in behalten:
+                continue
+            kamera = eintrag.get('qimg_kamera')
+            if kamera is None or eintrag['qimg'] is kamera:
+                continue
+            eintrag['qimg'] = kamera
+            self._resize_tile(eintrag, self._tile_width())
+            eintrag['img'].setToolTip("")
+
+    def _on_entwickelt_bild(self, name, qimg, quelle):
+        """Ein Bild der Engine ersetzt das Kamerabild in seiner Kachel."""
+        for eintrag in self.tiles:
+            if eintrag.get('name') != name:
+                continue
+            eintrag['qimg'] = qimg
+            self._resize_tile(eintrag, self._tile_width())
+            eintrag['img'].setToolTip(
+                self._t("Entwickelt in Pass 2 (aktueller Stand)",
+                        "Developed in pass 2 (current state)")
+                if quelle == 'pass2' else
+                self._t(f"Von {eng('label')} entwickelt (Keyframe)",
+                        f"Developed by {eng('label')} (keyframe)"))
+            break
+
     def _on_finished_loading(self):
         if getattr(self, 'lade_schirm', None) is not None:
             self.lade_schirm.hide()
@@ -11402,6 +12248,7 @@ class MainWindow(QtWidgets.QWidget):
         self._band_timer.start()
         self.progress.setValue(0)
         self.lbl_status.setText(self._t("Bereit.", "Ready."))
+        self._entwickelte_zeigen()
 
     def _pruefe_lichter(self):
         """Vorlaeufige Lichterwarnung aus den Vorschaubildern."""
@@ -12521,6 +13368,7 @@ class MainWindow(QtWidgets.QWidget):
         self._on_log("\n" + msg)
         self._enable_buttons()
         self.btn_cancel.setEnabled(False)
+        self._entwickelte_zeigen()      # nach Pass 2: die entwickelten Bilder
         if self.batch_running:
             self._queue_finish('done')
             return
@@ -12772,6 +13620,11 @@ class MainWindow(QtWidgets.QWidget):
             # Nur noch die Bilder, die gerade gelesen werden, laufen zu Ende
             # (der Rest ist gestrichen) - meist Sekundenbruchteile.
             self.gallery_worker.wait(15000)
+        # Bildleiste: RapidRAW wird dabei beendet, der Faden endet gleich
+        for faden in getattr(self, '_bl_faeden', []):
+            faden.abbrechen()
+        for faden in getattr(self, '_bl_faeden', []):
+            faden.wait(15000)
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
             self.worker.wait(2000)
@@ -12784,9 +13637,13 @@ def main():
         print(f"Purelapse {VERSION}")
         return
     app_instance.setStyle("Fusion")
+    platzierer = DialogPlatzierer(app_instance)
+    app_instance.installEventFilter(platzierer)
     win = MainWindow()
     win.show()
-    QtCore.QTimer.singleShot(0, win._startauswahl)
+    # Der Startdialog erst, wenn das Hauptfenster seinen Platz hat - sonst
+    # weiss niemand, auf welchem Bildschirm er erscheinen soll.
+    QtCore.QTimer.singleShot(150, win._startauswahl)
     sys.exit(app_instance.exec_())
 
 

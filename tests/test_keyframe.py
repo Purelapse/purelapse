@@ -346,7 +346,7 @@ pruef("getattr(self, '_busy', False)" in src, "_busy ungesichert gelesen")
 pruef('"btn_kf_filter", "btn_kf_edit", "lbl_clip"' in src,
       "neue Bedienelemente nicht in der Waisen-Wache")
 ub = schnitt(src, "def _update_kf_buttons", "def _open_quick_dialog")
-pruef("eng('kind') in ('ini', 'darktable', 'lightroom')" in ub, "Knopf nicht fuer Darktable freigegeben")
+pruef("eng('kind') in ('ini', 'darktable', 'lightroom', 'rapidraw')" in ub, "Knopf nicht fuer Darktable freigegeben")
 # Der Darktable-Fall muss sich von selbst erklaeren - genau daran ist der
 # Knopf zuletzt stillschweigend haengengeblieben.
 pruef("Darktable" in ub, "der Darktable-Fall wird dem Nutzer nicht erklaert")

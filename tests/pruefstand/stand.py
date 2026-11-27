@@ -94,6 +94,7 @@ def prozesse_mit(text):
 
 RT_CLI = ausfuehrbar(os.path.join(HIER, "rawtherapee-cli"))
 ART_CLI = ausfuehrbar(os.path.join(HIER, "ART-cli"))
+RR_CLI = ausfuehrbar(os.path.join(HIER, "RapidRAW"))
 
 
 # ---------------------------------------------------------------- Szene

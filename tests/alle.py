@@ -10,7 +10,7 @@ import os, sys, glob, subprocess, time
 hier = os.path.dirname(os.path.abspath(__file__))
 # Die nachgebauten Engines muessen ausfuehrbar sein. Git uebernimmt das Recht
 # nur, wenn es beim Einchecken gesetzt war - also hier sicherstellen.
-for _name in ("ART-cli", "rawtherapee-cli", "fake_engine.py"):
+for _name in ("ART-cli", "rawtherapee-cli", "fake_engine.py", "RapidRAW", "fake_rapidraw.py"):
     _p = os.path.join(hier, "pruefstand", _name)
     if os.path.exists(_p):
         os.chmod(_p, 0o755)

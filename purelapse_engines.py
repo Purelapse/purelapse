@@ -91,7 +91,20 @@ ENGINES = {
         'kind': 'lightroom',
         'wb_custom': "Custom",
     },
+    # RapidRAW: Begleitdatei BILD.NEF.rrdata (JSON). Entwickelt wird mit
+    # "RapidRAW export" ohne Oberflaeche (ab RapidRAW 1.6). Siehe TEIL D.
+    'rr': {
+        'label': "RapidRAW",
+        'ext': ".rrdata",
+        'bin': "RapidRAW",
+        'base': '',
+        'extra': [],
+        'kind': 'rapidraw',
+        'wb_custom': "",
+    },
 }
+# Andere Namen desselben Programms im Suchpfad (Arch-Paket: rapidraw)
+BIN_ALTERNATIVEN = {'rr': ("rapidraw",)}
 ENGINE = 'art'
 
 
@@ -358,6 +371,9 @@ WINDOWS_ORTE = {
     'art': ("ART\\ART-cli.exe", "ART*\\ART-cli.exe"),
     'rt': ("RawTherapee\\*\\rawtherapee-cli.exe", "RawTherapee\\rawtherapee-cli.exe"),
     'dt': ("darktable\\bin\\darktable-cli.exe",),
+    # Tauri-Installer: fuer den Benutzer unter %LOCALAPPDATA%\RapidRAW,
+    # fuer alle unter Programme\RapidRAW
+    'rr': ("RapidRAW\\RapidRAW.exe",),
 }
 
 
@@ -377,9 +393,11 @@ def engine_suchen(key=None, umgebung=None, nt=None, suchpfad=True):
     """
     key = key or engine_key()
     bin_name = ENGINES[key]['bin']
-    gefunden = shutil.which(bin_name) if suchpfad else None
-    if gefunden:
-        return gefunden
+    if suchpfad:
+        for name in (bin_name,) + BIN_ALTERNATIVEN.get(key, ()):
+            gefunden = shutil.which(name) if name else None
+            if gefunden:
+                return gefunden
     if not (os.name == 'nt' if nt is None else nt):
         return ""
     env = os.environ if umgebung is None else umgebung
@@ -390,6 +408,7 @@ def engine_suchen(key=None, umgebung=None, nt=None, suchpfad=True):
             wurzeln.append(w)
     if env.get('LOCALAPPDATA'):
         wurzeln.append(os.path.join(env['LOCALAPPDATA'], "Programs"))
+        wurzeln.append(env['LOCALAPPDATA'])
     for w in wurzeln:
         for muster in WINDOWS_ORTE.get(key, ()):
             treffer = sorted(glob.glob(os.path.join(w, *muster.split('\\'))),
@@ -415,6 +434,7 @@ FLATPAK_IDS = {
     'art': "us.pixls.art.ART",
     'rt': "com.rawtherapee.RawTherapee",
     'dt': "org.darktable.Darktable",
+    'rr': "io.github.CyberTimon.RapidRAW",
 }
 # Ordner, die Flatpak nicht freigibt (und die eine Engine nie braucht)
 _FLATPAK_TABU = ('/usr', '/proc', '/dev', '/sys', '/etc', '/app', '/lib', '/bin')
@@ -481,12 +501,14 @@ def _flatpak_freigaben(args):
             if not any(d != o and d.startswith(o.rstrip(os.sep) + os.sep) for o in ordner)]
 
 
-def engine_befehl(cmd, env=None, key=None):
+def engine_befehl(cmd, env=None, key=None, freigaben=()):
     """
     Der wirkliche Aufruf. Steht vorne ein Ersatzpfad "flatpak:<ID>", wird
     daraus "flatpak run" mit dem Kommandozeilenprogramm der Engine, den
     noetigen Ordnerfreigaben und den Umgebungsvariablen, die Purelapse
     setzt (die Sandbox reicht sie sonst nicht sicher durch).
+    freigaben: weitere Ordner, die nicht in der Befehlszeile stehen (etwa
+    das Ziel symbolischer Verknuepfungen).
     """
     cmd = list(cmd)
     if not cmd or not ist_flatpak(cmd[0]):
@@ -494,7 +516,7 @@ def engine_befehl(cmd, env=None, key=None):
     app_id = cmd[0][len(FLATPAK):]
     key = key or next((k for k, v in FLATPAK_IDS.items() if v == app_id), engine_key())
     vorne = ["flatpak", "run", f"--command={ENGINES[key]['bin']}"]
-    vorne += [f"--filesystem={d}" for d in _flatpak_freigaben(cmd[1:])]
+    vorne += [f"--filesystem={d}" for d in _flatpak_freigaben(list(cmd[1:]) + list(freigaben))]
     for name in ('OMP_NUM_THREADS',):
         if env and env.get(name):
             vorne.append(f"--env={name}={env[name]}")
@@ -850,6 +872,19 @@ QUICK_KEYS = {
         'denoise_l':  ('crs', 'LuminanceSmoothing',  0,    100,   0),
         'denoise_c':  ('crs', 'ColorNoiseReduction', 0,    100,   25),
     },
+    # RapidRAW: Regler unter "adjustments" (src/utils/defaultAdjustments.json,
+    # Bereiche aus src/components/adjustments/*.tsx). Lichter: 0..100
+    # abdunkeln = highlights 0..-100. Farbtemperatur (dort ein relativer
+    # Regler, keine Kelvin), Helligkeit und Schaerfe (andere Skalen) fehlen.
+    'rr': {
+        'contrast':   ('rr', 'contrast',            -100, 100, 0),
+        'highlights': ('rr', 'highlights',          0,    100, 0, -1.0),
+        'shadows':    ('rr', 'shadows',             0,    100, 0),
+        'vibrance':   ('rr', 'vibrance',            -100, 100, 0),
+        'saturation': ('rr', 'saturation',          -100, 100, 0),
+        'denoise_l':  ('rr', 'lumaNoiseReduction',  0,    100, 0),
+        'denoise_c':  ('rr', 'colorNoiseReduction', 0,    100, 0),
+    },
 }
 # Regler -> Modulwert: Prozent wie in Darktables Oberflaeche; die Schaerfe
 # so, dass 200 (Grundwert von ART/RawTherapee) Darktables 0,5 entspricht.
@@ -900,8 +935,9 @@ HL_OPTIONEN = {
                                            "Wahl")],
     'dt': [],
     'lr': [],
+    'rr': [],
 }
-HL_EMPFOHLEN = {'art': "Color", 'rt': "Coloropp", 'dt': "", 'lr': ""}
+HL_EMPFOHLEN = {'art': "Color", 'rt': "Coloropp", 'dt': "", 'lr': "", 'rr': ""}
 
 
 def hl_optionen(engine=None):
@@ -1061,6 +1097,11 @@ def quick_apply(profile, werte, engine=None):
                 geschrieben.append((d['sec'], d['key'], profile[d['sec']][d['key']]))
             continue
         sek = profile.setdefault(d['sec'], {})
+        if e == 'rr':
+            for key, f in ((d['key'], d.get('faktor', 1.0)),) + tuple(d.get('mehr', ())):
+                sek[key] = _rr_zahl_text(v * float(f), sek.get(key))
+                geschrieben.append((d['sec'], key, sek[key]))
+            continue
         if e == 'lr':
             for key, f in ((d['key'], d.get('faktor', 1.0)),) + tuple(d.get('mehr', ())):
                 sek[key] = lr_zahl_text(key, v * float(f), sek.get(key))
@@ -1212,6 +1253,10 @@ def nicht_ueberblendbar(start_arp, end_arp):
             _, hart = lr_sektion_mischen(sec, s_dict, e_dict, 0.0)
             harte.extend((sec, h) for h in hart)
             continue
+        if rr_ist_sektion(sec):
+            _, hart = rr_sektion_mischen(sec, s_dict, e_dict, 0.0)
+            harte.extend((sec, h) for h in hart)
+            continue
         for k in ordered_union(s_dict, e_dict):
             if k in ('Rank', 'Rating', 'Enabled'):
                 continue
@@ -1279,6 +1324,11 @@ def vorschau_profil(profil, kante):
     gr['Width'] = str(int(kante))
     gr['Height'] = str(int(kante))
     gr['AllowUpscaling'] = "false"
+    # ART rechnet Breite und Hoehe in der Einheit des Profils um
+    # (procparams.cc, ResizeParams::get_width) - steht im Keyframe "cm",
+    # waeren 480 sonst Zentimeter. RawTherapee kennt den Schluessel nicht
+    # und uebergeht ihn.
+    gr['Unit'] = "px"
     return neu
 
 
@@ -1328,6 +1378,9 @@ def interpolate_arp_dicts(start_arp, end_arp, ratio):
         if lr_ist_sektion(sec):
             out[sec], _ = lr_sektion_mischen(sec, s_dict, e_dict, ratio)
             continue
+        if rr_ist_sektion(sec):
+            out[sec], _ = rr_sektion_mischen(sec, s_dict, e_dict, ratio)
+            continue
         force_custom = False
         if sec == 'White Balance':
             force_custom = any(s_dict.get(k) != e_dict.get(k)
@@ -1361,8 +1414,9 @@ def set_raw_hotpixel(arp_data, enabled):
         if enabled and DT_STAPEL in arp_data:
             dt_modul_setzen(arp_data, 'hotpixels', {}, an=True)
         return
-    if ENGINE == 'lr':
-        return      # Lightroom entfernt Hotpixel selbst, ohne Einstellung
+    if ENGINE in ('lr', 'rr'):
+        # Lightroom und RapidRAW (ab 1.7) entfernen Hotpixel selbst, ohne Einstellung
+        return
     raw = arp_data.setdefault('RAW', {})
     raw['HotDeadPixelEnabled'] = "true" if enabled else "false"
     raw['HotPixelFilter'] = "true" if enabled else "false"
@@ -1374,7 +1428,7 @@ def validate_arp(profile, reference, name, lang='de'):
     """Prueft ein geschriebenes Profil gegen ein von ART/RT stammendes Vorbild.
     Fuer Darktable nicht sinnvoll - liefert dann einfach eine leere Liste.
     Die Befunde stehen in der Sprache der Oberflaeche (lang)."""
-    if ENGINE in ('dt', 'lr'):
+    if ENGINE in ('dt', 'lr', 'rr'):
         return []
     en = (lang == 'en')
     issues = []
@@ -1490,6 +1544,10 @@ def check_is_keyframe(arp_path):
     """
     # Die Endung JEDER Engine abschneiden, nicht nur .arp - sonst wird bei
     # RawTherapee nach "BILD.NEF.pp3.xmp" gesucht.
+    if ENGINE == 'rr':
+        # RapidRAW fuehrt die Sterne in der .rrdata selbst
+        if arp_path.lower().endswith(ENGINES['rr']['ext']):
+            return rr_bewertung(arp_path) == 5
     img_path = arp_path
     for _cfg in ENGINES.values():
         if _cfg['ext'] != '.xmp' and arp_path.lower().endswith(_cfg['ext']):
@@ -1509,7 +1567,7 @@ def check_is_keyframe(arp_path):
             return True
         if 'Rating="0"' in content or '<xmp:Rating>0</xmp:Rating>' in content:
             return False
-    if ENGINE not in ('dt', 'lr') and os.path.exists(arp_path):
+    if ENGINE not in ('dt', 'lr', 'rr') and os.path.exists(arp_path):
         for keys in read_arp_dict_ini(arp_path).values():
             if keys.get('Rank') == '5' or keys.get('Rating') == '5':
                 return True
@@ -2951,6 +3009,396 @@ def lr_hinweise(profil):
 
 
 # ==========================================================================
+#  TEIL D: RAPIDRAW  (.rrdata, JSON)
+#
+#  RapidRAW legt neben jedes Bild eine Datei BILD.NEF.rrdata:
+#      {"version": 1, "rating": 0, "adjustments": {...}, "tags": ...}
+#  (src-tauri/src/metadata/sidecar.rs, ImageMetadata). Unter "adjustments"
+#  stehen alle Regler des Bildes; fehlt der Schluessel oder ist er null,
+#  gilt das Bild als unbearbeitet.
+#
+#  Im Profil-Dict von Purelapse:
+#    'Version'   Shim, damit das Profil als vollstaendig gilt
+#    'Exposure'  Compensation in BLENDEN. RapidRAW rechnet den Regler
+#                "exposure" durch 0,8 (render/uniforms.rs, SCALES.exposure)
+#                und hellt dann um 2^Wert auf (shader.wgsl,
+#                apply_linear_exposure): Regler 1,0 = 1,25 Blenden.
+#    'rr'        alle uebrigen Regler, flach: "hsl/reds/hue" -> JSON-Text.
+#                Listen (Kurvenpunkte, Masken) bleiben am Stueck.
+#  Bewertung, Stichwoerter und EXIF stehen ausserhalb von "adjustments"
+#  und gehoeren dem Bild; sie werden nie mitkopiert.
+#
+#  Entwickelt wird mit "RapidRAW export <Quelle> --output <Ziel>" ohne
+#  Oberflaeche (src-tauri/src/app/launch_request.rs). Die Regler kommen
+#  dabei aus der .rrdata neben dem Bild.
+# ==========================================================================
+RR_SEK = 'rr'
+RR_EV_FAKTOR = 0.8          # Reglerwert = Blenden x 0,8
+_RR_TRENNER = '/'
+# Nie ueberblenden, sondern vom naeheren Keyframe: Werkzeuge, die fuer
+# ein bestimmtes Bild gerechnet sind oder keine Zwischenwerte kennen.
+# Zuschnitt, Drehung und Seitenverhaeltnis gehoeren zusammen; die Drehung
+# in Vierteln (orientationSteps) liest RapidRAW nur als ganze Zahl.
+RR_HART = ('masks', 'aiPatches', 'crop', 'aspectRatio', 'rotation',
+           'orientationSteps', 'lutData', 'lutPath', 'lutName',
+           'lutSize', 'toneMapper', 'video', 'lensDistortionParams',
+           'lensMaker', 'lensModel', 'lensBlurDepthMap', 'relightNormalMap',
+           'fogDepthMap', 'motionBlurDepthMap', 'guidedPerspective')
+
+
+def rr_ist_sektion(sec):
+    return sec == RR_SEK
+
+
+def _rr_flach(wert, praefix, out):
+    """Verschachtelte Regler (hsl, colorGrading ...) in flache Pfade.
+    Leere Objekte und Listen bleiben als ein Wert erhalten."""
+    if isinstance(wert, dict) and wert and praefix.split(_RR_TRENNER)[0] not in RR_HART:
+        for k, v in wert.items():
+            _rr_flach(v, f"{praefix}{_RR_TRENNER}{k}" if praefix else k, out)
+    else:
+        out[praefix] = json.dumps(wert, ensure_ascii=False)
+
+
+def _rr_tief(flach):
+    """Gegenstueck zu _rr_flach: aus den Pfaden wieder ein Objekt."""
+    out = {}
+    for pfad, text in flach.items():
+        try:
+            wert = json.loads(text)
+        except (TypeError, ValueError):
+            wert = text
+        teile = pfad.split(_RR_TRENNER)
+        ziel = out
+        for t in teile[:-1]:
+            if not isinstance(ziel.get(t), dict):
+                ziel[t] = {}
+            ziel = ziel[t]
+        ziel[teile[-1]] = wert
+    return out
+
+
+def _rr_laden(pfad):
+    """Die .rrdata als Objekt; None, wenn sie fehlt. Eine unlesbare Datei
+    ist ein Fehler - RapidRAW wuerde sie beiseitelegen und das Bild als
+    unbearbeitet behandeln."""
+    if not os.path.exists(pfad):
+        return None
+    try:
+        with open(pfad, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except (OSError, ValueError) as e:
+        raise OSError(f"{os.path.basename(pfad)} ist keine lesbare RapidRAW-Datei: {e}") from e
+    if not isinstance(doc, dict):
+        raise OSError(f"{os.path.basename(pfad)} ist keine lesbare RapidRAW-Datei")
+    return doc
+
+
+def _rr_schreiben(pfad, doc):
+    try:
+        datei_atomar(pfad, json.dumps(doc, ensure_ascii=False, indent=2))
+    except OSError as e:
+        raise OSError(f"{os.path.basename(pfad)} konnte nicht geschrieben "
+                      f"werden: {e.strerror or e}") from e
+
+
+def rr_sidecar_bereit(pfad):
+    """
+    Hat RapidRAW (oder Purelapse) dieses Bild schon bearbeitet?
+    Rueckgabe: (True, "") oder (False, Grund)
+    """
+    try:
+        doc = _rr_laden(pfad)
+    except OSError:
+        return False, "nicht lesbar"
+    if doc is None:
+        return False, "fehlt"
+    if not isinstance(doc.get('adjustments'), dict) or not doc['adjustments']:
+        return False, "unbearbeitet"
+    return True, ""
+
+
+def rr_bewertung(pfad):
+    """Sterne aus der .rrdata (0, wenn keine)."""
+    try:
+        doc = _rr_laden(pfad)
+    except OSError:
+        return 0
+    try:
+        return int((doc or {}).get('rating') or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def rr_bewertung_schreiben(pfad, sterne):
+    """Setzt die Sterne in der .rrdata. Eine fehlende Datei entsteht als
+    unbearbeitetes Bild - so sieht RapidRAW den Stern, und die Regler
+    bleiben auf seinen Grundwerten."""
+    doc = _rr_laden(pfad)
+    if doc is None:
+        doc = {"version": 1, "rating": 0, "adjustments": None}
+    doc['rating'] = int(sterne)
+    _rr_schreiben(pfad, doc)
+
+
+def _rr_zahl(text):
+    try:
+        w = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(w, bool) or not isinstance(w, (int, float)):
+        return None
+    return float(w)
+
+
+def _rr_zahl_text(wert, vorbild=None):
+    """Ganze Zahl, wo das Vorbild eine war und das Ergebnis ganz ist."""
+    w = round(float(wert), 4)
+    try:
+        v = json.loads(vorbild) if vorbild is not None else None
+    except (TypeError, ValueError):
+        v = None
+    if isinstance(v, int) and not isinstance(v, bool) and w == int(w):
+        return json.dumps(int(w))
+    return json.dumps(w)
+
+
+def _rr_kurve_mischen(s_text, e_text, t):
+    """Kurvenpunkte [{x, y}, ...] gleicher Anzahl weich; sonst None."""
+    try:
+        a, b = json.loads(s_text), json.loads(e_text)
+    except (TypeError, ValueError):
+        return None
+    if not (isinstance(a, list) and isinstance(b, list)) or len(a) != len(b) or not a:
+        return None
+    out = []
+    for pa, pb in zip(a, b):
+        if not (isinstance(pa, dict) and isinstance(pb, dict)) or set(pa) != set(pb):
+            return None
+        punkt = {}
+        for k in pa:
+            va, vb = pa[k], pb[k]
+            if (isinstance(va, bool) or isinstance(vb, bool)
+                    or not isinstance(va, (int, float)) or not isinstance(vb, (int, float))):
+                if va != vb:
+                    return None
+                punkt[k] = va
+            else:
+                punkt[k] = round(va + (vb - va) * t, 4)
+        out.append(punkt)
+    return json.dumps(out, ensure_ascii=False)
+
+
+def _rr_werkzeuge_einheitlich(rr):
+    """
+    "activeTools" in einer Form: RapidRAW zaehlt ein Werkzeug, das dort
+    fehlt, als eingeschaltet (adjustment_utils.rs, is_tool_active). {} und
+    {"basic": true, ...} sind also dasselbe - verglichen wuerden sie aber
+    als verschieden, und Purelapse meldete einen harten Wechsel, wo es
+    keinen gibt. Uebrig bleiben nur ausgeschaltete Werkzeuge.
+    """
+    praefix = 'activeTools' + _RR_TRENNER
+    if 'activeTools' not in rr and not any(k.startswith(praefix) for k in rr):
+        return rr
+    aus = {k: v for k, v in rr.items() if k.startswith(praefix) and v != 'true'}
+    out = {k: v for k, v in rr.items()
+           if k != 'activeTools' and not k.startswith(praefix)}
+    if aus:
+        out.update(aus)
+    else:
+        out['activeTools'] = '{}'
+    return out
+
+
+def rr_sektion_mischen(sec, s, e, t):
+    """
+    Ueberblendet die Regler zweier RapidRAW-Keyframes.
+    Zahlen und Kurven weich, alles andere vom naeheren Keyframe.
+    Rueckgabe: (Sektion, [Schluessel, die nicht weich gehen])
+    """
+    s, e = _rr_werkzeuge_einheitlich(s or {}), _rr_werkzeuge_einheitlich(e or {})
+    out, harte = {}, []
+    # Ein Werkzeug, das in einem Keyframe ein Objekt ist und im anderen
+    # null (etwa "whiteBalance"), laesst sich nicht Wert fuer Wert mischen:
+    # es kommt als Ganzes vom naeheren Keyframe.
+    konflikt = set()
+    for a, b in ((s, e), (e, s)):
+        for k in a:
+            if k not in b and any(x.startswith(k + _RR_TRENNER) for x in b):
+                konflikt.add(k)
+    def _unter(k):
+        return next((c for c in konflikt if k == c or k.startswith(c + _RR_TRENNER)), None)
+    nah = s if t < 0.5 else e
+    for k in ordered_union(s, e):
+        wurzel = _unter(k)
+        if wurzel is not None:
+            if k in nah:
+                out[k] = nah[k]
+            if wurzel not in harte:
+                harte.append(wurzel)
+            continue
+        v_s, v_e = s.get(k), e.get(k)
+        if v_s is None or v_e is None:
+            out[k] = v_s if v_e is None else v_e
+            continue
+        if v_s == v_e:
+            out[k] = v_s
+            continue
+        f_s, f_e = _rr_zahl(v_s), _rr_zahl(v_e)
+        if (f_s is not None and f_e is not None
+                and k.split(_RR_TRENNER)[0] not in RR_HART):
+            out[k] = _rr_zahl_text(f_s + (f_e - f_s) * t, v_s)
+            continue
+        kurve = (None if k.split(_RR_TRENNER)[0] in RR_HART
+                 else _rr_kurve_mischen(v_s, v_e, t))
+        if kurve is not None:
+            out[k] = kurve
+            continue
+        out[k] = v_s if t < 0.5 else v_e
+        harte.append(k)
+    return out, harte
+
+
+def read_arp_dict_rr(pfad):
+    try:
+        doc = _rr_laden(pfad)
+    except OSError:
+        return {}
+    adj = (doc or {}).get('adjustments')
+    if not isinstance(adj, dict) or not adj:
+        return {}
+    flach = {}
+    for k, v in adj.items():
+        if k == 'exposure':
+            continue
+        _rr_flach(v, k, flach)
+    try:
+        ev = float(adj.get('exposure') or 0.0) / RR_EV_FAKTOR
+    except (TypeError, ValueError):
+        ev = 0.0
+    return {'Version': {'AppVersion': 'rapidraw-passthrough'},
+            'Exposure': {'Enabled': 'true', 'Auto': 'false',
+                         'Compensation': f"{ev:.4f}"},
+            RR_SEK: flach}
+
+
+def write_arp_dict_rr(pfad, data):
+    """
+    Traegt das Profil-Dict in die .rrdata ein. Steht im Dict die Sektion
+    'rr', gilt sie vollstaendig (das Bild wird zur Kopie bzw. Ueberblendung
+    der Keyframes); sonst aendert sich nur die Belichtung. Bewertung,
+    Stichwoerter und alles ausserhalb von "adjustments" bleiben.
+    """
+    doc = _rr_laden(pfad)
+    if doc is None:
+        doc = {"version": 1, "rating": 0}
+    alt = doc.get('adjustments') if isinstance(doc.get('adjustments'), dict) else {}
+    doc['adjustments'] = rr_einstellungen(data, alt)
+    doc.setdefault('version', 1)
+    _rr_schreiben(pfad, doc)
+
+
+def rr_einstellungen(data, alt=None):
+    """Das Objekt "adjustments" zu einem Profil-Dict. Ohne Sektion 'rr'
+    bleiben die Regler aus 'alt', nur die Belichtung wird gesetzt."""
+    if RR_SEK in (data or {}):
+        adj = _rr_tief(data[RR_SEK])
+    else:
+        adj = dict(alt or {})
+    try:
+        comp = float((data or {}).get('Exposure', {}).get('Compensation'))
+    except (TypeError, ValueError):
+        comp = None
+    if comp is not None:
+        adj['exposure'] = round(comp * RR_EV_FAKTOR, 4)
+    # Die Belichtung sitzt im Werkzeug "basic". Ist es im Keyframe
+    # ausgeschaltet, liefe der Deflicker ins Leere.
+    werkzeuge = adj.get('activeTools')
+    if isinstance(werkzeuge, dict) and werkzeuge.get('basic') is False:
+        werkzeuge['basic'] = True
+    return adj
+
+
+def rr_vorschau_befehl(cli, bild, profil, ordner, qualitaet=92):
+    """
+    Ein Bild mit einem bestimmten Profil entwickeln, ohne die .rrdata des
+    Bildes anzufassen: die Regler kommen ueber "--adjustments" aus einer
+    eigenen Datei. Rueckgabe: (Befehl, Zieldatei)
+    """
+    einst = os.path.join(ordner, "vorschau_einstellungen.json")
+    with open(einst, 'w', encoding='utf-8') as f:
+        json.dump(rr_einstellungen(profil), f, ensure_ascii=False)
+    ziel = os.path.join(ordner, "vorschau.jpg")
+    return ([cli, "export", bild, "--output", ziel, "--format", "jpeg",
+             "--quality", str(int(qualitaet)), "--adjustments", einst], ziel)
+
+
+def rr_export_befehl(cli, quelle, ziel, tief=False, qualitaet=100):
+    """
+    Aufruf fuer "RapidRAW export": Quelle ist ein Bild oder ein Ordner,
+    Ziel ein Ordner (oder bei einem Bild die Zieldatei). Die Regler kommen
+    aus der .rrdata neben jedem Bild.
+    16 Bit: TIFF mit 16 Bit je Kanal; sonst JPG in der Qualitaet.
+    """
+    cmd = [cli, "export", quelle, "--output", ziel]
+    if tief:
+        cmd += ["--format", "tiff", "--tiff-bit-depth", "16"]
+    else:
+        cmd += ["--format", "jpeg", "--quality", str(int(qualitaet))]
+    return cmd + ["--keep-metadata"]
+
+
+RR_AUSGABE_ENDUNGEN = (".jpeg", ".jpg", ".tiff", ".tif")
+
+
+def rr_ausgabe_stamm(name):
+    """
+    Zu welchem Bild gehoert eine Ausgabedatei? RapidRAW nennt sie
+    BILD_edited.jpeg (Vorlage "{original_filename}_edited").
+    Rueckgabe: Stamm des Bildes oder None.
+    """
+    stamm, endung = os.path.splitext(name)
+    if endung.lower() not in RR_AUSGABE_ENDUNGEN or not stamm.endswith("_edited"):
+        return None
+    return stamm[:-len("_edited")] or None
+
+
+def rr_hinweise(profil):
+    """Was in einem RapidRAW-Keyframe fuer den Zeitraffer heikel ist."""
+    out = []
+    rr = (profil or {}).get(RR_SEK, {})
+    if rr.get('activeTools/basic') == 'false':
+        out.append('basic_aus')
+    if any(k.split(_RR_TRENNER)[0] in ('masks', 'aiPatches') and rr[k] not in ('[]', 'null')
+           for k in rr):
+        out.append('masken')
+    return out
+
+
+def find_arp_template_rr(target_dir, files=None):
+    """
+    Vorlage fuer Bilder ohne eigene Bearbeitung: das erste Bild der Serie,
+    das in RapidRAW bearbeitet wurde (Keyframes zuerst).
+    Rueckgabe: (profil_dict, herkunftspfad) oder (None, "").
+    """
+    kandidaten = [sidecar(f) for f in (files or [])]
+    kandidaten += sorted(glob.glob(os.path.join(target_dir, '*' + ENGINES['rr']['ext'])))
+    gesehen, bereit = set(), []
+    for pfad in kandidaten:
+        if pfad in gesehen:
+            continue
+        gesehen.add(pfad)
+        if rr_sidecar_bereit(pfad)[0]:
+            bereit.append(pfad)
+    bereit.sort(key=lambda p: rr_bewertung(p) != 5)      # Keyframes zuerst
+    for pfad in bereit:
+        data = read_arp_dict_rr(pfad)
+        if data:
+            return data, pfad
+    return None, ""
+
+
+# ==========================================================================
 #  DISPATCHER: hier entscheidet sich, welche Implementierung laeuft
 # ==========================================================================
 def read_arp_dict(arp_path):
@@ -2958,6 +3406,8 @@ def read_arp_dict(arp_path):
         return read_arp_dict_dt(arp_path)
     if ENGINE == 'lr':
         return read_arp_dict_lr(arp_path)
+    if ENGINE == 'rr':
+        return read_arp_dict_rr(arp_path)
     return read_arp_dict_ini(arp_path)
 
 
@@ -2966,6 +3416,8 @@ def write_arp_dict(arp_path, data):
         write_arp_dict_dt(arp_path, data)
     elif ENGINE == 'lr':
         write_arp_dict_lr(arp_path, data)
+    elif ENGINE == 'rr':
+        write_arp_dict_rr(arp_path, data)
     else:
         write_arp_dict_ini(arp_path, data)
 
@@ -2975,11 +3427,13 @@ def find_arp_template(target_dir, files=None):
         return {}, "(Darktable: kein Basisprofil erforderlich)"
     if ENGINE == 'lr':
         return {}, "(Lightroom: kein Basisprofil erforderlich)"
+    if ENGINE == 'rr':
+        return find_arp_template_rr(target_dir, files)
     return find_arp_template_ini(target_dir, files)
 
 
 def bootstrap_arp_template(art_cli_path, sample_image):
-    if ENGINE in ('dt', 'lr'):
+    if ENGINE in ('dt', 'lr', 'rr'):
         return None, ""
     return bootstrap_arp_template_ini(art_cli_path, sample_image)
 

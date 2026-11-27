@@ -50,4 +50,16 @@ f.cmb_engine.setCurrentIndex(1); f.txt_art_path.setText(RT_CLI); f.rb_raw.setChe
 f._go_step('smooth'); f._start()
 pruef("Pass 1 erledigt" in pm.workflow_stand(o), pm.workflow_stand(o))
 pruef(pm.workflow_stand("/gibt/es/nicht") is None, "fehlender Ordner")
+# 6) Zwei Bildschirme: Dialog mittig ueber dem Hauptfenster, ganz im Bild
+links, rechts = (0, 0, 1920, 1080), (1920, 0, 2560, 1440)
+haupt = (2200, 100, 1800, 1100)
+x, y = pm.mittig_auf((560, 220), haupt, rechts)
+pruef((x, y) == (2200 + (1800 - 560) // 2, 100 + (1100 - 220) // 2) and x >= 1920,
+      f"nicht mittig auf dem rechten Bildschirm: {(x, y)}")
+x, y = pm.mittig_auf((900, 700), (3900, 1000, 500, 400), rechts)
+pruef(x + 900 <= 1920 + 2560 and y + 700 <= 1440 and x >= 1920, f"ragt aus dem Bildschirm: {(x, y)}")
+x, y = pm.mittig_auf((560, 220), (-100, -50, 400, 300), links)
+pruef(x >= 0 and y >= 0, f"links/oben ausserhalb: {(x, y)}")
+src = open(os.path.join(PROJEKT, "purelapse_main.py"), encoding="utf-8").read()
+pruef("app_instance.installEventFilter(platzierer)" in src, "Platzierer nicht eingebaut")
 print(f"{OK} Pruefungen bestanden, {FEHL} fehlgeschlagen")
