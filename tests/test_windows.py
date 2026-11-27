@@ -5,7 +5,8 @@
 2. Engines in den ueblichen Installationsordnern finden.
 3. Lange Befehlszeilen auf mehrere Durchgaenge verteilen (Grenze 32767).
 4. Encoder, die es auf dem System nicht gibt (VAAPI unter Windows), gesperrt.
-5. Kein Konsolenfenster je Engine- oder FFmpeg-Aufruf."""
+5. Kein Konsolenfenster je Engine- oder FFmpeg-Aufruf.
+6. Abbruch beendet unter Windows den ganzen Prozessbaum (.cmd-Huellen)."""
 import os, sys, re, subprocess, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "pruefstand"))
 from stand import *
@@ -95,6 +96,35 @@ for name in ("purelapse_main.py", "purelapse_engines.py"):
         aufruf = text[m.start():i + 1]
         zeile = text.count("\n", 0, m.start()) + 1
         pruef("OHNE_FENSTER" in aufruf, f"{name}:{zeile} startet ohne OHNE_FENSTER: {aufruf[:60]}")
+
+print("=== 6. Abbruch beendet den ganzen Prozessbaum ===")
+# terminate() erreicht unter Windows nur den gestarteten Prozess; hinter
+# einer .cmd-Huelle liefe die Engine weiter und schriebe nach dem Abbruch
+# noch Bilder. Jedes terminate() braucht daneben den Windows-Weg.
+for name in ("purelapse_main.py", "purelapse_engines.py"):
+    zeilen = open(os.path.join(PROJEKT, name), encoding="utf-8").read().splitlines()
+    for nr, z in enumerate(zeilen):
+        if ".terminate()" in z and not z.strip().startswith("#"):
+            umfeld = "\n".join(zeilen[max(0, nr - 12):nr + 1])
+            pruef("os.name == 'nt'" in umfeld and "prozess_beenden" in umfeld,
+                  f"{name}:{nr + 1} terminate() ohne Windows-Weg")
+# und wirklich: eine .cmd-Huelle mit einem langsamen Kind wird samt Kind beendet
+if os.name == 'nt':
+    import time
+    ordner = tempfile.mkdtemp()
+    marke = os.path.join(ordner, "marke.txt")
+    kind = os.path.join(ordner, "kind.py")
+    with open(kind, "w", encoding="utf-8") as f:
+        f.write("import time, sys\ntime.sleep(3)\nopen(sys.argv[1], 'w').write('x')\n")
+    huelle = os.path.join(ordner, "huelle.cmd")
+    with open(huelle, "w", encoding="utf-8") as f:
+        f.write(f'@"{sys.executable}" "{kind}" %*\r\n')
+    pr = subprocess.Popen([huelle, marke], **pe.OHNE_FENSTER)
+    time.sleep(1.0)
+    pe.prozess_beenden(pr)
+    pr.wait(timeout=10)
+    time.sleep(4.0)
+    pruef(not os.path.exists(marke), "das Kind hinter der .cmd-Huelle lief nach dem Abbruch weiter")
 
 print(f"\n{OK} Pruefungen bestanden, {FEHL} fehlgeschlagen")
 sys.exit(1 if FEHL else 0)

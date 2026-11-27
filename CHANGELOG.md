@@ -3,6 +3,15 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
+## [Unveröffentlicht]
+
+### Behoben
+- Windows: Ein Abbruch in Pass 2 beendet ART/RawTherapee jetzt samt allen Prozessen, die das Programm selbst gestartet hat. Bisher wurde nur der gestartete Prozess beendet – steckte die Engine hinter einer `.cmd`- oder `.bat`-Hülle, entwickelte sie weiter und schrieb noch Bilder, nachdem der Abbruch schon festgehalten hatte, was fertig ist. Die Fortsetzung entwickelte diese Bilder dann unnötig neu.
+
+### Intern
+- Prüfung, dass jeder Abbruch unter Windows den ganzen Prozessbaum beendet, mit einem echten Versuch an einer `.cmd`-Hülle (nur auf Windows).
+- Die Prüfung auf GitHub läuft nur noch bei Pushes auf Zweige, nicht mehr zusätzlich beim Tag eines Releases (das prüfte denselben Commit ein zweites Mal).
+
 ## [2.46.1-beta] – 2026-11-27
 
 Feinschliff zu 2.46: ein neu gerechnetes, sauberes Icon – auch als eigenes Symbol der Windows-`.exe` – und der Schalter für 16-Bit-Zwischenbilder sitzt jetzt beim Video, mit Hinweis, wann er sich lohnt, und Warnung, solange er an ist.

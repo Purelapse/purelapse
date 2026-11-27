@@ -5,7 +5,10 @@ name: Pruefung
 # Qt, rawpy und die Engines sind in tests/pruefstand nachgebaut.
 
 on:
+  # Nur bei Pushes auf Zweige - ein neuer Tag (beim Release) prueft sonst
+  # denselben Commit ein zweites Mal.
   push:
+    branches: ["**"]
   pull_request:
 
 jobs:

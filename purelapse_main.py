@@ -7087,7 +7087,16 @@ class Worker(QtCore.QThread):
                 if self._abort:
                     for pr in procs:
                         if pr.poll() is None:
-                            pr.terminate()
+                            # Windows: terminate() beendet nur den gestarteten
+                            # Prozess. Steckt die Engine hinter einer .cmd-
+                            # oder .bat-Huelle, entwickelte sie danach weiter
+                            # und schriebe noch Bilder, waehrend der Abbruch
+                            # schon festhaelt, was fertig ist. Sanft beenden
+                            # gibt es dort ohnehin nicht.
+                            if os.name == 'nt':
+                                prozess_beenden(pr)
+                            else:
+                                pr.terminate()
                     for pr in procs:
                         try:
                             pr.wait(timeout=5)
