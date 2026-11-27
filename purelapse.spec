@@ -47,6 +47,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Windows: Symbol der .exe (PyInstaller wandelt das PNG mit Pillow um)
-    icon=('docs/assets/icon.png' if sys.platform.startswith('win') else None),
+    # Windows: Symbol der .exe - ein .ico mit eigens gerechneten kleinen
+    # Groessen (16-256 px, aus grafik/icon_bauen.py)
+    icon=('docs/assets/purelapse.ico' if sys.platform.startswith('win') else None),
 )

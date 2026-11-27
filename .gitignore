@@ -28,3 +28,23 @@ purelapse_pruefung/
 # Bildschirmfotos zum Hochladen in Releases (liegen im Release, nicht im Code)
 *_screenshot.jpg
 /*.mp4
+
+# Bilder und Videos, die beim Arbeiten im Projektordner landen koennen
+# (Rohdaten, Exporte, Testvideos). Die Webseite (docs/) ist davon ausgenommen.
+/*.jpg
+/*.jpeg
+/*.png
+/*.tif
+/*.tiff
+/*.mov
+/*.mkv
+*.NEF
+*.nef
+*.CR2
+*.CR3
+*.ARW
+*.DNG
+*.RAF
+*.ORF
+*.RW2
+*.exe

@@ -8,6 +8,15 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 ### Webseite
 - Markenhinweis zu Lightroom in der Fußzeile der Webseite und in den READMEs.
 
+### Geändert
+- **Icon in Spitzenqualität neu gerechnet:** gleiche Farben und Gestaltung, aber exakt aus der Geometrie (16-fach überabgetastet) statt nachgezeichnet. Keine Säume mehr – die Horizontlinie hatte oben und unten eine halb deckende Zeile, die Kanten von Punkten und Ecken nur wenige Abstufungen. Die Linie liegt jetzt in jeder Größe auf ganzen Bildpunkten; bis 24 px haben die Punkte mindestens 1,5 Bildpunkte Durchmesser, damit der Bogen in der Taskleiste nicht zu Grau verschwimmt. Durchsichtige Pixel tragen die Randfarbe statt Schwarz (kein dunkler Rand beim Skalieren).
+- Windows: Die `.exe` bekommt ein eigenes `.ico` mit allen Größen von 16 bis 256 px.
+
+### Intern
+- `grafik/icon_bauen.py` erzeugt alle Icons (Webseite, Favicon, AppImage, Windows-`.ico`, SVG-Vorlage, dazu 512 und 1024 px in `dist/`).
+- `hochladen.sh "Nachricht"`: lässt alle Prüfungen laufen und lädt nur hoch, wenn sie grün sind; bricht bei Dateien über 50 MB und bei Bild-XMPs außerhalb von `tests/daten` ab. Legt von Claude nach `dist/` gelegte Ablaufdateien an ihren Platz.
+- `.gitignore`: Bilder, Videos und RAW-Dateien im Hauptordner sowie `.exe` werden nie hochgeladen.
+
 ## [2.46.0-beta] – 2026-11-26
 
 Purelapse läuft jetzt auch unter **Windows** – als einzelne `.exe`, ohne Installation. Dazu kommt **Lightroom Classic** als vierte Engine (über die XMP-Dateien), und unter Linux werden Engines aus **Flatpak** erkannt. darktable 5.x wird vollständig unterstützt.
