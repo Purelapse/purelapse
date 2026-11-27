@@ -3,15 +3,17 @@
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 
-## [Unveröffentlicht]
+## [2.46.1-beta] – 2026-11-27
 
-### Webseite
-- Markenhinweis zu Lightroom in der Fußzeile der Webseite und in den READMEs.
+Feinschliff zu 2.46: ein neu gerechnetes, sauberes Icon – auch als eigenes Symbol der Windows-`.exe` – und der Schalter für 16-Bit-Zwischenbilder sitzt jetzt beim Video, mit Hinweis, wann er sich lohnt, und Warnung, solange er an ist.
 
 ### Geändert
 - **16-Bit-Zwischenbilder sitzen jetzt beim Video** statt unter „Engine und Leistung“ – dort, wo man das Rendern einstellt. Darunter steht, wofür der Schalter gut ist: in der Regel nicht nötig, hilfreich bei Stufen in feinen Verläufen wie einem klaren Himmel, vor allem mit HEVC 10 Bit oder ProRes. Ist er an, steht der Hinweis in Warnfarbe mit dem Platzbedarf der Serie (aus der Bildgröße des ersten RAW), und die Zusammenfassung über den Knöpfen nennt „16-Bit-Zwischenbilder“ – damit er nicht versehentlich für jede Serie an bleibt. Bei JPG-Serien ist er ausgeblendet.
 - **Icon in Spitzenqualität neu gerechnet:** gleiche Farben und Gestaltung, aber exakt aus der Geometrie (16-fach überabgetastet) statt nachgezeichnet. Keine Säume mehr – die Horizontlinie hatte oben und unten eine halb deckende Zeile, die Kanten von Punkten und Ecken nur wenige Abstufungen. Die Linie liegt jetzt in jeder Größe auf ganzen Bildpunkten; bis 24 px haben die Punkte mindestens 1,5 Bildpunkte Durchmesser, damit der Bogen in der Taskleiste nicht zu Grau verschwimmt. Durchsichtige Pixel tragen die Randfarbe statt Schwarz (kein dunkler Rand beim Skalieren).
 - Windows: Die `.exe` bekommt ein eigenes `.ico` mit allen Größen von 16 bis 256 px.
+
+### Webseite
+- Markenhinweis zu Lightroom in der Fußzeile der Webseite und in den READMEs.
 
 ### Intern
 - Neue Prüfreihe `test_tiff16_schalter.py`; der nachgebaute rawpy kennt jetzt `sizes`.
