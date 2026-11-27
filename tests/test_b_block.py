@@ -114,7 +114,8 @@ pruef(any("entwickle" in z.lower() or "Entwicklung" in z for z in e.log) and not
 # Platzpruefung
 w = pm.Worker(parameter(o, d, tiff16=True))
 alt = pm.shutil.disk_usage
-pm.shutil.disk_usage = lambda p: type("U", (), {"free": 10 * 1024 ** 2})()
+# Die Pruef-RAWs sind winzig (300 x 200); 1 KB frei reicht trotzdem nicht
+pm.shutil.disk_usage = lambda p: type("U", (), {"free": 1024})()
 try:
     w._platz_pruefen(d, o); pruef(False, "zu wenig Platz nicht erkannt")
 except RuntimeError as x:

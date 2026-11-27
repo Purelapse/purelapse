@@ -206,7 +206,9 @@ Blende oder ISO. Purelapse ist dafür ausgelegt:
 - **16-Bit-Zwischenbilder (TIFF)** auf Wunsch: Die Engine entwickelt nach
   16 Bit, das Video wird durchgehend in 16 Bit gerechnet – keine Stufen in
   Himmelsverläufen, vor allem mit HEVC 10 Bit oder ProRes. Braucht ein
-  Vielfaches an Platz; Purelapse prüft vorher, ob er reicht.
+  Vielfaches an Platz; Purelapse prüft vorher, ob er reicht. Der Schalter
+  sitzt im Bereich „Video“ und ist in der Regel nicht nötig; solange er an
+  ist, steht er dort in Warnfarbe samt Platzbedarf.
 
 ## Bild und Effekte
 

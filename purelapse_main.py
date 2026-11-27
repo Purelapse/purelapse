@@ -9041,9 +9041,17 @@ class MainWindow(QtWidgets.QWidget):
         self.cmb_fade = QtWidgets.QComboBox()
         self.cmb_fade.addItems(["Aus", "0,5 Sekunden", "1 Sekunde", "2 Sekunden", "3 Sekunden"])
         gv.addWidget(self.cmb_fade, 5, 1)
+        # 16 Bit gehoert zum Rendern: hier sieht man ihn, wenn man das Video
+        # einstellt - und vergisst nicht, dass er noch an ist.
+        self.chk_tiff16 = QtWidgets.QCheckBox("16-Bit-Zwischenbilder (TIFF)")
+        self.chk_tiff16.toggled.connect(self._tiff16_hinweis)
+        gv.addWidget(self.chk_tiff16, 6, 0, 1, 2)
+        self.lbl_tiff16 = QtWidgets.QLabel("")
+        self.lbl_tiff16.setWordWrap(True)
+        gv.addWidget(self.lbl_tiff16, 7, 0, 1, 2)
         self.lbl_size_est = QtWidgets.QLabel("Geschätzte Dateigröße: -- MB")
-        gv.addWidget(self.lbl_size_est, 6, 0, 1, 2)
-        gv.setRowStretch(7, 1)
+        gv.addWidget(self.lbl_size_est, 8, 0, 1, 2)
+        gv.setRowStretch(9, 1)
         # Beide Gruppen dieser Zeile im selben Raster: Beschriftung links
         # in fester Breite, das Bedienelement fuellt den Rest.
         for gitter in (gv,):
@@ -9229,9 +9237,6 @@ class MainWindow(QtWidgets.QWidget):
         gperf.addWidget(self.cmb_procs, 5, 1, 1, 2)
         self.chk_diag = QtWidgets.QCheckBox("Diagnose-Modus (Protokolldateien schreiben)")
         gperf.addWidget(self.chk_diag, 6, 0, 1, 3)
-        self.chk_tiff16 = QtWidgets.QCheckBox(
-            "16-Bit-Zwischenbilder (TIFF) für höchste Qualität")
-        gperf.addWidget(self.chk_tiff16, 7, 0, 1, 3)
         vset.addWidget(self.box_perf)
         self.box_telegram = QtWidgets.QGroupBox("Benachrichtigung (Telegram)")
         gtg = QtWidgets.QGridLayout(self.box_telegram)
@@ -9837,6 +9842,8 @@ class MainWindow(QtWidgets.QWidget):
                 zeile2.append(self._t("Messbereich aktiv", "Measuring area active"))
             if not self._entflackern_an():
                 zeile2.append(self._t("ohne Entflackern", "without deflickering"))
+            if is_raw and self.chk_tiff16.isChecked():
+                zeile2.append(self._t("16-Bit-Zwischenbilder", "16-bit intermediate images"))
             if n_video < n:
                 zeile2.append(self._t(f"Nacht entfernt ({n - n_video} Bilder)",
                                       f"night removed ({n - n_video} frames)"))
@@ -10142,6 +10149,8 @@ class MainWindow(QtWidgets.QWidget):
             feld.setStyleSheet(f"color: {t['dim']}; font-size: 10px;")
         self.chk_diag.setStyleSheet(f"color: {t['dim']};")
         self._engine_anzeigen()
+        if hasattr(self, 'lbl_tiff16'):
+            self._tiff16_hinweis()
         self.lbl_size_est.setStyleSheet(f"color: {t['dim']}; font-style: italic;")
         self._style_gaps()
         if not self._is_busy():
@@ -10266,6 +10275,7 @@ class MainWindow(QtWidgets.QWidget):
         self._on_smooth_changed(self.slider_smooth.value())
         self._on_ev_changed(self.slider_ev.value())
         self._update_filesize_estimate()
+        self._tiff16_hinweis()
         if self._jpg_files or self._nef_files:
             self._recount_keyframes()
         else:
@@ -11844,10 +11854,66 @@ class MainWindow(QtWidgets.QWidget):
             f"Video length: {videolaenge_text(duration, 'en')} ({num_frames} frames at "
             f"{fps_text} fps)  \u00b7  Estimated file size: ~ {groesse}"))
 
+    def _tiff16_masse(self):
+        """(Bildbreite, -hoehe) des ersten RAW, je Ordner gemerkt."""
+        dateien = getattr(self, '_nef_files', None) or []
+        if not dateien:
+            return None
+        merker = getattr(self, '_tiff16_merker', None)
+        if merker and merker[0] == dateien[0]:
+            return merker[1]
+        masse = None
+        try:
+            with rawpy.imread(dateien[0]) as raw:
+                masse = (raw.sizes.width, raw.sizes.height)
+        except Exception:
+            masse = None
+        self._tiff16_merker = (dateien[0], masse)
+        return masse
+
+    def _tiff16_hinweis(self, *_):
+        """
+        Hinweis unter dem Schalter. Aus: wofuer er gut ist (meist nicht
+        noetig). An: deutlich markiert, mit dem Platzbedarf - damit er nicht
+        aus Versehen fuer jede Serie an bleibt.
+        """
+        lbl = getattr(self, 'lbl_tiff16', None)
+        if lbl is None:
+            return
+        t = THEMES[self.theme]
+        if not self.chk_tiff16.isChecked():
+            lbl.setText(self._t(
+                "In der Regel nicht nötig. Hilft, wenn feine Verläufe – etwa ein "
+                "klarer Himmel – Stufen zeigen, vor allem mit HEVC 10 Bit oder ProRes.",
+                "Usually not needed. Helps when smooth gradients – a clear sky, "
+                "say – show banding, especially with HEVC 10-bit or ProRes."))
+            lbl.setStyleSheet(f"color: {t['dim']};")
+        else:
+            n = len(getattr(self, '_nef_files', None) or [])
+            masse = self._tiff16_masse()
+            if n and masse:
+                gb = masse[0] * masse[1] * 6 * 0.85 * n / 1024 ** 3
+                menge = self._t(f" – rund {gb:.0f} GB für {n} Bilder",
+                                f" – about {gb:.0f} GB for {n} frames")
+            else:
+                menge = ""
+            lbl.setText(self._t(
+                f"⚠ An: Zwischenbilder werden etwa sechsmal so groß wie JPG{menge}. "
+                "Für normale Serien wieder ausschalten.",
+                f"⚠ On: intermediate images are about six times the size of JPG{menge}. "
+                "Switch off again for normal sequences."))
+            lbl.setStyleSheet(f"color: {t['warn']};")
+        if hasattr(self, 'btn_start'):
+            self._update_summary()
+
     def _update_visibility(self):
         # Welche Gruppen zu sehen sind, bestimmt die Schrittleiste
         # (_go_step); hier geht es nur noch um JPG/RAW-Unterschiede.
         is_raw = self.rb_raw.isChecked()
+        # 16 Bit gibt es nur fuer RAW (JPG-Serien sind schon 8 Bit)
+        for w in (self.chk_tiff16, self.lbl_tiff16):
+            w.setVisible(is_raw)
+        self._tiff16_hinweis()
         self.chk_video.setVisible(not is_raw)
         video_on = self.chk_video.isChecked() or is_raw
         for w in (self.cmb_fps, self.cmb_res, self.cmb_blur, self.cmb_codec, self.cmb_quality,

@@ -139,7 +139,7 @@ TRANSLATIONS = {
     "Clipping": "Clipping",
     "Restflackern": "Residual flicker",
     "Diagnose-Modus (Protokolldateien schreiben)": "Diagnostic mode (write log files)",
-    "16-Bit-Zwischenbilder (TIFF) für höchste Qualität": "16-bit intermediate images (TIFF) for best quality",
+    "16-Bit-Zwischenbilder (TIFF)": "16-bit intermediate images (TIFF)",
     "JPG (Direkt-Workflow)": "JPG (direct workflow)",
     "NEF / RAW (RAW-Workflow)": "NEF / RAW (RAW workflow)",
     " Durchsuchen…": " Browse…",

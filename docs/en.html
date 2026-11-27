@@ -563,7 +563,7 @@
                 <li>If an export is older than its XMP (keyframe changed afterwards), pass 2 starts again with step 1. If single frames are missing, Purelapse names them without rewriting anything.</li>
               </ul>
               <h4>16-bit intermediate images</h4>
-              <p>Option in the settings. The engine develops to 16-bit TIFF, and the video is computed in 16 bit throughout (handed to FFmpeg as <code>bgr48le</code>). Fine gradients in the sky stay free of banding, especially with HEVC 10 bit or ProRes. Purelapse checks the disk space first: <code>width × height × 6 bytes × 0.85</code> per frame plus 5 % reserve (about 120 MB per frame at 24 megapixels). Switching the option re-develops the frames.</p>
+              <p>Switch in the “Video” group (RAW only), usually not needed. While it is on, it is shown there in warning colour with the space the sequence needs, and in the summary – so it doesn't stay on by accident. The engine develops to 16-bit TIFF, and the video is computed in 16 bit throughout (handed to FFmpeg as <code>bgr48le</code>). Fine gradients in the sky stay free of banding, especially with HEVC 10 bit or ProRes. Purelapse checks the disk space first: <code>width × height × 6 bytes × 0.85</code> per frame plus 5 % reserve (about 120 MB per frame at 24 megapixels). Switching the option re-develops the frames.</p>
               <h4>Resuming and cancelling</h4>
               <ul>
                 <li>In <code>Purelapse/Deflickered_JPG/.purelapse_developed.json</code> Purelapse records for every frame the fingerprint of its profile (SHA-1) and the format. The next run only develops what is missing or whose profile changed.</li>

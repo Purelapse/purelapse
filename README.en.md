@@ -201,7 +201,9 @@ the sequence. Purelapse is built for this:
 - **16-bit intermediate images (TIFF)** on request: the engine develops to
   16 bit and the video is computed in 16 bit throughout – no banding in sky
   gradients, especially with HEVC 10 bit or ProRes. Needs many times the disk
-  space; Purelapse checks beforehand that there is enough.
+  space; Purelapse checks beforehand that there is enough. The switch sits in
+  the "Video" group and is usually not needed; while it is on, it is shown
+  there in warning colour with the space required.
 
 ## Image and effects
 

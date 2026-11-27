@@ -563,7 +563,7 @@
                 <li>Ist ein Export älter als seine XMP (Keyframe danach geändert), beginnt Pass 2 wieder mit Schritt 1. Fehlen einzelne Bilder, nennt Purelapse sie, ohne etwas neu zu schreiben.</li>
               </ul>
               <h4>16-Bit-Zwischenbilder</h4>
-              <p>Option in den Einstellungen. Die Engine entwickelt nach 16-Bit-TIFF, das Video wird durchgehend in 16 Bit gerechnet (Übergabe an FFmpeg als <code>bgr48le</code>). Feine Verläufe im Himmel bleiben frei von Stufen, besonders mit HEVC 10 Bit oder ProRes. Vorher prüft Purelapse den Platz: <code>Breite × Höhe × 6 Byte × 0,85</code> je Bild, plus 5 % Reserve (bei 24 Megapixeln rund 120 MB je Bild). Wer umschaltet, bekommt die Bilder neu entwickelt.</p>
+              <p>Schalter im Bereich „Video“ (nur bei RAW), in der Regel nicht nötig. Ist er an, steht er dort in Warnfarbe mit dem Platzbedarf der Serie und in der Zusammenfassung – damit er nicht versehentlich an bleibt. Die Engine entwickelt nach 16-Bit-TIFF, das Video wird durchgehend in 16 Bit gerechnet (Übergabe an FFmpeg als <code>bgr48le</code>). Feine Verläufe im Himmel bleiben frei von Stufen, besonders mit HEVC 10 Bit oder ProRes. Vorher prüft Purelapse den Platz: <code>Breite × Höhe × 6 Byte × 0,85</code> je Bild, plus 5 % Reserve (bei 24 Megapixeln rund 120 MB je Bild). Wer umschaltet, bekommt die Bilder neu entwickelt.</p>
               <h4>Fortsetzen und Abbruch</h4>
               <ul>
                 <li>In <code>Purelapse/Deflickered_JPG/.purelapse_developed.json</code> merkt sich Purelapse je Bild den Fingerabdruck seines Profils (SHA-1) und das Format. Beim nächsten Lauf wird nur entwickelt, was fehlt oder dessen Profil sich geändert hat.</li>

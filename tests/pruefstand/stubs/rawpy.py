@@ -36,6 +36,16 @@ class _Raw:
     white_level = 65535
 
     @property
+    def sizes(self):
+        """Wie rawpy: Bildgroesse (Breite, Hoehe) ohne zu entwickeln."""
+        class _Groesse:
+            pass
+        g = _Groesse()
+        g.height, g.width = self.daten.shape[:2]
+        g.raw_height, g.raw_width = g.height, g.width
+        return g
+
+    @property
     def raw_image_visible(self):
         """Sensordaten als Bayer-Mosaik (RGGB) aus dem linearen Bild."""
         d = self.daten
