@@ -8,7 +8,11 @@ Das Anhaengsel `-beta` kennzeichnet oeffentliche Testversionen.
 ### Behoben
 - Windows: Ein Abbruch in Pass 2 beendet ART/RawTherapee jetzt samt allen Prozessen, die das Programm selbst gestartet hat. Bisher wurde nur der gestartete Prozess beendet – steckte die Engine hinter einer `.cmd`- oder `.bat`-Hülle, entwickelte sie weiter und schrieb noch Bilder, nachdem der Abbruch schon festgehalten hatte, was fertig ist. Die Fortsetzung entwickelte diese Bilder dann unnötig neu.
 
+### Webseite
+- Das 4K-Vergleichsvideo (Stromboli) lief nicht mehr: Mit 2.46.1 war versehentlich eine leere Datei hochgeladen worden. Die Fassung vom 26. November ist wiederhergestellt.
+
 ### Intern
+- `hochladen.sh` bricht ab, wenn eine bisher gefüllte Datei leer geworden ist.
 - Prüfung, dass jeder Abbruch unter Windows den ganzen Prozessbaum beendet, mit einem echten Versuch an einer `.cmd`-Hülle (nur auf Windows).
 - Die Prüfung auf GitHub läuft nur noch bei Pushes auf Zweige, nicht mehr zusätzlich beim Tag eines Releases (das prüfte denselben Commit ein zweites Mal).
 

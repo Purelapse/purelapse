@@ -9,7 +9,9 @@
 #   - eine Datei ueber 50 MB hochgeladen wuerde (GitHub warnt ab 50 MB und
 #     lehnt ab 100 MB ab),
 #   - eine Bild-XMP ausserhalb von tests/daten dabei ist (darin stehen
-#     Name und Ort des Fotografen).
+#     Name und Ort des Fotografen),
+#   - eine bisher gefuellte Datei leer geworden ist (z. B. ein Video, dessen
+#     Neuberechnung abgebrochen ist - die Webseite zeigte es sonst nicht mehr).
 # Was nicht hochgeladen werden soll, regelt die .gitignore.
 # Am Ende sagt es, wie es weitergeht - und, wenn die Versionsnummer noch
 # kein Release hat, Schritt fuer Schritt, wie das Release veroeffentlicht wird.
@@ -55,6 +57,21 @@ done < <(git diff --cached --name-only -z --diff-filter=AM)
 if [ -n "$ZU_GROSS" ]; then
     git reset -q
     echo -e "ABBRUCH: Dateien ueber $GRENZE_MB MB:$ZU_GROSS"
+    echo "Nichts wurde hochgeladen."
+    exit 1
+fi
+
+# Leer gewordene Dateien
+LEER=""
+while IFS= read -r -d '' datei; do
+    if [ -f "$datei" ] && [ ! -s "$datei" ]; then
+        LEER="$LEER\n  $datei"
+    fi
+done < <(git diff --cached --name-only -z --diff-filter=M)
+if [ -n "$LEER" ]; then
+    git reset -q
+    echo -e "ABBRUCH: Diese Dateien sind jetzt leer (0 Bytes):$LEER"
+    echo "Vorige Fassung zurueckholen:  git show HEAD:<datei> > <datei>"
     echo "Nichts wurde hochgeladen."
     exit 1
 fi
