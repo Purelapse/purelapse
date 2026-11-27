@@ -65,7 +65,7 @@ import purelapse_design as design
 # === VERSIONSNUMMER ===
 # "-beta": oeffentliche Testversion. Fuer die erste stabile Ausgabe das
 # Anhaengsel entfernen (siehe CHANGELOG.md).
-VERSION = "2.46.1-beta"
+VERSION = "2.47.0-beta"
 # ======================
 
 # Startbild und Endbild je Ordner: was davor und danach liegt, bleibt im
@@ -6223,7 +6223,7 @@ class Worker(QtCore.QThread):
         engine_teil = ""
         if (p.get('format') == 'raw' and p.get('mode', 'normal') == 'normal'
                 and not p.get('name_suffix')):
-            kuerzel = {'lr': "LT", 'dt': "DT", 'rt': "RT", 'art': "AR", 'rr': "RR"}
+            kuerzel = {'lr': "LR", 'dt': "DT", 'rt': "RT", 'art': "AR", 'rr': "RR"}
             if p.get('engine') in kuerzel:
                 engine_teil = "_" + kuerzel[p['engine']]
         base_filename = (f"{parent_dir_name}_Purelapse_{p['res_name']}_{p['fps']}fps"

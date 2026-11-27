@@ -302,9 +302,25 @@ o3 = os.path.join(ARBEIT, "rapidraw_abbruch")
 d3, _ = szene(o3, n=40, flackern=0.07, seed=5)
 rrdata(pe.sidecar(d3[0]), look(), sterne=5)
 e = lauf(parameter(o3, d3, raw_mode='pass1', make_video=False, **par))
-os.environ["FAKE_VERZOEGERUNG"] = "0.08"
-e = lauf(parameter(o3, d3, raw_mode='pass2', **par),
-         vor_start=lambda w: threading.Timer(1.5, lambda: setattr(w, '_abort', True)).start())
+os.environ["FAKE_VERZOEGERUNG"] = "0.15"
+
+
+def abbruch_nach_erstem_bild(w, ordner=pl(o3, "Deflickered_JPG")):
+    # Nicht nach fester Zeit abbrechen: Auf langsamen Rechnern (Windows-CI)
+    # waren nach 1,5 s noch keine 8 Bilder fertig - und nach einem Abbruch
+    # verwirft _sichere_teilstand die 8 juengsten (RapidRAW exportiert mit
+    # bis zu acht Faeden, sie koennten halb geschrieben sein). Uebrig blieb
+    # nichts. Deshalb erst abbrechen, wenn 16 Bilder im Ausgabeordner stehen
+    # (spaetestens nach 120 s).
+    def wache():
+        ende = time.time() + 120
+        while time.time() < ende and len(glob.glob(os.path.join(ordner, "*.jpg"))) < 16:
+            time.sleep(0.03)
+        w._abort = True
+    threading.Thread(target=wache, daemon=True).start()
+
+
+e = lauf(parameter(o3, d3, raw_mode='pass2', **par), vor_start=abbruch_nach_erstem_bild)
 os.environ["FAKE_VERZOEGERUNG"] = "0"
 pruef(not e.fertig and "abgebrochen" in " ".join(e.fehler).lower(), f"Abbruch: {e.fehler}")
 zw3 = pl(o3, "Deflickered_JPG")

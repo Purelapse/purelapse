@@ -155,7 +155,7 @@ for i, c in enumerate(VC):
     pruef(os.path.dirname(pfad) == os.path.join(basis, "Nacht01", "Purelapse")
           and os.path.isdir(os.path.dirname(pfad)), f"Codec {i}: Video nicht im Purelapse-Ordner: {pfad}")
 # Kuerzel der Engine im Namen - nur bei RAW und nur fuer das eigentliche Video
-for eng_, k_ in (('rt', 'RT'), ('art', 'AR'), ('dt', 'DT'), ('lr', 'LT'), ('rr', 'RR')):
+for eng_, k_ in (('rt', 'RT'), ('art', 'AR'), ('dt', 'DT'), ('lr', 'LR'), ('rr', 'RR')):
     pfad = ns["W2"](dict(grund, codec_idx=0, format='raw', engine=eng_))._get_output_video_path()
     pruef(os.path.basename(pfad) == f"Nacht01_Purelapse_2160p_25fps_{k_}.mp4", f"{eng_}: {os.path.basename(pfad)}")
 pfad = ns["W2"](dict(grund, codec_idx=0, format='jpg', engine='rt'))._get_output_video_path()
@@ -196,7 +196,7 @@ pruef("self.cmb_engine.setEnabled(False)" in launch,
 pruef("self.cmb_engine.setEnabled(True)" in
       schnitt("    def _enable_buttons", "    def _queue_refresh"),
       "Engine-Auswahl wird nach dem Lauf nicht wieder freigegeben")
-pruef('VERSION = "2.46.1-beta"' in src, "Versionsnummer nicht erhoeht")
+pruef('VERSION = "2.47.0-beta"' in src, "Versionsnummer nicht erhoeht")
 pruef(src.count("codec_idx == 0") == 0 and src.count("crf_vals[qual_idx]") == 0,
       "alte if/elif-Codecauswahl noch vorhanden")
 

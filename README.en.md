@@ -2,7 +2,7 @@
 
 [Deutsch](README.md) · **English**
 
-**Flicker-free timelapses – from RAW or JPG sequences, with ART, RawTherapee, Darktable or Lightroom Classic. For Linux and Windows.**
+**Flicker-free timelapses – from RAW or JPG sequences, with ART, RawTherapee, Darktable, RapidRAW or Lightroom Classic. For Linux and Windows.**
 
 > ⚠️ **Beta version.** Purelapse is under active development. Please back up
 > your original images and report bugs as an [issue](https://github.com/purelapse/purelapse/issues).
@@ -42,7 +42,7 @@ steps:
 
 1. **Pass 1 – smooth brightness:** Purelapse measures the brightness of every
    RAW in linear light and writes an exposure correction into the engine's
-   sidecar files (`.arp`, `.pp3` or `.xmp`).
+   sidecar files (`.arp`, `.pp3`, `.xmp` or `.rrdata`).
 2. **Keyframes (optional):** Grade individual frames – right inside Purelapse
    with the quick settings, or in the engine. Purelapse blends smoothly in
    between.
@@ -58,8 +58,8 @@ JPG sequences are processed in a single pass, without an external engine.
 |---|---|
 | **Deflicker** | Measurement in linear light (16 bit) without blown-out areas, two-stage smoothing, recalibration until residual flicker is below 0.008 EV, measuring area (ROI), light progression sunrise/sunset/constant |
 | **Holy grail** | Compensates exposure and ISO jumps, detects ramping intervals, EXIF exposure and sun elevation as curves, remove night in 24-hour timelapses |
-| **RAW development** | ART, RawTherapee, Darktable, Lightroom Classic (via XMP); formats NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
-| **Keyframes** | Smooth blending between keyframes (with Darktable the complete module stack), quick settings with a real engine preview, automatic optimisation, highlight reconstruction |
+| **RAW development** | ART, RawTherapee, Darktable, RapidRAW, Lightroom Classic (via XMP); formats NEF, CR2, CR3, DNG, ARW, RAF, ORF, RW2, PEF, SRW |
+| **Keyframes** | Smooth blending between keyframes (with Darktable the complete module stack, with RapidRAW every control), quick settings with a real engine preview, gallery in the engine's look, automatic optimisation, highlight reconstruction |
 | **Video** | 720p to 8K, 23.976 to 120 fps, H.264, H.265 (also 10 bit), ProRes 422 HQ, BT.709 colour space, optional 16-bit intermediate images, CPU or NVIDIA, Intel QuickSync, VAAPI, four quality levels |
 | **Effects** | Motion blur (3–25 frames), 16:9 camera move, stabilisation, denoise, hot pixels, astro clean, telemetry overlay, fade in/out, reverse |
 | **Checks** | Quick preview, 5-frame preview, untouched version, comparison video, warnings for gaps and highlights |
@@ -135,8 +135,19 @@ the sequence. Purelapse is built for this:
   keyframe come from the nearer keyframe; Purelapse reports them beforehand.
   Exception: shadows and highlights and colour balance rgb are blended
   smoothly from their zero setting even then.
+- **RapidRAW: every control.** All numeric controls of RapidRAW keyframes
+  blend smoothly into the frames in between, nested ones too (HSL, colour
+  grading, calibration), and curves with the same number of points. Masks, AI
+  retouching, crop, rotation, LUT and tone mapper come from the nearer
+  keyframe.
+- **Gallery in the engine's look.** Keyframes show the image the engine makes
+  of them even before pass 2 (RapidRAW, ART, RawTherapee, darktable) –
+  developed in the background, stored small and only redone after a change.
+  After pass 2 the gallery shows the developed frames, with Lightroom the
+  export.
 - **Quick settings** (ART and RawTherapee; for Darktable all except white
-  balance and denoising) right inside Purelapse via
+  balance and denoising; for RapidRAW contrast, highlights, shadows,
+  vibrance, saturation and denoising) right inside Purelapse via
   *Edit keyframe…*, without opening the engine:
 
   | Control | Range |
@@ -154,7 +165,8 @@ the sequence. Purelapse is built for this:
   shadows/highlights, Darktable: shadows and highlights); Purelapse scales
   the values per engine so the same slider does roughly the same everywhere.
 - **Real preview.** The engine develops the frame with the chosen values,
-  with a histogram and *show before*.
+  with a histogram and *show before*. While it is working, a blurred
+  approximation is shown and the note pulses.
 - **Automatic optimisation.** Measures the frame and makes it pleasing:
   pulls the highlights down, lifts the shadows, gives the midtones punch and
   the colours vibrance; plus sharpening and denoising matched to the ISO
@@ -176,6 +188,7 @@ the sequence. Purelapse is built for this:
 | **Fade in / out** | Off · 0.5 · 1 · 2 · 3 seconds from/to black |
 | **Location** | `Purelapse` folder inside the image folder (default), parent folder, program folder or a folder of your choice |
 | **Existing file** | Create a new version (`_v1`, `_v2`, …) or overwrite |
+| **File name** | `Folder_Purelapse_2160p_25fps_RT.mp4` – for RAW with the engine's code: `AR` ART, `RT` RawTherapee, `DT` darktable, `RR` RapidRAW, `LR` Lightroom |
 
 **Video codecs:**
 
@@ -291,7 +304,8 @@ the sequence. Purelapse is built for this:
 
 ## Installation (Linux)
 
-1. Install **RawTherapee**, **ART** and/or **darktable** (for RAW development).
+1. Install **RawTherapee**, **ART**, **darktable** and/or **RapidRAW** (for RAW
+   development).
 2. Download `Purelapse-…-x86_64.AppImage` from
    [Releases](https://github.com/purelapse/purelapse/releases).
 3. Make it executable and start it:
@@ -300,10 +314,10 @@ the sequence. Purelapse is built for this:
    ./Purelapse-*-x86_64.AppImage
    ```
 4. In Purelapse, open **Settings** (gear icon, top right) and enter the path
-   to `rawtherapee-cli`, `ART-cli` or `darktable-cli`.
+   to `rawtherapee-cli`, `ART-cli`, `darktable-cli` or `RapidRAW`.
 
-**Engines as Flatpak (Flathub):** Purelapse finds RawTherapee, ART and
-darktable from Flathub by itself; the settings then show e.g.
+**Engines as Flatpak (Flathub):** Purelapse finds RawTherapee, ART,
+darktable and RapidRAW from Flathub by itself; the settings then show e.g.
 `flatpak:com.rawtherapee.RawTherapee`. Purelapse starts the command-line
 program inside the package with `flatpak run --command=…` and grants the
 engine exactly the folders it needs for the run (images, output, work folder).
@@ -311,6 +325,20 @@ engine exactly the folders it needs for the run (images, output, work folder).
 **darktable:** supports 4.6 to 5.6. XMPs from darktable 5 (exposure
 version 7, white balance version 4) are read and written in their own version;
 keyframes from darktable 4 and 5 can be blended together.
+
+**RapidRAW (1.6 or newer):** Purelapse works with RapidRAW's sidecar files
+(`IMAGE.NEF.rrdata`) and develops with `RapidRAW export`, without opening
+RapidRAW. Workflow:
+
+1. Open the folder in RapidRAW, edit the keyframes and mark them with 5 stars.
+   At least one frame of the sequence must be edited in RapidRAW – the look
+   for all others comes from it.
+2. In Purelapse choose "RapidRAW" as the engine and start pass 1.
+3. Start pass 2: Purelapse blends the keyframes, RapidRAW develops the whole
+   sequence in one call, Purelapse recalibrates and builds the video.
+
+RapidRAW's exposure slider is not in stops: it brightens by 2^(value / 0.8).
+Purelapse converts this. RapidRAW is also available for Windows.
 
 **Lightroom Classic (Windows, macOS):** Lightroom has no command line –
 Purelapse writes the XMP files, Lightroom develops. Workflow:
@@ -342,12 +370,13 @@ JPG sequences don't need an engine.
    needed.
 2. Start it. If Windows says "Windows protected your PC": the file is not
    signed – *More info → Run anyway*.
-3. For RAW, install an engine (ART, RawTherapee, darktable) or work with
+3. For RAW, install an engine (ART, RawTherapee, darktable, RapidRAW) or work with
    Lightroom Classic via the XMP files (see above).
 
 - Purelapse finds the engines in the search path and in the usual install
   folders (`C:\Program Files\ART`, `…\RawTherapee\<version>`,
-  `…\darktable\bin`); otherwise enter them under **Settings**.
+  `…\darktable\bin`, `%LOCALAPPDATA%\RapidRAW`); otherwise enter them under
+  **Settings**.
 - Settings live in `%APPDATA%\Purelapse\purelapse.json`, self-made base
   profiles in `%LOCALAPPDATA%\Purelapse`.
 - File names containing a colon (such as `2016-12-26_20:15:32.nef`) are not
@@ -376,7 +405,7 @@ Build the AppImage with `bash build_appimage.sh` (requires Docker and internet).
 
 ## Tests
 
-About 3000 automated checks run through the whole program – with real
+More than 4000 automated checks run through the whole program – with real
 measurement, real FFmpeg and finished videos. They run on every push to GitHub
 and can be started locally:
 
@@ -392,7 +421,7 @@ Purelapse writes exactly one configuration file:
 (`~/.purelapse_*`) are taken over on first start and removed.
 
 In the image folder, only the engine's sidecar files (`.arp`, `.pp3`,
-`.xmp`) sit next to the images. Everything else – videos, developed frames
+`.xmp`, `.rrdata`) sit next to the images. Everything else – videos, developed frames
 (`Deflickered_JPG`), measurement data and logs – goes into the subfolder
 `Purelapse`.
 
@@ -400,7 +429,7 @@ In the image folder, only the engine's sidecar files (`.arp`, `.pp3`,
 
 Purelapse is licensed under the [GNU General Public License v3](LICENSE).
 
-Purelapse calls ART, RawTherapee, Darktable and FFmpeg as separate programs;
+Purelapse calls ART, RawTherapee, Darktable, RapidRAW and FFmpeg as separate programs;
 their own licenses apply to them. The AppImage contains an FFmpeg build from
 the `imageio-ffmpeg` package.
 
